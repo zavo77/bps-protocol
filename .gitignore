@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Next.js output
+.next/
+next-env.d.ts
+apps/web/out/
+
+# TypeScript build output
+dist/
+*.tsbuildinfo
+
+# Foundry output and cache
+packages/contracts/out/
+packages/contracts/cache/
+packages/contracts/broadcast/
+packages/contracts/lib/
+
+# Test coverage
+coverage/
+lcov.info
+
+# Local environment files (keep .env.example)
+.env
+.env.*
+!.env.example
+
+# Private keys and deployment secrets
+*.pem
+*.key
+*.keystore
+keystore/
+secrets/
+*.secret
+deployments/local/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini

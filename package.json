@@ -1,0 +1,37 @@
+{
+  "name": "bps-experiment",
+  "version": "0.0.0",
+  "private": true,
+  "description": "BPS Protocol engineering monorepo (foundation scaffolding)",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @bps/web",
+    "build:shared": "npm run build --workspace @bps/shared",
+    "build": "npm run build:shared && npm run build --workspaces --if-present",
+    "lint": "eslint .",
+    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
+    "test": "npm run build:shared && npm run test --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "proof:mock": "npm run build:shared && npm run build --workspace @bps/pilot && node packages/pilot/dist/cli.js",
+    "build:contracts": "npm run forge:build --workspace @bps/contracts",
+    "test:contracts": "npm run forge:test --workspace @bps/contracts",
+    "fmt:contracts": "npm run forge:fmt --workspace @bps/contracts",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build && npm run fmt:contracts && npm run build:contracts && npm run test:contracts"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "24.13.3",
+    "eslint": "9.39.5",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.65.0",
+    "vitest": "4.1.10"
+  }
+}

@@ -1,0 +1,307 @@
+{
+  "cycle": {
+    "schemaVersion": "bps.pod.cycle/1",
+    "cycleId": "42",
+    "chainId": "987654",
+    "bpsTokenAddress": "0x000000000000000000000000000000000000b005",
+    "claimManagerAddress": "0x000000000000000000000000000000000000c1a1",
+    "economicsVersion": "BPS-ECON-2.0",
+    "rewardPolicyVersion": "vebps-1",
+    "epochId": "2000000",
+    "epochStart": "1800000000",
+    "epochEnd": "1800000900",
+    "startBlock": "5000000",
+    "endBlock": "5000300",
+    "snapshotBlock": "5000300",
+    "finalizedBlock": "5000320",
+    "confirmationDepth": "20",
+    "claimStart": "1800001000",
+    "claimDeadline": "1800600000",
+    "termsVersion": "terms-1",
+    "eligibilityPolicyVersion": "elig-1",
+    "restrictedJurisdictionPolicyVersion": "rjp-1"
+  },
+  "excludedAddresses": [
+    {
+      "address": "0x0000000000000000000000000000000000009001",
+      "category": "UNISWAP_POOL",
+      "reason": "Uniswap v3 BPS/USDX pool",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000009002",
+      "category": "NONFUNGIBLE_POSITION_MANAGER",
+      "reason": "Uniswap NonfungiblePositionManager",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x000000000000000000000000000000000000dead",
+      "category": "ZERO_BURN_DEAD",
+      "reason": "conventional burn/dead address",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000009004",
+      "category": "OFFICIAL_ROUTER",
+      "reason": "official BPS trade router",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000009005",
+      "category": "ACQUISITION_VAULT",
+      "reason": "stock-token acquisition vault",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000009006",
+      "category": "DISTRIBUTION_VAULT",
+      "reason": "participant distribution vault",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000009007",
+      "category": "STRATEGIC_ASSET_RESERVE",
+      "reason": "strategic asset reserve",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000009008",
+      "category": "LOCKING_VAULT",
+      "reason": "veBPS locking vault",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000009009",
+      "category": "PROTOCOL_TREASURY",
+      "reason": "protocol treasury/admin holdings",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000009010",
+      "category": "TEAM_VESTING",
+      "reason": "team/contributor vesting contract",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000009011",
+      "category": "BRIDGE",
+      "reason": "canonical bridge contract",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000009012",
+      "category": "CONTRACT_INELIGIBLE",
+      "reason": "contract unable to satisfy eligibility",
+      "policyVersion": "excl-1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000009013",
+      "category": "EXPLICIT_MANIFEST",
+      "reason": "explicitly excluded manifest address",
+      "policyVersion": "excl-1"
+    }
+  ],
+  "eligibility": [
+    {
+      "wallet": "0x0000000000000000000000000000000000001001",
+      "eligible": true,
+      "policyVersion": "elig-1",
+      "validFrom": "1799990000",
+      "revoked": false
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000001007",
+      "eligible": true,
+      "policyVersion": "elig-1",
+      "validFrom": "1799990000",
+      "revoked": false
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000001014",
+      "eligible": true,
+      "policyVersion": "elig-1",
+      "validFrom": "1799990000",
+      "revoked": false
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000001021",
+      "eligible": true,
+      "policyVersion": "elig-1",
+      "validFrom": "1799990000",
+      "revoked": false
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000001030",
+      "eligible": true,
+      "policyVersion": "elig-1",
+      "validFrom": "1799990000",
+      "revoked": false
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000002001",
+      "eligible": true,
+      "policyVersion": "elig-1",
+      "validFrom": "1799990000",
+      "revoked": false
+    },
+    {
+      "wallet": "0x000000000000000000000000000000000000abcd",
+      "eligible": true,
+      "policyVersion": "elig-1",
+      "validFrom": "1799990000",
+      "revoked": false
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000003001",
+      "eligible": false,
+      "policyVersion": "elig-1",
+      "validFrom": "1799990000",
+      "revoked": false
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000003002",
+      "eligible": true,
+      "policyVersion": "elig-1",
+      "validFrom": "1799990000",
+      "revoked": true
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000003003",
+      "eligible": true,
+      "policyVersion": "elig-1",
+      "validFrom": "1799990000",
+      "expiry": "1800000000",
+      "revoked": false
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000003004",
+      "eligible": true,
+      "policyVersion": "elig-1",
+      "validFrom": "1800001000",
+      "revoked": false
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000009001",
+      "eligible": true,
+      "policyVersion": "elig-1",
+      "validFrom": "1799990000",
+      "revoked": false
+    }
+  ],
+  "epochStartBalances": [
+    { "wallet": "0x0000000000000000000000000000000000001001", "rawBalance": "100000" },
+    { "wallet": "0x0000000000000000000000000000000000001007", "rawBalance": "100000" },
+    { "wallet": "0x0000000000000000000000000000000000001014", "rawBalance": "100000" },
+    { "wallet": "0x0000000000000000000000000000000000001021", "rawBalance": "100000" },
+    { "wallet": "0x0000000000000000000000000000000000001030", "rawBalance": "100000" },
+    { "wallet": "0x0000000000000000000000000000000000002001", "rawBalance": "60000" },
+    { "wallet": "0x0000000000000000000000000000000000003001", "rawBalance": "100000" },
+    { "wallet": "0x0000000000000000000000000000000000009001", "rawBalance": "250000" },
+    { "wallet": "0x0000000000000000000000000000000000009004", "rawBalance": "300000" },
+    { "wallet": "0x0000000000000000000000000000000000009006", "rawBalance": "123456" },
+    { "wallet": "0x000000000000000000000000000000000000dead", "rawBalance": "999" }
+  ],
+  "transfers": [
+    {
+      "chainId": "987654",
+      "blockNumber": "5000200",
+      "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000bb3",
+      "transactionHash": "0x0000000000000000000000000000000000000000000000000000000000000aa3",
+      "transactionIndex": "0",
+      "logIndex": "0",
+      "timestamp": "1800000450",
+      "from": "0x0000000000000000000000000000000000002001",
+      "to": "0x000000000000000000000000000000000000AbCd",
+      "rawAmount": "40000"
+    },
+    {
+      "chainId": "987654",
+      "blockNumber": "5000150",
+      "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000bb2",
+      "transactionHash": "0x0000000000000000000000000000000000000000000000000000000000000aa2",
+      "transactionIndex": "0",
+      "logIndex": "0",
+      "timestamp": "1800000100",
+      "from": "0x0000000000000000000000000000000000009004",
+      "to": "0x0000000000000000000000000000000000000000",
+      "rawAmount": "50000"
+    },
+    {
+      "chainId": "987654",
+      "blockNumber": "5000200",
+      "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000bb3",
+      "transactionHash": "0x0000000000000000000000000000000000000000000000000000000000000aa3",
+      "transactionIndex": "0",
+      "logIndex": "0",
+      "timestamp": "1800000450",
+      "from": "0x0000000000000000000000000000000000002001",
+      "to": "0x000000000000000000000000000000000000AbCd",
+      "rawAmount": "40000"
+    },
+    {
+      "chainId": "987654",
+      "blockNumber": "5000100",
+      "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000bb1",
+      "transactionHash": "0x0000000000000000000000000000000000000000000000000000000000000aa1",
+      "transactionIndex": "0",
+      "logIndex": "0",
+      "timestamp": "1800000000",
+      "from": "0x0000000000000000000000000000000000000000",
+      "to": "0x0000000000000000000000000000000000009001",
+      "rawAmount": "250000"
+    }
+  ],
+  "locks": [
+    {
+      "wallet": "0x0000000000000000000000000000000000001007",
+      "rawPrincipal": "100000",
+      "tier": "LOCK_7D",
+      "startTimestamp": "1799999900",
+      "unlockTimestamp": "1800604700"
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000001014",
+      "rawPrincipal": "100000",
+      "tier": "LOCK_14D",
+      "startTimestamp": "1799999900",
+      "unlockTimestamp": "1801209500"
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000001021",
+      "rawPrincipal": "100000",
+      "tier": "LOCK_21D",
+      "startTimestamp": "1799999900",
+      "unlockTimestamp": "1801814300"
+    },
+    {
+      "wallet": "0x0000000000000000000000000000000000001030",
+      "rawPrincipal": "100000",
+      "tier": "LOCK_30D",
+      "startTimestamp": "1799999900",
+      "unlockTimestamp": "1802591900"
+    }
+  ],
+  "assets": [
+    {
+      "ticker": "USDX",
+      "name": "Fictional USD Stock Token",
+      "tokenAddress": "0x000000000000000000000000000000000000a006",
+      "decimals": 6,
+      "acquiredRawAmount": "1000000000001"
+    },
+    {
+      "ticker": "WBTX",
+      "name": "Fictional Wrapped BT Stock Token",
+      "tokenAddress": "0x000000000000000000000000000000000000a008",
+      "decimals": 8,
+      "acquiredRawAmount": "5000000001"
+    },
+    {
+      "ticker": "GOVX",
+      "name": "Fictional Governance Stock Token",
+      "tokenAddress": "0x000000000000000000000000000000000000a018",
+      "decimals": 18,
+      "acquiredRawAmount": "1000000000000000000000001"
+    }
+  ]
+}

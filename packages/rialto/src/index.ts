@@ -1,0 +1,9 @@
+export interface WorkspaceInfo {
+  readonly name: string;
+  readonly implemented: boolean;
+}
+
+export const workspaceInfo: WorkspaceInfo = {
+  name: "@bps/rialto",
+  implemented: false,
+};

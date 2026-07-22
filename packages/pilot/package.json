@@ -1,0 +1,21 @@
+{
+  "name": "@bps/pilot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "proof:mock": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@bps/shared": "0.0.0"
+  }
+}
