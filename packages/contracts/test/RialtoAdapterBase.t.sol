@@ -17,6 +17,7 @@ interface Vm {
     function expectRevert(bytes4 selector) external;
     function expectRevert(bytes calldata revertData) external;
     function deal(address to, uint256 give) external;
+    function chainId(uint256 newChainId) external;
 }
 
 /// @notice Shared setup for RialtoStockAcquisitionAdapter unit tests. The TEST CONTRACT itself acts as
@@ -29,6 +30,7 @@ abstract contract RialtoAdapterBase is IStockAcquisitionVaultView {
 
     uint256 internal constant RATE = 100; // stockOut = wethIn * 100
     uint256 internal constant DEADLINE = type(uint64).max;
+    uint256 internal constant RH_CHAIN = 4663; // the adapter deploys only on Robinhood Chain
     address internal constant ATTACKER = address(0xBAD);
 
     MockWETH internal weth;
@@ -52,6 +54,7 @@ abstract contract RialtoAdapterBase is IStockAcquisitionVaultView {
     // --- Setup helpers ---------------------------------------------------------------------------
 
     function _deployHonest() internal {
+        vm.chainId(RH_CHAIN); // the adapter's constructor requires block.chainid == 4663
         weth = new MockWETH();
         stockA = new MockERC20("Stock A", "STKA", 18);
         registry = new MockRialtoRouterRegistry();

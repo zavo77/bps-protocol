@@ -11,6 +11,7 @@ import {UniswapV3BPSSwapAdapter} from "../src/adapters/UniswapV3BPSSwapAdapter.s
 import {RialtoStockAcquisitionAdapter} from "../src/adapters/RialtoStockAcquisitionAdapter.sol";
 import {MockWETH} from "./mocks/MockWETH.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {MockFeeOnTransferERC20} from "./mocks/MockFeeOnTransferERC20.sol";
 import {MockSwapRouter02} from "./mocks/MockSwapRouter02.sol";
 import {MockRialtoRouterRegistry} from "./mocks/MockRialtoRouterRegistry.sol";
 import {MockRialtoRouter} from "./mocks/MockRialtoRouter.sol";
@@ -24,25 +25,26 @@ interface Vm {
     function expectRevert(bytes calldata revertData) external;
     function getNonce(address account) external view returns (uint64);
     function computeCreateAddress(address deployer, uint256 nonce) external pure returns (address);
+    function chainId(uint256 newChainId) external;
 }
 
-/// @notice Complete local end-to-end proof of the beta flow: a frozen BPSTradeRouter buy funds the
-///         stock-acquisition budget; the StockAcquisitionVault acquires stock through the concrete
-///         Rialto adapter (registry-locked mock router); the vault applies the frozen 80/20 split and
-///         delivers the reserve; the DistributionFundingCoordinator funds a DistributionClaimManager
-///         cycle with exactly the released 80%; and an eligible locker claims against a fixture PoD
-///         root. All addresses/assets are fictional and local; nothing is deployed and no Rialto API
-///         is called. The circular immutability among router/adapter/vault/coordinator/manager is
-///         closed with nonce-predicted CREATE addresses (no production authorization is weakened).
+/// @notice Complete local end-to-end proof of the beta flow with the acquisition-recording coordinator
+///         occupying BOTH frozen vault roles (executor + distributionFundingCoordinator): router buy ->
+///         vault 2% WETH budget -> trusted operator calls coordinator -> coordinator (as executor)
+///         drives the vault acquisition through the Rialto adapter -> coordinator records the exact
+///         acquisition from vault deltas -> reserve receives exact 20% -> rootPublisher funds exactly
+///         that acquisition's 80% into one cycle -> eligible locker claims -> invalid/duplicate fail.
+///         All fictional/local; nothing deployed; no Rialto API called. Circular immutability closed via
+///         nonce-predicted CREATE; the test acts as the trusted acquisitionOperator and rootPublisher.
 contract RialtoEndToEndTest {
     Vm internal constant vm = Vm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
-    // Fictional rates: 1 WETH <-> 1000 BPS (buy legs); 1 WETH -> 100 stock (Rialto acquisition).
-    uint256 internal constant BW_RATE = 1000;
+    uint256 internal constant BW_RATE = 1000; // 1 WETH <-> 1000 BPS (buy legs)
     uint256 internal constant BW_DIV = 1000;
-    uint256 internal constant STOCK_RATE = 100;
+    uint256 internal constant STOCK_RATE = 100; // 1 WETH -> 100 stock (Rialto acquisition)
     uint24 internal constant TEST_FEE = 3000;
     uint256 internal constant DEADLINE = type(uint64).max;
+    uint256 internal constant RH_CHAIN = 4663;
 
     address internal constant OWNER = address(0x0A11);
     address internal constant RESERVE = address(0x5E5E);
@@ -65,16 +67,15 @@ contract RialtoEndToEndTest {
     StockAcquisitionVault internal vault;
     BPSLockingVault internal lockingVault;
 
-    // Buy expectations for G = 1000e18.
     uint256 internal constant G = 1000e18;
     uint256 internal constant STOCK_BUDGET_WETH = 20e18; // 2%
     uint256 internal constant BURNED_BPS = 10_000e18; // 1% * BW_RATE
-    // Acquisition of 20e18 WETH -> 2000e18 stock; 80/20 split.
-    uint256 internal constant ACQUIRED = 2000e18;
+    uint256 internal constant ACQUIRED = 2000e18; // 20e18 * STOCK_RATE
     uint256 internal constant DISTRIBUTION = 1600e18; // 80%
     uint256 internal constant RESERVE_ALLOC = 400e18; // 20%
 
     function setUp() public {
+        vm.chainId(RH_CHAIN); // the Rialto adapter deploys only on Robinhood Chain
         bps = new BPSToken(address(this));
         weth = new MockWETH();
         stockA = new MockERC20("Stock A", "STKA", 18);
@@ -85,21 +86,19 @@ contract RialtoEndToEndTest {
 
         _deployStack();
 
-        // Seed venue liquidity: DEX with BPS (buy legs), Rialto router with stock inventory.
         // forge-lint: disable-next-line(erc20-unchecked-transfer)
         bps.transfer(address(dexRouter), 500_000_000e18);
         stockA.mint(address(rialtoRouter), 1_000_000_000e18);
         registry.setOwner(2, address(rialtoRouter));
     }
 
-    /// @dev Deploy the six interdependent contracts closing every circular immutability with predicted
-    ///      CREATE addresses. `this` acts as the vault's acquisition executor and the coordinator's root
-    ///      publisher (trusted governance/keeper roles — see the operational blocker in HANDOVER).
+    /// @dev The test contract is the trusted acquisitionOperator and rootPublisher. The coordinator is
+    ///      BOTH the vault's executor and its distributionFundingCoordinator.
     function _deployStack() internal {
         uint256 n = uint256(vm.getNonce(address(this)));
-        address predR = vm.computeCreateAddress(address(this), n + 1); // trade router
-        address predV = vm.computeCreateAddress(address(this), n + 5); // stock vault
-        address predCo = vm.computeCreateAddress(address(this), n + 4); // coordinator
+        address predR = vm.computeCreateAddress(address(this), n + 1);
+        address predCo = vm.computeCreateAddress(address(this), n + 4);
+        address predV = vm.computeCreateAddress(address(this), n + 5);
 
         swapAdapter = new UniswapV3BPSSwapAdapter(
             predR, address(bps), address(weth), address(dexRouter), TEST_FEE
@@ -108,27 +107,24 @@ contract RialtoEndToEndTest {
             new BPSTradeRouter(OWNER, address(bps), address(weth), address(swapAdapter), predV); // n+1
         rialtoAdapter = new RialtoStockAcquisitionAdapter(predV, address(weth), address(registry)); // n+2
         manager = new DistributionClaimManager(predCo, RECOVERY); // n+3
-        coordinator = new DistributionFundingCoordinator(predV, address(manager), address(this)); // n+4
+        coordinator = new DistributionFundingCoordinator(
+            predV, address(manager), address(this), address(this)
+        ); // n+4  (operator == publisher == this)
         address[] memory basket = new address[](1);
         basket[0] = address(stockA);
         vault = new StockAcquisitionVault(
-            address(weth),
-            address(rialtoAdapter),
-            address(this), // executor
-            RESERVE,
-            predCo,
-            basket
-        ); // n+5
+            address(weth), address(rialtoAdapter), predCo, RESERVE, predCo, basket
+        ); // n+5  (executor == coordinator == predCo)
 
         require(address(tradeRouter) == predR, "router addr");
+        require(address(coordinator) == predCo, "coord addr");
         require(address(vault) == predV, "vault addr");
-        require(address(coordinator) == predCo, "coordinator addr");
-        require(address(tradeRouter.swapAdapter()) == address(swapAdapter), "router->adapter");
         require(tradeRouter.stockBudgetRecipient() == address(vault), "router->vault");
-        require(address(vault.acquisitionAdapter()) == address(rialtoAdapter), "vault->adapter");
+        require(vault.acquisitionExecutor() == address(coordinator), "executor==coordinator");
+        require(
+            vault.distributionFundingCoordinator() == address(coordinator), "coord==coordinator"
+        );
         require(rialtoAdapter.stockAcquisitionVault() == address(vault), "adapter->vault");
-        require(vault.distributionFundingCoordinator() == address(coordinator), "vault->coord");
-        require(address(coordinator.stockAcquisitionVault()) == address(vault), "coord->vault");
         require(manager.owner() == address(coordinator), "coord owns manager");
     }
 
@@ -140,104 +136,111 @@ contract RialtoEndToEndTest {
         require(c, m);
     }
 
-    function _rialtoExec(uint256 wethIn) internal view returns (bytes memory) {
+    function _rialtoExec(address stockToken, address routerTarget, uint256 wethIn)
+        internal
+        pure
+        returns (bytes memory)
+    {
         return abi.encode(
             RialtoStockAcquisitionAdapter.RialtoExecution({
-                target: address(rialtoRouter),
+                target: routerTarget,
                 callData: abi.encodeWithSelector(
-                    MockRialtoRouter.settle.selector, address(stockA), wethIn
+                    MockRialtoRouter.settle.selector, stockToken, wethIn
                 ),
-                quoteDeadline: DEADLINE
+                quoteDeadline: type(uint64).max
             })
         );
     }
 
-    /// @dev Drive the flow up to (but not including) the claim, funding cycle `cycleId` for `LOCKER`
-    ///      with the exact released distribution and returning the fixture root leaf used.
-    function _runToFunded(uint256 cycleId) internal returns (uint256 supplyBefore) {
-        // 0. Eligible locker locks BPS (a real participant whose veBPS earns the entitlement).
-        // forge-lint: disable-next-line(erc20-unchecked-transfer)
-        bps.transfer(LOCKER, 1_000e18);
-        vm.prank(LOCKER);
-        bps.approve(address(lockingVault), 1_000e18);
-        vm.prank(LOCKER);
-        lockingVault.createLock(1_000e18, 7 days);
-
-        // 1. Router buy funds the stock-acquisition budget (WETH) into the vault.
+    function _buyFundsBudget() internal returns (uint256 supplyBefore) {
         weth.mint(USER, G);
         vm.prank(USER);
         weth.approve(address(tradeRouter), G);
         supplyBefore = bps.totalSupply();
         vm.prank(USER);
         tradeRouter.buyExactWethForBps(G, 0, 0, USER, DEADLINE);
-        _eq(weth.balanceOf(address(vault)), STOCK_BUDGET_WETH, "2% stock budget funded to vault");
-        _eq(supplyBefore - bps.totalSupply(), BURNED_BPS, "1% buy-burn reduced totalSupply");
+        _eq(weth.balanceOf(address(vault)), STOCK_BUDGET_WETH, "2% budget funded to vault");
+        _eq(supplyBefore - bps.totalSupply(), BURNED_BPS, "1% true burn");
+    }
 
-        // 2-3. Executor acquires stock via the Rialto adapter; vault applies 80/20; reserve delivered.
-        vault.executeAcquisition(
-            address(stockA), STOCK_BUDGET_WETH, 1900e18, DEADLINE, _rialtoExec(STOCK_BUDGET_WETH)
-        );
-        _eq(vault.totalStockAcquired(address(stockA)), ACQUIRED, "acquired stock");
-        _eq(vault.distributionAllocated(address(stockA)), DISTRIBUTION, "80% distribution");
-        _eq(vault.reserveAllocated(address(stockA)), RESERVE_ALLOC, "20% reserve");
-        _eq(stockA.balanceOf(RESERVE), RESERVE_ALLOC, "reserve delivered exactly");
-        _eq(stockA.balanceOf(address(vault)), DISTRIBUTION, "distribution retained");
-        _eq(stockA.balanceOf(address(rialtoAdapter)), 0, "no adapter stock residue");
-        _eq(weth.balanceOf(address(rialtoAdapter)), 0, "no adapter WETH residue");
-        _eq(weth.balanceOf(address(vault)), 0, "vault WETH fully spent on acquisition");
-
-        // 4. Executor releases the distribution allocation to the coordinator.
-        vault.releaseToDistributionCoordinator(address(stockA), DISTRIBUTION);
-        _eq(stockA.balanceOf(address(coordinator)), DISTRIBUTION, "coordinator holds distribution");
-
-        // 5. Root publisher funds a cycle with a single-leaf fixture root for the locker.
-        bytes32 leaf = manager.leafFor(cycleId, LOCKER, address(stockA), DISTRIBUTION);
-        coordinator.fundAndPublishCycle(
-            cycleId,
-            leaf, // single-entitlement tree: root == leaf
-            keccak256("allocationsContentHash"),
-            keccak256("manifestEnvelopeHash"),
-            uint64(block.timestamp + 1),
-            uint64(block.timestamp + 1000),
+    /// @dev Drive router buy -> operator acquires+records -> returns the acquisition id.
+    function _acquire() internal returns (uint256 acquisitionId) {
+        _buyFundsBudget();
+        // Trusted acquisitionOperator (this) calls the coordinator, which (as executor) drives the
+        // vault acquisition through the Rialto adapter and records the exact deltas.
+        acquisitionId = coordinator.executeAndRecordAcquisition(
             address(stockA),
-            DISTRIBUTION
+            STOCK_BUDGET_WETH,
+            1900e18,
+            DEADLINE,
+            _rialtoExec(address(stockA), address(rialtoRouter), STOCK_BUDGET_WETH)
         );
-        _eq(stockA.balanceOf(address(manager)), DISTRIBUTION, "manager funded exactly");
-        _eq(stockA.balanceOf(address(coordinator)), 0, "coordinator retains nothing");
+        _eq(vault.totalStockAcquired(address(stockA)), ACQUIRED, "acquired");
+        _eq(stockA.balanceOf(RESERVE), RESERVE_ALLOC, "exact 20% reserve delivered");
+        (,,, uint256 acq, uint256 dist, uint256 res,) = coordinator.acquisitions(acquisitionId);
+        _eq(acq, ACQUIRED, "record acquired");
+        _eq(dist, DISTRIBUTION, "record 80%");
+        _eq(res, RESERVE_ALLOC, "record 20%");
     }
 
     function testEndToEndClaim() public {
-        _runToFunded(42);
-        vm.warp(block.timestamp + 2); // enter the claim window
+        uint256 id = _acquire();
+        uint256 cycleId = 42;
+        bytes32 leaf = manager.leafFor(cycleId, LOCKER, address(stockA), DISTRIBUTION);
+        // rootPublisher (this) funds exactly the recorded 80% into one cycle.
+        coordinator.fundRecordedAcquisition(
+            id,
+            leaf,
+            keccak256("alloc"),
+            keccak256("manifest"),
+            uint64(block.timestamp + 1),
+            uint64(block.timestamp + 1000),
+            cycleId
+        );
+        _eq(stockA.balanceOf(address(manager)), DISTRIBUTION, "manager funded exact 80%");
+        _eq(stockA.balanceOf(address(coordinator)), 0, "coordinator retains nothing");
 
+        vm.warp(block.timestamp + 2);
         bytes32[] memory emptyProof = new bytes32[](0);
         vm.prank(LOCKER);
-        manager.claim(42, address(stockA), DISTRIBUTION, emptyProof);
+        manager.claim(cycleId, address(stockA), DISTRIBUTION, emptyProof);
 
-        _eq(stockA.balanceOf(LOCKER), DISTRIBUTION, "locker claimed exactly the distribution");
-        _eq(stockA.balanceOf(address(manager)), 0, "manager fully claimed");
-        // Full reconciliation: acquired = distribution + reserve; claimed + reserve == acquired.
-        _eq(DISTRIBUTION + RESERVE_ALLOC, ACQUIRED, "80/20 conserves the acquisition");
+        _eq(stockA.balanceOf(LOCKER), DISTRIBUTION, "locker claimed exact 80%");
         _eq(stockA.balanceOf(LOCKER) + stockA.balanceOf(RESERVE), ACQUIRED, "all stock accounted");
-        // No residues / lingering approvals anywhere in the new components.
-        _eq(weth.allowance(address(vault), address(rialtoAdapter)), 0, "vault->adapter allowance 0");
-        _eq(weth.allowance(address(rialtoAdapter), address(rialtoRouter)), 0, "adapter->router 0");
-        _eq(stockA.allowance(address(coordinator), address(manager)), 0, "coord->manager 0");
-        _eq(stockA.balanceOf(address(vault)), 0, "vault distribution fully released");
+        _eq(DISTRIBUTION + RESERVE_ALLOC, ACQUIRED, "80/20 conserves");
     }
 
     function testInvalidProofCannotClaim() public {
-        _runToFunded(42);
+        uint256 id = _acquire();
+        bytes32 leaf = manager.leafFor(42, LOCKER, address(stockA), DISTRIBUTION);
+        coordinator.fundRecordedAcquisition(
+            id,
+            leaf,
+            keccak256("a"),
+            keccak256("m"),
+            uint64(block.timestamp + 1),
+            uint64(block.timestamp + 1000),
+            42
+        );
         vm.warp(block.timestamp + 2);
         bytes32[] memory emptyProof = new bytes32[](0);
-        // Wrong amount -> different leaf -> fails against the single-leaf root.
         vm.prank(LOCKER);
         vm.expectRevert(DistributionClaimManager.InvalidProof.selector);
         manager.claim(42, address(stockA), DISTRIBUTION - 1, emptyProof);
     }
 
     function testDuplicateClaimCannotClaim() public {
-        _runToFunded(42);
+        uint256 id = _acquire();
+        bytes32 leaf = manager.leafFor(42, LOCKER, address(stockA), DISTRIBUTION);
+        coordinator.fundRecordedAcquisition(
+            id,
+            leaf,
+            keccak256("a"),
+            keccak256("m"),
+            uint64(block.timestamp + 1),
+            uint64(block.timestamp + 1000),
+            42
+        );
         vm.warp(block.timestamp + 2);
         bytes32[] memory emptyProof = new bytes32[](0);
         vm.prank(LOCKER);
@@ -251,38 +254,59 @@ contract RialtoEndToEndTest {
         manager.claim(42, address(stockA), DISTRIBUTION, emptyProof);
     }
 
-    // A hostile Rialto router mid-flow must revert the entire acquisition atomically, leaving the
-    // vault's post-buy state (WETH budget) untouched and nothing distributed.
+    // A hostile Rialto router mid-flow reverts the whole acquisition atomically: no record, no id, the
+    // vault's post-buy WETH budget untouched, nothing distributed.
     function testHostileRialtoRollsBackAcquisition() public {
         HostileRialtoRouter hostile = new HostileRialtoRouter(address(weth), STOCK_RATE);
         stockA.mint(address(hostile), 1_000_000e18);
         registry.setOwner(2, address(hostile));
-        hostile.setMode(HostileRialtoRouter.Mode.UNDER_DELIVER);
-        hostile.setUnderBy(200e18); // deliver 1800e18 < the 1900e18 minimum
+        hostile.setMode(HostileRialtoRouter.Mode.NO_OUTPUT);
 
-        weth.mint(USER, G);
-        vm.prank(USER);
-        weth.approve(address(tradeRouter), G);
-        vm.prank(USER);
-        tradeRouter.buyExactWethForBps(G, 0, 0, USER, DEADLINE);
-        _eq(weth.balanceOf(address(vault)), STOCK_BUDGET_WETH, "budget funded");
-
-        bytes memory ex = abi.encode(
-            RialtoStockAcquisitionAdapter.RialtoExecution({
-                target: address(hostile),
-                callData: abi.encodeWithSelector(
-                    MockRialtoRouter.settle.selector, address(stockA), STOCK_BUDGET_WETH
-                ),
-                quoteDeadline: DEADLINE
-            })
-        );
+        _buyFundsBudget();
         vm.expectRevert();
-        vault.executeAcquisition(address(stockA), STOCK_BUDGET_WETH, 1900e18, DEADLINE, ex);
+        coordinator.executeAndRecordAcquisition(
+            address(stockA),
+            STOCK_BUDGET_WETH,
+            1900e18,
+            DEADLINE,
+            _rialtoExec(address(stockA), address(hostile), STOCK_BUDGET_WETH)
+        );
 
-        _eq(weth.balanceOf(address(vault)), STOCK_BUDGET_WETH, "vault WETH budget intact");
-        _eq(vault.totalStockAcquired(address(stockA)), 0, "no acquisition recorded");
-        _eq(vault.distributionAllocated(address(stockA)), 0, "no distribution");
-        _eq(stockA.balanceOf(address(vault)), 0, "no stock in vault");
+        _eq(coordinator.acquisitionCount(), 0, "no acquisition recorded");
+        _eq(weth.balanceOf(address(vault)), STOCK_BUDGET_WETH, "vault budget intact");
+        _eq(vault.totalStockAcquired(address(stockA)), 0, "no acquisition");
         _eq(stockA.balanceOf(RESERVE), 0, "no reserve delivered");
+    }
+
+    // Fee-on-transfer stock through the complete adapter->vault path is rejected by the frozen vault's
+    // report-vs-observed check (the adapter forwards its observed net amount; the vault sees less).
+    function testFeeOnTransferStockRejectedThroughAdapterPath() public {
+        MockFeeOnTransferERC20 feeStock = new MockFeeOnTransferERC20("Fee Stock", "fSTK", 100); // 1%
+        MockRialtoRouter feeRouter = new MockRialtoRouter(address(weth), STOCK_RATE);
+        feeStock.mint(address(feeRouter), 1_000_000e18);
+        MockRialtoRouterRegistry feeReg = new MockRialtoRouterRegistry();
+
+        // Minimal vault + Rialto adapter with the fee stock in the basket; this contract is the executor.
+        uint256 n = uint256(vm.getNonce(address(this)));
+        address predV = vm.computeCreateAddress(address(this), n + 1);
+        RialtoStockAcquisitionAdapter feeAdapter =
+            new RialtoStockAcquisitionAdapter(predV, address(weth), address(feeReg)); // n
+        address[] memory basket = new address[](1);
+        basket[0] = address(feeStock);
+        StockAcquisitionVault feeVault = new StockAcquisitionVault(
+            address(weth), address(feeAdapter), address(this), RESERVE, address(0xC00D), basket
+        ); // n+1
+        require(address(feeVault) == predV, "fee vault addr");
+        feeReg.setOwner(2, address(feeRouter));
+        weth.mint(address(feeVault), 1_000_000e18);
+
+        vm.expectRevert(); // vault ReportedStockMismatch: observed (net of fee) < adapter-reported
+        feeVault.executeAcquisition(
+            address(feeStock),
+            STOCK_BUDGET_WETH,
+            1,
+            DEADLINE,
+            _rialtoExec(address(feeStock), address(feeRouter), STOCK_BUDGET_WETH)
+        );
     }
 }

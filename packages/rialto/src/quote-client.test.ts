@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+// Import through the public server entry ("@bps/rialto/server" maps to ./server.js) to exercise the
+// same boundary consumers must use — never the client-reachable main barrel.
 import {
   fetchRialtoAllowanceQuote,
   RialtoQuoteError,
   type RialtoQuoteConfig,
   type RialtoQuoteRequest,
-} from "./quote-client.js";
+} from "./server.js";
 
 const WETH = "0x1111111111111111111111111111111111111111";
 const ADAPTER = "0x2222222222222222222222222222222222222222";

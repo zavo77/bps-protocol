@@ -50,6 +50,10 @@ contract RialtoStockAcquisitionAdapter is IStockAcquisitionAdapter, ReentrancyGu
     IRialtoRouterRegistry public immutable routerRegistry;
     /// @notice Rialto registry feature ID for the active taker-submitted swap router.
     uint256 public constant SWAP_ROUTER_FEATURE_ID = 2;
+    /// @notice Robinhood Chain ID (verified from official Rialto/Robinhood Chain documentation). The
+    ///         adapter is deployable ONLY on this chain — the fee/allowance-settlement Rialto flow is
+    ///         chain-specific and the registry lives here. Not configurable.
+    uint256 public constant ROBINHOOD_CHAIN_ID = 4663;
 
     /// @notice The minimal adapter-specific execution payload carried in `executionData`. It contains
     ///         only the Rialto quote's target and unmodified calldata plus the quote's own expiry —
@@ -63,6 +67,7 @@ contract RialtoStockAcquisitionAdapter is IStockAcquisitionAdapter, ReentrancyGu
     error ZeroAddress();
     error InvalidSystemAddress();
     error NotAContract(address target);
+    error WrongChain(uint256 chainId);
     error NotVault();
     error StockNotApproved(address stockToken);
     error InvalidStock();
@@ -86,6 +91,8 @@ contract RialtoStockAcquisitionAdapter is IStockAcquisitionAdapter, ReentrancyGu
     /// @param weth_ Immutable WETH token (must already have code).
     /// @param registry_ Immutable Rialto Router Registry (must already have code).
     constructor(address vault_, address weth_, address registry_) {
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.chainid != ROBINHOOD_CHAIN_ID) revert WrongChain(block.chainid);
         if (vault_ == address(0) || weth_ == address(0) || registry_ == address(0)) {
             revert ZeroAddress();
         }

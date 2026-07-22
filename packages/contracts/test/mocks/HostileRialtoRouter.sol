@@ -19,6 +19,7 @@ contract HostileRialtoRouter {
         WRONG_TOKEN, // deliver a different token
         OUTPUT_TO_ATTACKER, // deliver stock to an attacker address, not the caller
         EXCESS_PULL, // attempt to pull wethAmountIn + 1 (reverts on allowance)
+        FALSE_RETURN, // deliver honestly but return a bogus amount (the adapter must ignore it)
         REENTER // call back into a target mid-settlement
     }
 
@@ -105,7 +106,8 @@ contract HostileRialtoRouter {
         }
 
         // forge-lint: disable-next-line(erc20-unchecked-transfer)
-        IERC20(stockToken).transfer(msg.sender, out); // HONEST
-        return out;
+        IERC20(stockToken).transfer(msg.sender, out); // honest delivery
+        if (mode == Mode.FALSE_RETURN) return type(uint256).max; // bogus return; adapter must ignore
+        return out; // HONEST
     }
 }

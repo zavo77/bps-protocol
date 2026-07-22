@@ -8,5 +8,6 @@ export const workspaceInfo: WorkspaceInfo = {
   implemented: true,
 };
 
-// Server-only Rialto quote boundary (never import into browser/client code).
-export * from "./quote-client.js";
+// The server-only Rialto quote boundary is deliberately NOT re-exported here. It handles the
+// RIALTO_API_KEY server-side and must never be reachable from browser/client bundles that import the
+// package's main entry. Import it explicitly from "@bps/rialto/server" (see ./server.ts).

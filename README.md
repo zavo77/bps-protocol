@@ -19,12 +19,18 @@ custody, no arbitrary path/calldata/target/fee, no owner/upgrade);
 `RialtoStockAcquisitionAdapter`, the production `IStockAcquisitionAdapter` that acquires an
 approved stock token by executing a Rialto allowance-settlement quote against the current
 registry-locked (feature ID 2) router with strict exact-input, minimum, residual, and
-atomicity invariants; and `DistributionFundingCoordinator`, which funds a
-`DistributionClaimManager` cycle with exactly the vault's released 80% distribution stock.
-A server-only Rialto quote client (`@bps/rialto`) forces allowance settlement on chain 4663,
-validates the full response, and reads its API key server-side only (never exposed). A
-complete local Foundry end-to-end test proves buy → stock acquisition → 80/20 split →
-reserve delivery → distribution funding → proof-based claim. All assets, addresses,
+atomicity invariants, and is deployable only on Robinhood Chain (its constructor requires
+`block.chainid == 4663`); and `DistributionFundingCoordinator`, which occupies **both** of the
+frozen vault's immutable roles (its `acquisitionExecutor` and `distributionFundingCoordinator`)
+so that, as the vault's sole executor, it records each acquisition atomically from the vault's
+exact before/after accounting deltas, assigns a monotonic acquisition id, and later releases and
+funds a `DistributionClaimManager` cycle with exactly that acquisition's recorded 80% — bound
+one-to-one to a single cycle id (no caller-selected amount, no split, recombination, reassignment,
+or replay). A server-only Rialto quote client (`@bps/rialto`) forces allowance settlement on chain
+4663, validates the full response, and reads its API key server-side only (never exposed); it is
+reachable only through the `@bps/rialto/server` subpath, never the package's main entry. A
+complete local Foundry end-to-end test proves buy → stock acquisition → recorded 80/20 split →
+reserve delivery → recorded-acquisition funding → proof-based claim. All assets, addresses,
 adapters, quotes, budgets, burns, claims, and transactions are fictional and local-only.
 Nothing is deployed to any network, no Rialto API is called, no credential is read or
 exposed, and no on-chain claim, trade, swap, acquisition, or burn is executed.
@@ -129,11 +135,14 @@ owner/setter/pause/sweep/rescue/withdrawal, no delegatecall/proxy/upgrade);
 `RialtoStockAcquisitionAdapter` (the production `IStockAcquisitionAdapter` — executes a
 Rialto allowance-settlement quote against the registry-locked feature-2 router with
 exact-input, observed-delta minimum, no-residual, cleared-approval, and atomic-revert
-invariants; no owner/sweep/withdrawal/Permit2/gasless/Universal-Router/delegatecall/upgrade);
-and `DistributionFundingCoordinator` (funds a claim cycle with exactly the vault's released
-80% distribution stock, bounded on-chain, governed root publisher, no arbitrary
-recipient/withdrawal). A server-only Rialto quote client (`@bps/rialto`) and a complete local
-end-to-end Foundry test are included. Not implemented: production frontend/UI, eligibility
+invariants; deployable only on Robinhood Chain (`block.chainid == 4663`); no
+owner/sweep/withdrawal/Permit2/gasless/Universal-Router/delegatecall/upgrade); and
+`DistributionFundingCoordinator` (occupies both frozen vault roles — executor and distribution
+coordinator — records each acquisition atomically from the vault's exact deltas, and funds one
+claim cycle with exactly that acquisition's recorded 80%, bound one-to-one to a single cycle id;
+trusted acquisition operator + governed root publisher, no arbitrary recipient/withdrawal). A
+server-only Rialto quote client (`@bps/rialto`, reachable only via the `@bps/rialto/server`
+subpath) and a complete local end-to-end Foundry test are included. Not implemented: production frontend/UI, eligibility
 contract, the 15-minute epoch indexer, database, transferable veBPS, and an on-chain
 price/oracle slippage guard. No contract is deployed; none is deployable until the verified
 addresses, fee tier, liquidity, circular deployment sequences, operational controls, and
@@ -150,17 +159,19 @@ and `address(this)`). (2) `BPSTradeRouter`'s swap adapter and stock-budget recip
 immutable, so a trusted production swap adapter and `StockAcquisitionVault` must exist
 **before** the router is deployed; changing either requires a new router. (3)
 `StockAcquisitionVault`'s adapter, executor, reserve recipient, distribution coordinator,
-and approved basket are all immutable, so the concrete `DistributionFundingCoordinator` and
-the governance/authorization sequence must be finalized **before** the vault is deployed;
-changing any of them requires a new vault (and hence a new router). (4) `BPSTradeRouter` and
+and approved basket are all immutable, and the `DistributionFundingCoordinator` is intended to
+be **both** the executor and the coordinator, so that coordinator (and the governance/authorization
+sequence) must be finalized **before** the vault is deployed; changing any of them requires a new
+vault (and hence a new router). (4) `BPSTradeRouter` and
 `UniswapV3BPSSwapAdapter` each store the other immutably (a circular dependency), so
 production deployment needs a reviewed deterministic / nonce-predicted sequence that
 constructs the second contract at the first's predicted address and then verifies both
 immutables on-chain — there is no one-time setter. The adapter's WETH/BPS/pool addresses,
 fee tier, and pool liquidity are also unresolved deployment gates. (5) The
 `RialtoStockAcquisitionAdapter` (vault↔adapter) and `DistributionFundingCoordinator`
-(vault↔coordinator, and claim-manager owner = coordinator) add the same predicted-address
-cycles; and the Rialto adapter needs the verified feature-2 router (from Router Registry
+(vault↔coordinator for **both** the executor and coordinator roles, and claim-manager owner =
+coordinator) add the same predicted-address cycles; and the Rialto adapter needs the verified
+feature-2 router (from Router Registry
 `0x71a120…687E`), WETH, and stock-token addresses plus the exact registry/router ABI.
 
 **Not deployable / beta blockers.** Beyond addresses and the deployment cycles: the

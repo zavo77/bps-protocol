@@ -77,6 +77,17 @@ contract RialtoAdapterHostileTest is RialtoAdapterBase {
         _run(HostileRialtoRouter.Mode.EXCESS_PULL, 1); // pulls amountIn+1 -> allowance revert
     }
 
+    // The adapter never trusts the router's return value — it uses its own observed stock delta. A
+    // router that delivers correctly but returns a bogus amount is accepted (the false return is
+    // ignored). (A false return with NO delivery is covered by testNoOutput, which reverts.)
+    function testFalseReturnIgnored() public {
+        _fundVaultWeth(W);
+        h.setMode(HostileRialtoRouter.Mode.FALSE_RETURN);
+        uint256 got = adapter.acquireStock(address(stockA), W, OUT, DEADLINE, _hostileExec(W));
+        _eq(got, OUT, "adapter uses observed delta, not the bogus return");
+        _eq(stockA.balanceOf(address(this)), OUT, "vault received the real output");
+    }
+
     function testReentrancyBlocked() public {
         _fundVaultWeth(W);
         h.setMode(HostileRialtoRouter.Mode.REENTER);

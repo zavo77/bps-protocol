@@ -117,11 +117,48 @@ contract RialtoAdapterSecurityTest is RialtoAdapterBase {
         adapter.acquireStock(address(stockA), W, W * RATE, DEADLINE, ex);
     }
 
-    function testRegistryUninitialized() public {
-        registry.setOwner(2, address(0)); // paused / uninitialized feature
+    // Verified real behavior: a paused/uninitialized feature makes `ownerOf(2)` REVERT, so the
+    // acquisition fails closed (the revert propagates through the adapter).
+    function testRegistryPausedOrUninitializedReverts() public {
+        registry.pause(2);
+        _fundVaultWeth(W);
+        vm.expectRevert(); // MockRialtoRouterRegistry.FeaturePausedOrUninitialized (fail closed)
+        adapter.acquireStock(address(stockA), W, W * RATE, DEADLINE, _honestExec(W));
+    }
+
+    // Defensive guard: if a (non-conformant) registry ever returned address(0) instead of reverting,
+    // the adapter still rejects it.
+    function testRegistryReturnsZeroRejected() public {
+        registry.forceReturnZero(2);
         _fundVaultWeth(W);
         vm.expectRevert(RialtoStockAcquisitionAdapter.RouterFeatureUninitialized.selector);
         adapter.acquireStock(address(stockA), W, W * RATE, DEADLINE, _honestExec(W));
+    }
+
+    // The adapter is deployable ONLY on Robinhood Chain (block.chainid == 4663).
+    function testConstructorWrongChainReverts() public {
+        vm.chainId(1);
+        vm.expectRevert(
+            abi.encodeWithSelector(RialtoStockAcquisitionAdapter.WrongChain.selector, 1)
+        );
+        new RialtoStockAcquisitionAdapter(address(this), address(weth), address(registry));
+    }
+
+    function testMalformedExecutionDataReverts() public {
+        _fundVaultWeth(W);
+        vm.expectRevert(); // abi.decode of non-conformant bytes reverts
+        adapter.acquireStock(address(stockA), W, W * RATE, DEADLINE, hex"deadbeef");
+    }
+
+    function testTruncatedExecutionDataReverts() public {
+        _fundVaultWeth(W);
+        bytes memory full = _honestExec(W);
+        bytes memory truncated = new bytes(full.length - 32); // drop the trailing word
+        for (uint256 i = 0; i < truncated.length; i++) {
+            truncated[i] = full[i];
+        }
+        vm.expectRevert(); // decode out-of-bounds
+        adapter.acquireStock(address(stockA), W, W * RATE, DEADLINE, truncated);
     }
 
     function testWrongTargetRejected() public {

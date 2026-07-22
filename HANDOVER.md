@@ -51,10 +51,18 @@ acquires an approved stock token for the vault by executing a Rialto **allowance
 unmodified calldata against the current registry-locked feature-2 router, then forwards the acquired
 stock to the vault — safe via registry-locked target, exact-input WETH consumption, observed-delta
 minimum, no residual custody, cleared approval, and atomic revert, with no owner/setter/sweep/rescue/
-withdrawal/Permit2/gasless/Universal-Router/delegatecall/proxy/upgrade. `DistributionFundingCoordinator`
-receives the vault's released 80% distribution stock and, under a governed root publisher, funds a
-`DistributionClaimManager` cycle with exactly that amount (bounded on-chain by the vault's cumulative
-`distributionReleased`), never fabricating allocations. A **server-only** Rialto quote client
+withdrawal/Permit2/gasless/Universal-Router/delegatecall/proxy/upgrade, and is deployable **only on
+Robinhood Chain** (its constructor reverts unless `block.chainid == 4663`).
+`DistributionFundingCoordinator` occupies **both** of the frozen vault's immutable roles — it is the
+vault's `acquisitionExecutor` **and** its `distributionFundingCoordinator` (the frozen constructor
+permits `acquisitionExecutor == distributionFundingCoordinator`; the executor is only zero-checked,
+never rejected for aliasing the coordinator). As the vault's sole executor it is the only contract that
+can move the acquisition counters, so it drives each acquisition through the vault (which uses the
+Rialto adapter), **records it atomically from the vault's exact before/after cumulative deltas**,
+assigns a monotonic acquisition id (NONE→RECORDED), and later (RECORDED→FUNDED) releases-and-funds
+exactly that acquisition's recorded 80% once, bound to one claim-cycle id — no caller-selected token or
+amount, and one acquisition id per cycle id (no splitting, recombination, reassignment, or replay). A
+**server-only** Rialto quote client
 (`@bps/rialto`) forces `chain_id=4663`/`settlement=allowance`/no-integrator-fee/no-Permit2/no-gasless,
 validates the full response, and returns only sanitized execution fields — it reads `RIALTO_API_KEY`
 server-side only, never exposes or logs it, and makes no live request in this milestone. A complete
@@ -145,18 +153,23 @@ any deployment; do not begin frontend or deployment work (see §13).
   `src/index.ts` (`runCanonicalCycle`), `src/pipeline.test.ts` (fixture end-to-end tests). Depends
   on `@bps/shared`.
 - `packages/db` — `@bps/db`. Placeholder package exporting a `WorkspaceInfo` object plus one unit test.
-- `packages/rialto` — `@bps/rialto`. **Server-only Rialto quote boundary.** `src/quote-client.ts`
-  (`fetchRialtoAllowanceQuote` + typed `RialtoQuoteError`/config/result) forces allowance settlement on
-  chain 4663, validates the full response, and returns only sanitized execution fields; reads
-  `RIALTO_API_KEY` server-side only, never exposes/logs it, injects `fetch`/`env` for tests, and makes
-  no live request. `src/quote-client.test.ts` (27 mocked-fetch tests) + `src/index.test.ts` (1). No new
-  dependency (plain-TS validation). **Never import into browser/client code.**
-- New contracts src (TASK 6B-2 + coordinator): `src/adapters/RialtoStockAcquisitionAdapter.sol`,
-  `src/DistributionFundingCoordinator.sol`, and interfaces `src/interfaces/{IStockAcquisitionVaultView,
-IRialtoRouterRegistry,IDistributionClaimManagerFunding}.sol`. New Foundry tests:
-  `test/RialtoAdapter{Base,Swap,Security,Hostile}.t.sol`, `test/CoordinatorFunding.t.sol`,
-  `test/RialtoEndToEnd.t.sol`. New test-only mocks: `test/mocks/{MockRialtoRouterRegistry,
-MockRialtoRouter,HostileRialtoRouter,MockDistributionSource}.sol`.
+- `packages/rialto` — `@bps/rialto`. **Server-only Rialto quote boundary, gated behind a package
+  subpath.** `src/quote-client.ts` (`fetchRialtoAllowanceQuote` + typed `RialtoQuoteError`/config/result)
+  forces allowance settlement on chain 4663, validates the full response, and returns only sanitized
+  execution fields; reads `RIALTO_API_KEY` server-side only, never exposes/logs it, injects `fetch`/`env`
+  for tests, and makes no live request. It is exposed **only** through `src/server.ts` (re-export),
+  published as the `"@bps/rialto/server"` subpath in `package.json` `exports`; the main barrel
+  (`src/index.ts`) deliberately does **not** re-export it, so a browser/client bundle importing
+  `@bps/rialto` can never pull the key-handling code. `src/quote-client.test.ts` (27 mocked-fetch tests,
+  imported through `./server.js`) + `src/index.test.ts` (3 — workspace info + a structural test proving
+  the barrel excludes `fetchRialtoAllowanceQuote`/`RialtoQuoteError` and the server entry exposes them).
+  No new dependency (plain-TS validation). **Never import the quote client except via `@bps/rialto/server`.**
+- New contracts src (TASK 6B-2 + acquisition-recording coordinator):
+  `src/adapters/RialtoStockAcquisitionAdapter.sol`, `src/DistributionFundingCoordinator.sol`, and
+  interfaces `src/interfaces/{IStockAcquisitionVaultView,IStockAcquisitionVaultOps,IRialtoRouterRegistry,
+IDistributionClaimManagerFunding}.sol`. New Foundry tests: `test/RialtoAdapter{Base,Swap,Security,
+Hostile}.t.sol`, `test/CoordinatorFunding.t.sol`, `test/RialtoEndToEnd.t.sol`. New test-only mocks:
+  `test/mocks/{MockRialtoRouterRegistry,MockRialtoRouter,HostileRialtoRouter}.sol`.
 - Root: `package.json` (workspaces `apps/*` + `packages/*`, pinned exact devDependencies;
   `typecheck`/`test`/`build`/`proof:mock` scripts prebuild `@bps/shared` first — see §9),
   `tsconfig.base.json` (strict + NodeNext), `eslint.config.mjs` (ESLint 9 flat config with
@@ -316,7 +329,10 @@ distribution`, remainder to reserve), delivers the reserve portion to the immuta
   §7): 1 state-mutating function (`swapExactInput`) + 5 immutable getters; **no owner, setter, pause,
   sweep, rescue, withdrawal, arbitrary path/calldata/target/fee, delegatecall, proxy, or upgrade**.
 - **`RialtoStockAcquisitionAdapter` (TASK 6B-2)** — production `IStockAcquisitionAdapter`. Verified:
-  `forge test` 372 tests pass (54 new: 35 adapter, 15 coordinator, 4 end-to-end). Only the vault may
+  `forge test` 382 tests pass (64 in the Rialto/coordinator/e2e milestone: 26 security + 11 hostile + a
+  swap/base harness for the adapter, 19 coordinator, 5 end-to-end). Deployable **only on Robinhood Chain**
+  — the constructor reverts `WrongChain(block.chainid)` unless `block.chainid == ROBINHOOD_CHAIN_ID`
+  (`4663`), a `public constant`, not configurable (`testConstructorWrongChainReverts`). Only the vault may
   call; approves stock only if the vault's basket approves it; `stockToken != WETH`; `amountIn > 0`;
   `minStockOut > 0`; enforces both the vault deadline and the quote's own expiry; decodes a minimal
   `{target, callData, quoteDeadline}` payload; requires non-empty calldata; resolves the current router
@@ -331,37 +347,66 @@ distribution`, remainder to reserve), delivers the reserve portion to the immuta
   migration that makes a quote stale. No native ETH path. Control surface (see §7): 1 state-mutating
   function + immutable getters; no owner/setter/sweep/rescue/withdrawal/Permit2/gasless/Universal-
   Router/delegatecall/proxy/upgrade.
-- **`DistributionFundingCoordinator` (TASK 6B-2)** — smallest immutable link from a completed
-  acquisition to the claim boundary. Root-publisher-only `fundAndPublishCycle`; funds only the vault's
-  approved stock; each `cycleId` once; cumulative funding per token bounded on-chain by the vault's
-  `distributionReleased` (donations/reserve never fundable); is the frozen manager's owner (set at
-  deployment via predicted address, no setter); verifies both its exact decrease and the manager's
-  exact increase. No owner/mutable-setter/arbitrary-recipient/withdrawal/sweep/generic-call.
+- **`DistributionFundingCoordinator` (TASK 6B-2, acquisition-recording)** — occupies **both** frozen
+  vault roles (`acquisitionExecutor` **and** `distributionFundingCoordinator`; the frozen constructor
+  permits the alias), verified on-chain in the tests (`testCoordinatorOccupiesBothVaultRoles`). Two
+  immutable trusted roles: `acquisitionOperator` (initiates acquisitions, supplies the off-chain quote +
+  `minStockOut`) and `rootPublisher` (supplies the governed PoD root/window and funds cycles); plus
+  immutable `stockAcquisitionVault` and `distributionClaimManager`. **No owner, no setter.** State
+  machine per acquisition id: NONE→RECORDED→FUNDED. `executeAndRecordAcquisition(stockToken,
+wethAmountIn, minStockOut, deadline, executionData) returns (acquisitionId)` is operator-only,
+  `nonReentrant`: it snapshots the vault's cumulative counters, calls `vault.executeAcquisition` (as the
+  vault's sole executor), re-reads the counters, and records the acquisition **only from the exact
+  deltas** — requiring `wethSpent == wethAmountIn`, `acquiredStock > 0`, `distribution ==
+Math.mulDiv(acquired, 80, 100)` (the vault's own rule), `reserve == acquired − distribution`, and no
+  release during the acquisition — then assigns a monotonic id and stores a RECORDED record
+  (status, stockToken, wethSpent, acquiredStock, distributionAmount, reserveAmount, cycleId). A hostile
+  or reverting acquisition reverts the whole call: no record, no id consumed
+  (`testHostileAcquisitionNoRecordNoId`, `testVaultUnderDeliveryRollsBack`). `fundRecordedAcquisition(
+acquisitionId, merkleRoot, allocationsContentHash, manifestEnvelopeHash, claimStart, claimDeadline,
+cycleId)` is rootPublisher-only, `nonReentrant`: it requires status == RECORDED and an unused `cycleId`,
+  derives the stock token and amount **from the stored record** (no caller-selected token/amount), binds
+  one acquisition id to one cycle id (`cycleUsed`/`cycleAcquisitionId`), advances to FUNDED, then
+  releases exactly the recorded 80% from the vault and publishes-and-funds that one cycle — verifying the
+  vault's release delta, the coordinator's exact receipt, the reserve accounting is unchanged, the
+  manager's exact receipt, the coordinator returns to its pre-release baseline (donations preserved), and
+  the manager allowance is cleared. Splitting, recombination, reassignment to a second cycle, a cycle
+  funding a second acquisition, replay, and out-of-order funding are all rejected
+  (`testCannotReassignAcquisitionToSecondCycle`, `testCycleIdCannotFundSecondAcquisition`,
+  `testDuplicateFundingReverts`, `testOutOfOrderFundingCorrect`, `testReserveNeverReleasedThroughCoordinator`,
+  `testPreloadedDonationsPreserved`). No arbitrary recipient/withdrawal/sweep/generic-call/proxy/upgrade.
+  19 coordinator tests.
 - **Server-only Rialto quote client (`@bps/rialto`)** — `fetchRialtoAllowanceQuote` forces
   `chain_id=4663`, `settlement=allowance`, `sell_token=WETH`, `taker=adapter`, no `swap_fee_bps`, no
   Permit2, no gasless; validates the full response (chain, settlement, tokens, exact amount, taker,
   `tx.to` nonzero, bounded hex `tx.data`, `tx.value==0`, `min_buy_amount>0`, `issues.balance==null`,
   simulation complete, allowance spender `== tx.to`) and fails closed; reads `RIALTO_API_KEY`
   server-side only, never returns/logs it, uses `AbortSignal` timeout + `no-store`, and makes **no live
-  request**. 27 mocked-fetch tests.
-- **Complete local end-to-end** (`RialtoEndToEnd.t.sol`): a real frozen `BPSTradeRouter` buy funds the
-  2% WETH budget to the vault; the executor acquires stock via the Rialto adapter (registry-locked mock
-  router); the vault applies the exact 80/20 split and delivers the 20% reserve; the coordinator funds a
-  cycle with the exact 80%; an eligible locker (with a real `BPSLockingVault` lock) claims against a
-  single-leaf fixture PoD root; invalid-proof and duplicate-claim revert; a hostile Rialto router
-  rolls the whole acquisition back; and the 2%/1%/2% economics with a true `totalSupply` burn are
-  preserved. Reconciles acquisition = distribution + reserve; all allowances/residues return to zero.
+  request**. Reachable only through the `@bps/rialto/server` subpath (`src/server.ts`); the main barrel
+  does not re-export it — proven structurally by `src/index.test.ts`. 27 mocked-fetch tests + 3 boundary
+  tests.
+- **Complete local end-to-end** (`RialtoEndToEnd.t.sol`, 5 tests): a real frozen `BPSTradeRouter` buy
+  funds the 2% WETH budget to the vault; the trusted `acquisitionOperator` calls the coordinator, which
+  (as the vault's sole executor) drives the acquisition through the Rialto adapter (registry-locked mock
+  router on chain 4663) and **records the exact acquisition from the vault's deltas**; the vault applies
+  the exact 80/20 split and delivers the 20% reserve; the `rootPublisher` funds exactly that acquisition's
+  recorded 80% into one cycle; an eligible locker claims against a single-leaf fixture PoD root;
+  invalid-proof and duplicate-claim revert; a hostile Rialto router rolls the whole acquisition back (no
+  record, vault budget intact); and a fee-on-transfer stock token is rejected through the complete
+  adapter→vault path. Reconciles acquisition = distribution + reserve; all allowances/residues return to
+  zero.
 - `BPSToken`, `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter`, `StockAcquisitionVault`,
   `UniswapV3BPSSwapAdapter`, and all frozen interfaces (`IBPSSwapAdapter`, `IBPSBurnable`,
   `IStockAcquisitionAdapter`, `ISwapRouter02`) are unchanged (no git diff on any of them or their
-  tests); the `packages/shared/src` PoD engine is unchanged. Their tests still pass within the 372-test
+  tests); the `packages/shared/src` PoD engine is unchanged. Their tests still pass within the 382-test
   suite.
-- Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; **94 TS tests**
-  incl. 27 new quote-client + 1 workspace, **372 Foundry tests**) when `forge` is on PATH (see §11).
+- Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; **97 TS tests**
+  incl. 27 quote-client + 3 boundary/workspace, **382 Foundry tests**) when `forge` is on PATH (see §11).
 - Git repository: prior checkpoints `c443b925…` (1–5), `33062815…` (6A), `0f326913…` (6B-1A),
-  `64825a3185b34100a1b36b44daac31e28b3c8c68` (6B-1B, "feat(contracts): add Uniswap v3 BPS swap adapter",
-  HEAD). The combined 6B-2 + coordinator + e2e milestone is working-tree only until an authorized
-  checkpoint commit.
+  `64825a3…` (6B-1B), `41d86ccaa9b53a3f7a837790d2bc9e2f03e65bf3` (6B-2 + coordinator + e2e,
+  "feat(protocol): integrate Rialto stock funding flow", HEAD). The acquisition-recording redesign
+  (dual-role coordinator, chain-4663 adapter guard, server subpath boundary) is working-tree only until
+  the authorized `fix(protocol): bind funding to recorded acquisitions` commit.
 
 ## 4. In progress
 
@@ -662,8 +707,11 @@ minimumBurnBpsOutput, recipient, deadline)`): swap **all** `Q` BPS→WETH first,
   is not deployed at the predicted address, the pair is unusable. There is deliberately **no one-time
   setter** shortcut. The adapter's constructor omits the router code-check precisely to allow the
   predicted (code-less) router address. No live deployment is authorized.
-- **`RialtoStockAcquisitionAdapter` rules (TASK 6B-2 — must not be silently changed):** vault-only
-  caller; only a vault-approved `stockToken != WETH`; `amountIn > 0`, `minStockOut > 0`; enforce both
+- **`RialtoStockAcquisitionAdapter` rules (TASK 6B-2 — must not be silently changed):** deployable ONLY
+  on Robinhood Chain — the constructor reverts `WrongChain(block.chainid)` unless `block.chainid ==
+ROBINHOOD_CHAIN_ID` (`4663`, a `public constant`). This is a hard, non-configurable guard, not a stored
+  parameter. Runtime: vault-only caller; only a vault-approved `stockToken != WETH`; `amountIn > 0`,
+  `minStockOut > 0`; enforce both
   the vault deadline and the quote's own `quoteDeadline`; decode only `{target, callData, quoteDeadline}`
   (no caller-selected value/spender/secondary-target/callback); require non-empty calldata. **Registry
   target lock:** accept ONLY `registry.ownerOf(2)` (revert on zero/uninitialized and on any target !=
@@ -677,15 +725,34 @@ minimumBurnBpsOutput, recipient, deadline)`): swap **all** `Q` BPS→WETH first,
   (forced ETH may stick). No owner/setter/sweep/rescue/withdrawal/Permit2/gasless/Universal-Router/
   proxy/upgrade. The exact Rialto router ABI/selector is unverified — the design deliberately relies on
   the registry-locked target + invariants, not a guessed selector (§11 config blocker).
-- **`DistributionFundingCoordinator` rules (must not be silently changed):** governed `rootPublisher`
-  only; fund a vault-approved stock; each `cycleId` once; cumulative `totalFunded[token]` bounded on-
-  chain by `vault.distributionReleased(token)` (so donations and reserve stock are never fundable and
-  allocations are never fabricated); the Merkle root/hashes/window are governed PoD inputs passed
-  through to the frozen manager (never computed on-chain); verify both the coordinator's exact decrease
-  and the manager's exact increase. The coordinator is the frozen manager's owner (set at deploy via a
-  predicted address; NO setter). No owner/mutable-setter/arbitrary-recipient/withdrawal/sweep/generic-
-  call. **Vault↔coordinator and manager-ownership deployment cycles** resolve via nonce-predicted CREATE
-  (no one-time setter), verified on-chain after deploy.
+- **`DistributionFundingCoordinator` rules (acquisition-recording — must not be silently changed):** the
+  coordinator occupies **both** frozen vault roles — it is the vault's `acquisitionExecutor` AND its
+  `distributionFundingCoordinator`. This is permitted because the frozen vault constructor only
+  zero-checks the executor and never rejects `acquisitionExecutor == distributionFundingCoordinator`
+  (it does reject the coordinator aliasing the vault/adapter/WETH/reserve, none of which the coordinator
+  is). Being the vault's **sole** executor is what makes per-acquisition delta attribution exact: no
+  other party can move the vault's cumulative counters, and both vault entry points are `nonReentrant`,
+  so a single `executeAcquisition` is the only thing that can change the counters between the
+  coordinator's before/after reads. Immutable roles: `acquisitionOperator` (initiates acquisitions),
+  `rootPublisher` (funds cycles), `stockAcquisitionVault`, `distributionClaimManager`; **no owner, no
+  setter.** Per-acquisition state machine NONE→RECORDED→FUNDED, ids monotonic from 1 (0 is never valid).
+  `executeAndRecordAcquisition` (operator-only, `nonReentrant`): record **only** from the vault's exact
+  before/after deltas, requiring `wethSpent == wethAmountIn`, `acquiredStock > 0`, `distribution ==
+Math.mulDiv(acquired, DISTRIBUTION_PERCENT, SPLIT_DENOMINATOR)` (read from the vault: 80/100), `reserve
+== acquired − distribution`, and zero release during the acquisition; a hostile/reverting acquisition
+  writes no record and consumes no id. `fundRecordedAcquisition` (rootPublisher-only, `nonReentrant`):
+  requires RECORDED status and an unused `cycleId`; derives the stock token and amount **from the stored
+  record only** (never a caller parameter); binds exactly one acquisition id to one cycle id
+  (`cycleUsed`/`cycleAcquisitionId`) so acquisitions cannot be split, recombined, reassigned, or replayed
+  and a cycle id cannot fund a second acquisition; advances to FUNDED; releases exactly the recorded 80%
+  and publishes-and-funds that one cycle, verifying the vault's release delta, the coordinator's exact
+  receipt, unchanged reserve accounting, the manager's exact receipt, a return to the coordinator's
+  pre-release baseline (donations preserved), and a cleared manager allowance. The PoD root/hashes/window
+  are governed inputs passed through to the frozen manager (never computed on-chain). The coordinator is
+  the frozen manager's owner (set at deploy via a predicted address; NO setter). No arbitrary-recipient/
+  withdrawal/sweep/generic-call/proxy/upgrade. **Vault↔coordinator (both roles) and manager-ownership
+  deployment cycles** resolve via nonce-predicted CREATE (no one-time setter), verified on-chain after
+  deploy.
 - **`StockAcquisitionVault` / frozen 80/20 split (TASK 6B-1A — must not be silently changed):**
   - Frozen split constants (percent, denominator 100, `public constant`): `SPLIT_DENOMINATOR = 100`,
     `DISTRIBUTION_PERCENT = 80`. Per successful acquisition:
@@ -695,11 +762,14 @@ minimumBurnBpsOutput, recipient, deadline)`): swap **all** `Q` BPS→WETH first,
     the router's `BPS-ECON-2.0` 2%/1%/2% WETH allocation; do not conflate them.
   - Immutable wiring (constructor, no setter): `weth`, `acquisitionAdapter` (`IStockAcquisitionAdapter`),
     `acquisitionExecutor` (sole authority; there is NO owner and NO pause), `reserveRecipient`,
-    `distributionFundingCoordinator` (placeholder — deployment blocked), and the approved stock
-    **basket** (frozen at construction; `isApprovedStockToken` is write-once, with no add/remove
-    function in v1). Constructor rejects zero addresses, adapter aliasing WETH/vault, reserve or
-    coordinator aliasing vault/adapter/WETH, reserve==coordinator, and empty/zero/duplicate/aliasing
-    basket entries.
+    `distributionFundingCoordinator`, and the approved stock **basket** (frozen at construction;
+    `isApprovedStockToken` is write-once, with no add/remove function in v1). Constructor rejects zero
+    addresses, adapter aliasing WETH/vault, reserve or coordinator aliasing vault/adapter/WETH,
+    reserve==coordinator, and empty/zero/duplicate/aliasing basket entries. It does **not** reject
+    `acquisitionExecutor == distributionFundingCoordinator` (the executor is only zero-checked), which is
+    exactly what lets the `DistributionFundingCoordinator` occupy both roles (see its rules below).
+    Deployment remains blocked on the §11 gates, but the coordinator is no longer a placeholder — the
+    acquisition-recording coordinator is the intended value for both the executor and coordinator slots.
   - `executeAcquisition(stockToken, wethAmountIn, minStockOut, deadline, executionData)`: executor-only,
     `nonReentrant`; rejects unapproved stock, zero `wethAmountIn`, zero `minStockOut`, expired deadline
     (inclusive), and `wethAmountIn` exceeding custody. Approves the immutable adapter for exactly
@@ -957,25 +1027,29 @@ address weth_, address swapRouter02_, uint24 poolFee_)`; all five are `immutable
 - `RialtoStockAcquisitionAdapter.sol` (`packages/contracts/src/adapters`) — production
   `IStockAcquisitionAdapter` executing a Rialto allowance-settlement quote against the registry-locked
   feature-2 router. Inherits OZ `ReentrancyGuard`; uses OZ `SafeERC20`. Constructor `(address vault_,
-address weth_, address registry_)`; all three immutable (`SWAP_ROUTER_FEATURE_ID = 2` constant).
-  Control surface: **1 state-mutating function** (`acquireStock`) + immutable getters
-  (`stockAcquisitionVault`, `weth`, `routerRegistry`, `SWAP_ROUTER_FEATURE_ID`). No events (it reverts
-  or returns), ~18 custom errors, no owner/setter/sweep/rescue/withdrawal/Permit2/gasless/
-  Universal-Router/delegatecall/proxy/upgrade, no native-ETH path. **Not deployed**; vault↔adapter
-  immutability is circular (nonce-predicted deploy). The registry ABI (`ownerOf(2)`), the current
-  feature-2 router, WETH, and stock-token addresses are deployment gates (§11).
-- `DistributionFundingCoordinator.sol` (`packages/contracts/src`) — governed link from a completed
-  acquisition to `DistributionClaimManager`. Inherits OZ `ReentrancyGuard`; uses OZ `SafeERC20`.
-  Constructor `(address vault_, address claimManager_, address rootPublisher_)`; all immutable. Control
-  surface: **1 state-mutating function** (`fundAndPublishCycle`) + view getters (`cycleFunded`,
-  `cycleStockToken`, `cycleFundedAmount`, `totalFunded`, immutable refs). 1 event (`CycleFunded`),
-  ~9 custom errors. Is the claim manager's owner (set at deploy via predicted address; no setter). No
-  owner/mutable-setter/arbitrary-recipient/withdrawal/sweep/generic-call. **Not deployed**;
-  vault↔coordinator immutability is circular (nonce-predicted deploy).
-- `IStockAcquisitionVaultView.sol` / `IRialtoRouterRegistry.sol` / `IDistributionClaimManagerFunding.sol`
-  (`packages/contracts/src/interfaces`) — minimal read/call slices the new components use against the
-  frozen vault (`isApprovedStockToken`, `distributionReleased`), the Rialto registry (`ownerOf`), and
-  the frozen manager (`publishCycle`). No frozen implementation is imported or modified.
+address weth_, address registry_)`; all three immutable (`SWAP_ROUTER_FEATURE_ID = 2` and
+  `ROBINHOOD_CHAIN_ID = 4663` constants). The constructor reverts `WrongChain(block.chainid)` off chain 4663. Control surface: **1 state-mutating function** (`acquireStock`) + immutable getters
+  (`stockAcquisitionVault`, `weth`, `routerRegistry`, `SWAP_ROUTER_FEATURE_ID`, `ROBINHOOD_CHAIN_ID`). No
+  events (it reverts or returns), ~19 custom errors (incl. `WrongChain`), no owner/setter/sweep/rescue/
+  withdrawal/Permit2/gasless/Universal-Router/delegatecall/proxy/upgrade, no native-ETH path. **Not
+  deployed**; vault↔adapter immutability is circular (nonce-predicted deploy). The registry ABI
+  (`ownerOf(2)`), the current feature-2 router, WETH, and stock-token addresses are deployment gates (§11).
+- `DistributionFundingCoordinator.sol` (`packages/contracts/src`) — acquisition-recording coordinator
+  occupying **both** frozen vault roles (executor + distributionFundingCoordinator). Inherits OZ
+  `ReentrancyGuard`; uses OZ `SafeERC20` and `Math`. Constructor `(address vault_, address claimManager_,
+address acquisitionOperator_, address rootPublisher_)`; all immutable (constructor code-checks the
+  already-deployed manager but not the predicted vault). Control surface: **2 state-mutating functions**
+  (`executeAndRecordAcquisition`, `fundRecordedAcquisition`) + public getters (`acquisitions` mapping,
+  `acquisitionCount`, `cycleUsed`, `cycleAcquisitionId`, immutable refs). 2 events (`AcquisitionRecorded`,
+  `AcquisitionFunded`), ~22 custom errors. Is the claim manager's owner (set at deploy via predicted
+  address; no setter). No owner/mutable-setter/arbitrary-recipient/withdrawal/sweep/generic-call. **Not
+  deployed**; vault↔coordinator immutability (both roles) is circular (nonce-predicted deploy).
+- `IStockAcquisitionVaultView.sol` / `IStockAcquisitionVaultOps.sol` / `IRialtoRouterRegistry.sol` /
+  `IDistributionClaimManagerFunding.sol` (`packages/contracts/src/interfaces`) — minimal read/call slices
+  the new components use against the frozen vault (`isApprovedStockToken` + `distributionReleased` for the
+  adapter's view; the counter getters, `executeAcquisition`, `releaseToDistributionCoordinator`, and the
+  80/20 constants for the coordinator's ops), the Rialto registry (`ownerOf`), and the frozen manager
+  (`publishCycle`). No frozen implementation is imported or modified.
 - `BuildProbe.sol` (`packages/contracts/src`) — toolchain probe only, compiles (Solc 0.8.26)
   and its test passes under Forge 1.7.1. **Not deployed**, must never be deployed.
 - No deployments on any network. No addresses, transaction hashes, or roles exist. No deployment
@@ -1088,9 +1162,33 @@ types/JS. This is required because `@bps/pilot` imports `@bps/shared`.
 
 ## 10. Latest verification
 
-TASK 6B-2 + coordinator + end-to-end verification run 2026-07-22 with Forge 1.7.1 and Node 24.18.0.
-Baseline confirmed at `64825a3185b34100a1b36b44daac31e28b3c8c68` (HEAD, the TASK 6B-1B commit); working
-tree was clean before edits. Commands actually run:
+Acquisition-recording redesign verification run 2026-07-22 with Forge 1.7.1 and Node 24.18.0. Baseline
+confirmed at `41d86ccaa9b53a3f7a837790d2bc9e2f03e65bf3` (HEAD, the TASK 6B-2 + funding-flow commit).
+Commands actually run:
+
+- `forge fmt --check` — PASS. `forge build` — PASS, no warnings. `forge test` — **382 tests pass, 0
+  failed** across 39 suites: 318 preserved TASK 1–6B-1B tests + 64 in this milestone —
+  `RialtoAdapterSecurityTest` 26 (incl. `testConstructorWrongChainReverts`, malformed/truncated
+  executionData), `RialtoAdapterHostileTest` 11 (incl. `testFalseReturnIgnored`), the adapter swap/base
+  harness, `CoordinatorFundingTest` 19 (dual-role occupancy, exact single/distinct records, hostile
+  no-record, reassignment/recombination/replay/out-of-order prevention, preloaded donations, reserve
+  never released), `RialtoEndToEndTest` 5 (full flow, invalid/duplicate claim, hostile rollback,
+  fee-on-transfer stock rejection through the adapter→vault path).
+- `npm run test --workspace @bps/rialto` — **30 pass** (27 quote-client via the `@bps/rialto/server`
+  subpath + 3 boundary/workspace, incl. the structural test that the main barrel excludes
+  `fetchRialtoAllowanceQuote`). Full TS suite **97 pass**.
+- `npm run check` — see below (run as the final gate). `git diff --check` — clean. Secret scan over all
+  changed files — no real credential; the Rialto registry address appears only in `IRialtoRouterRegistry`
+  NatSpec; the quote client reads `RIALTO_API_KEY` server-side only; tests use a placeholder key.
+- Frozen files confirmed unchanged (`git diff` empty): `BPSToken`, `DistributionClaimManager`,
+  `BPSLockingVault`, `BPSTradeRouter`, `StockAcquisitionVault`, `UniswapV3BPSSwapAdapter`, all frozen
+  interfaces (incl. `IStockAcquisitionAdapter`), their tests, and `packages/shared/src`. No new dependency.
+
+Prior — TASK 6B-2 + coordinator + end-to-end verification run 2026-07-22 with Forge 1.7.1 and Node
+24.18.0 (superseded by the redesign above; the coordinator was later rebuilt as acquisition-recording
+and the adapter gained the chain-4663 guard). Baseline confirmed at
+`64825a3185b34100a1b36b44daac31e28b3c8c68` (the TASK 6B-1B commit); working tree was clean before edits.
+Commands actually run:
 
 - `forge fmt --check` — PASS. `forge build` — PASS, no warnings (production contracts use OZ
   `SafeERC20`/`ReentrancyGuard`; the low-level `router.call` in the Rialto adapter targets only the
@@ -1368,9 +1466,9 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 ## 11. Known issues and blockers
 
-- **No local functional blockers.** All TASK 1–5, 6A, 6B-1A, 6B-1B, and the combined 6B-2 + coordinator
-  - e2e milestone pass locally (372 Foundry + 94 TS tests). The remaining blockers below prevent any
-    deployment / public beta and are grouped by kind.
+- **No local functional blockers.** All TASK 1–5, 6A, 6B-1A, 6B-1B, and the 6B-2 milestone with the
+  acquisition-recording coordinator pass locally (382 Foundry + 97 TS tests). The remaining blockers
+  below prevent any deployment / public beta and are grouped by kind.
 - **Code blockers (local):** none — the local architecture is complete and safe. One design decision to
   finalize before deployment: whether to pin an exact Rialto settlement selector in the adapter. This
   task did NOT independently verify the deployed Rialto router ABI, so the adapter relies on the
@@ -1415,13 +1513,15 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
   gates. Native ETH forced onto the adapter (via `selfdestruct`/coinbase) cannot be prevented and
   would remain stuck (no recovery path) — documented, not a functional defect.
 - **Deployment blocker (by design): `StockAcquisitionVault` is not deployable yet.** It binds the
-  `distributionFundingCoordinator` address immutably, but the concrete `DistributionFundingCoordinator`
-  is a later task, and the executor/reserve/coordinator authorization sequence is not finalized. The
-  vault only implements the narrow custody→coordinator release boundary; a bare transfer to the
-  coordinator does not publish or fund a `DistributionClaimManager` cycle. Resolution: build the
-  coordinator (and finalize governance addresses) before constructing the vault. Because the vault's
-  adapter, executor, reserve, coordinator, and basket are all immutable, changing any of them requires a
-  new vault (and, since the router binds the vault as `stockBudgetRecipient`, a new router).
+  `acquisitionExecutor` and `distributionFundingCoordinator` addresses immutably. The concrete
+  `DistributionFundingCoordinator` now exists and is intended to be **both** of those addresses (it
+  records and funds each acquisition), but the governance-address set (`acquisitionOperator`,
+  `rootPublisher`, `reserveRecipient`, claim-manager `recoveryRecipient`) and the deterministic deploy
+  order are not finalized. Because the vault's adapter, executor, reserve, coordinator, and basket are
+  all immutable, changing any of them requires a new vault (and, since the router binds the vault as
+  `stockBudgetRecipient`, a new router). The deploy sequence must place the coordinator at the vault's
+  predicted executor==coordinator address and make the coordinator the claim manager's owner — via
+  nonce-predicted CREATE, no one-time setter.
 - Router ownership hardening (by design, not a risk): unlike the claim manager and locking vault,
   `BPSTradeRouter` **disables** `renounceOwnership` (reverts `RenounceDisabled`) so it can never be
   stranded ownerless or lose its emergency pause. Ownership moves only through the two-step
@@ -1464,6 +1564,37 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 ## 12. Recent change log
 
+- **2026-07-22 (acquisition-recording coordinator redesign)** — Rebuilt `DistributionFundingCoordinator`
+  to close the per-acquisition acceptance gap **without touching the frozen `StockAcquisitionVault`**.
+  The coordinator now occupies **both** frozen vault roles (`acquisitionExecutor` +
+  `distributionFundingCoordinator`) — permitted because the frozen constructor only zero-checks the
+  executor. As the vault's sole executor it exposes `executeAndRecordAcquisition(...)` (operator-only,
+  records each acquisition atomically from the vault's exact before/after cumulative deltas, assigns a
+  monotonic id, NONE→RECORDED) and `fundRecordedAcquisition(acquisitionId, root, hashes, window, cycleId)`
+  (rootPublisher-only, RECORDED→FUNDED, derives the stock token and 80% amount from the stored record,
+  binds one acquisition id to one cycle id, releases-and-funds exactly once). New immutable
+  `acquisitionOperator` role; new `IStockAcquisitionVaultOps` interface (counter getters +
+  `executeAcquisition`/`releaseToDistributionCoordinator` + 80/20 constants). Added an
+  `IStockAcquisitionAdapter` chain guard: `RialtoStockAcquisitionAdapter` reverts
+  `WrongChain(block.chainid)` unless `block.chainid == ROBINHOOD_CHAIN_ID` (4663). Corrected the Rialto
+  registry model to the **verified** fail-closed semantics (`ownerOf(2)` reverts on paused/uninitialized)
+  in `IRialtoRouterRegistry` NatSpec and `MockRialtoRouterRegistry` (`pause`/`forceReturnZero`). Made the
+  quote client server-only at the module-boundary level: added `packages/rialto/src/server.ts` and the
+  `@bps/rialto/server` subpath export; removed it from the main barrel; added a structural test. Added
+  adapter test gaps (wrong-chain, malformed/truncated executionData, false-return-ignored,
+  fee-on-transfer stock through the full adapter→vault path). Rewrote `CoordinatorFunding.t.sol` (19) and
+  `RialtoEndToEnd.t.sol` (5) for the new flow; deleted the now-dead `MockDistributionSource.sol`. Files:
+  `src/DistributionFundingCoordinator.sol`, `src/interfaces/IStockAcquisitionVaultOps.sol`,
+  `src/interfaces/IRialtoRouterRegistry.sol`, `src/adapters/RialtoStockAcquisitionAdapter.sol`,
+  `test/{CoordinatorFunding,RialtoEndToEnd,RialtoAdapterBase,RialtoAdapterSecurity,RialtoAdapterHostile}.t.sol`,
+  `test/mocks/{MockRialtoRouterRegistry,HostileRialtoRouter}.sol`,
+  `packages/rialto/src/{index.ts,server.ts,index.test.ts,quote-client.test.ts}`,
+  `packages/rialto/package.json`, `README.md`, `HANDOVER.md`. Uses existing OZ 5.6.1; **no new
+  dependency**. Verification: `forge fmt --check`, `forge build` (no warnings), `forge test` (382 pass =
+  318 preserved + 64 milestone), `npm run test --workspace @bps/rialto` (30 pass), full `npm run check`
+  (97 TS + 382 Foundry), `git diff --check` clean — all PASS; frozen contracts/tests and the PoD engine
+  unchanged; no secret/credential/live-address in code. Status: complete and verified; **not deployable**
+  (§11 blockers); no Rialto API called; no credential read/used/exposed.
 - **2026-07-22 (TASK 6B-2 + coordinator + local end-to-end)** — Implemented the concrete
   `RialtoStockAcquisitionAdapter` (allowance-settlement, registry-locked feature-2 target, unmodified
   quote calldata, exact-input + observed-delta-minimum + no-residual invariants), the
@@ -1654,18 +1785,22 @@ IRialtoRouterRegistry,IDistributionClaimManagerFunding}.sol`, six `test/*.t.sol`
 
 1. Read `CLAUDE.md` and this file first.
 2. Ensure Forge is on PATH (see §11 PATH note). Run `npm install` (if `node_modules` is missing),
-   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (94 TS tests, 372 Foundry
+   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (97 TS tests, 382 Foundry
    tests). Quick subsets from `packages/contracts`: `forge test --match-contract
 "RialtoAdapter|CoordinatorFunding|RialtoEndToEnd"`, `forge test --match-contract "StockVault"`,
    `forge test --match-contract "SwapAdapter|RouterUniswapIntegration"`. TS: `npm run test --workspace
 @bps/rialto`. Optionally `npm run proof:mock -- --out <tmp>`. The working tree carries the
-   uncommitted combined 6B-2 + coordinator + e2e milestone unless it has been checkpointed.
-3. **The combined 6B-2 + coordinator + local end-to-end milestone is complete.** Do NOT begin deployment
-   or frontend work. Before any deployment, resolve the §11 blockers: verified WETH/BPS/stock/router/pool
-   addresses + fee tier; the exact Rialto router ABI (`ownerOf(2)`) and settlement selector; a
-   price/oracle slippage guard; operational controls; the three circular deterministic deployment
-   sequences (router↔Uniswap-adapter, vault↔Rialto-adapter, vault↔coordinator, claim-manager owner =
-   coordinator); and external legal/eligibility review (Robinhood Stock Tokens have jurisdiction limits).
+   acquisition-recording redesign unless it has been checkpointed as
+   `fix(protocol): bind funding to recorded acquisitions`.
+3. **The 6B-2 milestone with the acquisition-recording coordinator is complete.** The coordinator now
+   occupies both frozen vault roles (executor + distributionFundingCoordinator) and records/funds each
+   acquisition from exact vault deltas; the Rialto adapter is chain-4663-guarded; the quote client is
+   server-only via the `@bps/rialto/server` subpath. Do NOT begin deployment or frontend work. Before any
+   deployment, resolve the §11 blockers: verified WETH/BPS/stock/router/pool addresses + fee tier; the
+   exact Rialto router ABI (`ownerOf(2)`) and settlement selector; a price/oracle slippage guard;
+   operational controls; the circular deterministic deployment sequences (router↔Uniswap-adapter,
+   vault↔Rialto-adapter, vault↔coordinator **for both roles**, claim-manager owner = coordinator); and
+   external legal/eligibility review (Robinhood Stock Tokens have jurisdiction limits).
    Do NOT create/use/expose the Rialto API key or make a live quote request. When resuming, honor the §6
    rules (Rialto adapter, coordinator, 80/20, router, burn-truth) and the frozen contracts; introduce no
    economics other than
