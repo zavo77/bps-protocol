@@ -46,7 +46,7 @@ exposed, and no on-chain claim, trade, swap, acquisition, or burn is executed.
 
 | Path                 | Package          | Purpose                                                                                                                                                                                                     |
 | -------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`           | `@bps/web`       | Next.js (App Router) web application                                                                                                                                                                        |
+| `apps/web`           | `@bps/web`       | Restricted-beta interface: fail-closed dashboard + tested application core (`lib/`) for deployment config, eligibility, official trade/lock/claim, transparency, and oracle read models                     |
 | `apps/indexer`       | `@bps/indexer`   | Chain indexer service (scaffold)                                                                                                                                                                            |
 | `apps/worker`        | `@bps/worker`    | Background worker service (scaffold)                                                                                                                                                                        |
 | `packages/contracts` | `@bps/contracts` | Foundry: `BPSToken`, `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter`, `StockAcquisitionVault`, `UniswapV3BPSSwapAdapter`, `RialtoStockAcquisitionAdapter`, `DistributionFundingCoordinator` |
@@ -194,3 +194,17 @@ deploys the whole stack against the real externals and asserts every predicted a
 immutable role. **Nothing is deployed, broadcast, signed, or pooled.** The first live deployment
 decision is **NO-GO** until the pool/fee tier, deployer/role/basket inputs, an on-chain slippage
 guard, and legal/eligibility review are resolved.
+
+**Restricted-beta application (fail-closed, no live writes).** `apps/web` provides the interface: a
+tested, dependency-free application core (`apps/web/lib/`) covering a deployment-manifest boundary
+(chain 4663, rejects placeholder/null addresses, writes disabled until a broadcast-ready same-commit
+manifest with runtime code), a wallet/declaration/eligibility state machine (EIP-712 verification
+where signing is never sufficient for eligibility), an official-router-only trade model (exact
+allowances, never SwapRouter02 direct), locking and Merkle-verified claim flows, a provenance-tagged
+transparency read model, and a read-only Chainlink oracle model with a `minStockOut` operator policy.
+The dashboard resolves the dry-run manifest to **"Protocol not live"**, disables every write, labels
+all fixtures as demonstration data, and states the system is **not fully decentralized**. Covered by
+55 vitest tests including a full local end-to-end flow and a server-only Rialto import boundary. A
+real wallet-connect + EIP-712-signing UI and browser tests are deferred (they require dependencies
+not installed in this task); the EIP-712 declaration domain is a labeled beta scaffold pending
+governance/legal finalization. `RIALTO_API_KEY` and the quote client remain server-only.

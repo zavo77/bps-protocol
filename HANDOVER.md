@@ -75,9 +75,18 @@ any deployment; do not begin frontend or deployment work (see §13).
 
 ## 2. Repository map
 
-- `apps/web` — `@bps/web`. Next.js 16.2.11 (App Router, Turbopack). Single static page stating
-  "BPS Protocol — Engineering Build" and "Live pilot functionality is not configured."
-  Files: `app/layout.tsx`, `app/page.tsx`, `next.config.mjs` (empty config), `tsconfig.json`.
+- `apps/web` — `@bps/web`. Next.js 16.2.11 (App Router). **TASK 8 restricted-beta interface.** A
+  fail-closed dashboard (`app/page.tsx`, `app/layout.tsx`, `app/globals.css`) driven by a tested,
+  dependency-free application core under `apps/web/lib/`: `manifest.ts` (deployment-manifest boundary),
+  `economics.ts` (frozen BPS-ECON-2.0 math), `eligibility.ts` (wallet+declaration EIP-712 state machine),
+  `trade.ts` (official-router-only trade model), `locking.ts`, `claim.ts` (Merkle claim verification),
+  `transparency.ts` (provenance-tagged read model), `oracle.ts` (Chainlink read model + minStockOut
+  policy), `abis.ts` (hand-written ABIs from the frozen surfaces), `fixtures.ts` (labeled demo data), plus
+  `*.test.ts` (55 vitest tests incl. `e2e.test.ts` and `rialto-boundary.test.ts`). `vitest.config.ts` +
+  a `test` script wire it into the suite. The page resolves the dry-run manifest → "Protocol not live",
+  disables every write, labels all fixtures, and states the system is not decentralized. Uses viem/zod/
+  vitest via workspace hoisting — **no dependency installed**; a real wallet-connect + EIP-712-signing UI
+  and React/browser tests are deferred (need wagmi/@testing-library/jsdom — a documented blocker).
 - `apps/indexer` — `@bps/indexer`. TypeScript service stub. `src/index.ts` prints health JSON and
   exits (no long-running behavior). `src/health.ts` exports `getHealthStatus()`;
   `src/health.test.ts` covers it.
@@ -407,17 +416,21 @@ cycleId)` is rootPublisher-only, `nonReentrant`: it requires status == RECORDED 
   `IStockAcquisitionAdapter`, `ISwapRouter02`) are unchanged (no git diff on any of them or their
   tests); the `packages/shared/src` PoD engine is unchanged. Their tests still pass within the 398-test
   suite.
-- Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; **97 TS tests**
-  incl. 27 quote-client + 3 boundary/workspace, **398 Foundry tests**) when `forge` is on PATH (see §11).
-  The 398 include the TASK 7 additions: 2 coordinator funding-rollback tests, 13 deployment-config
-  validation/prediction tests, and 1 mainnet-fork deploy-rehearsal test that skips when
-  `ROBINHOOD_FORK_RPC` is unset (so the offline suite stays green) and runs the full stack against the
-  real Robinhood Chain externals when it is set.
+- Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; **152 TS tests**
+  incl. 27 quote-client + 55 TASK 8 `@bps/web` app-core tests, **398 Foundry tests**) when `forge` is on
+  PATH (see §11). The 398 include the TASK 7 additions (2 coordinator funding-rollback tests, 13
+  deployment-config validation/prediction tests, 1 mainnet-fork deploy-rehearsal test that skips when
+  `ROBINHOOD_FORK_RPC` is unset). The 55 new TS tests cover the TASK 8 manifest boundary, eligibility
+  state machine, official-trade/lock/claim models, transparency read model, oracle read model, the local
+  end-to-end flow, and the server-only Rialto import boundary.
 - Git repository: prior checkpoints `c443b925…` (1–5), `33062815…` (6A), `0f326913…` (6B-1A),
-  `64825a3…` (6B-1B), `41d86cc…` (6B-2 + coordinator + e2e), `90e338ae13fd13258128d6aa659b2162d9c37caa`
-  (acquisition-recording redesign, "fix(protocol): bind funding to recorded acquisitions", HEAD). The
-  TASK 7 deployment package (rollback tests, verified externals, deterministic deploy plan + fork
-  rehearsal, manifest/runbook) is working-tree only until the authorized
+  `64825a3…` (6B-1B), `41d86cc…` (6B-2 + coordinator + e2e), `90e338a…` (acquisition-recording redesign),
+  `cd98df35fcb917c328c3dfec769c200e017e2690` (TASK 7 deployment preparation,
+  "feat(deploy): prepare restricted beta release", HEAD). The TASK 8 restricted-beta application
+  (`apps/web` app-core + fail-closed UI) is working-tree only until the authorized
+  `feat(app): integrate restricted beta protocol flows` commit. The TASK 7 deployment package
+  (rollback tests, verified externals, deterministic deploy plan + fork rehearsal, manifest/runbook)
+  remains as committed at `cd98df3`. (Historical note:) it was working-tree only until the authorized
   `feat(deploy): prepare restricted beta release` commit.
 
 ## 4. In progress
@@ -1614,6 +1627,38 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 ## 12. Recent change log
 
+- **2026-07-22 (TASK 8 — restricted-beta application integration + on-chain transparency)** — Built a
+  production-shaped restricted-beta interface on `apps/web` from the previously placeholder page. **No
+  contract deploy, live transaction, signature, broadcast, pool, or liquidity action; no wallet/key/
+  credential/protected-Rialto access; no frozen contract/interface/test or `packages/shared/src`
+  modified; no dependency installed (viem/zod/vitest used via workspace hoisting).** Added a tested,
+  dependency-free application core under `apps/web/lib/`: (A) `manifest.ts` — a deployment-manifest
+  boundary that validates the Task 7 schema, requires chain 4663, distinguishes local/fork/restricted-
+  beta/production, rejects null/zero/placeholder/malformed addresses, and FAILS CLOSED (writes stay
+  disabled until a broadcast-ready, same-commit, real-address manifest passes an injected runtime-code
+  check; fixtures never enable writes). (B) `eligibility.ts` — a 7-state wallet+declaration machine with
+  EIP-712 verification (signer/chain/expiry/nonce-replay/document-version via viem) where signing is
+  NEVER sufficient for eligibility (a separate boundary result is required). (C) `trade.ts` — official
+  trades route only through BPSTradeRouter (never SwapRouter02), exact allowances, full economics
+  disclosure, and a fail-closed submission gate. (D) `locking.ts` — no yield/APY language. (E) `claim.ts`
+  — local double-keccak leaf + sorted-pair Merkle verification against the on-chain cycle; entitlement is
+  never inferred from holdings. (F) `transparency.ts` — provenance-tagged read model that keeps budget
+  accrual distinct from executed acquisitions and never calls Rialto decentralized. (G) a source-scan
+  test proving no browser-reachable code imports the quote client or references `RIALTO_API_KEY`. (H)
+  `oracle.ts` — a read-only Chainlink feed model + `minStockOut` operator policy (feed addresses are
+  config-injected, not hardcoded). A fail-closed UI (`app/page.tsx`, `globals.css`) renders "Protocol not
+  live", disables all writes, labels fixtures, and states the system is not decentralized. Tests: 55
+  vitest tests in `apps/web/lib/*.test.ts` (incl. `e2e.test.ts` and `rialto-boundary.test.ts`), wired via
+  `vitest.config.ts` + a `test` script. Verification: `forge fmt --check`, `forge build`, `forge test`
+  (398 pass), `npm run test --workspace @bps/web` (55 pass), full `npm run check` (152 TS + 398 Foundry,
+  exit 0), web `next build` static, browser-bundle scan clean of `RIALTO_API_KEY`/
+  `fetchRialtoAllowanceQuote`, `git diff --check` clean. **Deferred as blockers (not faked):** a real
+  wallet-connect + EIP-712-signing UI and React-component/browser-E2E tests require wagmi/
+  @testing-library/jsdom (not installed — stopped before installing); there is no pre-existing accepted
+  EIP-712 legal domain, so the declaration typed-data is a clearly-labeled beta scaffold pending
+  governance/legal finalization; a protected operator/quote route stays disabled (no operator-auth
+  boundary exists). Live blockers carried forward unchanged (§11); legal/eligibility and security review
+  remain incomplete.
 - **2026-07-22 (TASK 7 — verified deployment configuration + restricted-beta rehearsal)** — Prepared a
   production-shaped, independently verified Robinhood Chain deployment package and a deterministic
   deployment rehearsal; **no live broadcast, deploy, sign, pool, or liquidity action was performed**, no
@@ -1861,21 +1906,27 @@ IRialtoRouterRegistry,IDistributionClaimManagerFunding}.sol`, six `test/*.t.sol`
 
 1. Read `CLAUDE.md` and this file first.
 2. Ensure Forge is on PATH (see §11 PATH note). Run `npm install` (if `node_modules` is missing),
-   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (97 TS tests, 398 Foundry
+   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (152 TS tests, 398 Foundry
    tests). The mainnet-fork deploy rehearsal is opt-in: `ROBINHOOD_FORK_RPC=<read-only rpc> forge test
---match-contract ForkDeployRehearsal` (it skips, counting as pass, when the env var is unset). Quick
-   subsets from `packages/contracts`: `forge test --match-contract
-"RialtoAdapter|CoordinatorFunding|RialtoEndToEnd"`, `forge test --match-contract
-"DeployConfigValidation"`, `forge test --match-contract "StockVault"`. TS: `npm run test --workspace
-@bps/rialto`. Optionally `npm run proof:mock -- --out <tmp>`. The working tree carries the TASK 7
-   deployment package unless it has been checkpointed as `feat(deploy): prepare restricted beta release`.
-3. **TASK 7 is complete and the decision is NO-GO for a live deployment** (blocked on the BPS/WETH pool +
-   fee tier, user-supplied deployer/role addresses, the beta basket selection, an on-chain slippage/oracle
-   guard, and external legal/eligibility review — all in §11). The deployment package is ready and fails
-   closed: `script/BPSDeployment.sol` + `script/DeployBPS.s.sol` + `deploy/` (schema, dry-run manifest,
-   runbook) + `.env.example`; the fork rehearsal proves the deterministic wiring against the real
-   externals. The coordinator occupies both frozen vault roles; the Rialto adapter is chain-4663-guarded;
-   the quote client is server-only via `@bps/rialto/server`. Do NOT begin deployment or frontend work.
+--match-contract ForkDeployRehearsal` (it skips, counting as pass, when the env var is unset). TS
+   subsets: `npm run test --workspace @bps/web` (55 TASK 8 app-core tests), `npm run test --workspace
+@bps/rialto`. Contract subsets: `forge test --match-contract
+"RialtoAdapter|CoordinatorFunding|RialtoEndToEnd"`, `... "DeployConfigValidation"`, `... "StockVault"`.
+   The working tree carries the TASK 8 restricted-beta application (`apps/web`) unless it has been
+   checkpointed as `feat(app): integrate restricted beta protocol flows`.
+3. **TASK 8 (restricted-beta application) is complete; TASK 7's NO-GO for a live deployment stands** —
+   application integration does not lift it. The app fails closed (writes disabled without a valid live
+   manifest), keeps eligibility separate from terms acceptance, keeps the Rialto client server-only, and
+   labels all fixtures. Deferred with documented blockers: a real wallet-connect + EIP-712-signing UI and
+   React/browser tests (need wagmi/@testing-library/jsdom — not installed), and a governance/legal-final
+   EIP-712 declaration domain (the current one is a labeled scaffold). NO-GO remains blocked on the
+   BPS/WETH pool + fee tier, user-supplied deployer/role addresses, the beta basket selection, an on-chain
+   slippage/oracle guard, and external legal/eligibility + security review (all §11). The TASK 7
+   deployment package is ready and fails closed: `script/BPSDeployment.sol` + `script/DeployBPS.s.sol` +
+   `deploy/` (schema, dry-run manifest, runbook) + `.env.example`; the fork rehearsal proves the
+   deterministic wiring against the real externals. The coordinator occupies both frozen vault roles; the
+   Rialto adapter is chain-4663-guarded; the quote client is server-only via `@bps/rialto/server`. Do NOT
+   begin live deployment, pool creation, liquidity provision, or the separate launchpad project.
    Before any deployment, resolve the §11 blockers: the verified BPS/WETH pool + fee tier + liquidity;
    the user-supplied deployer/role/basket values; a price/oracle slippage guard; operational controls; and
    external legal/eligibility review (Robinhood Stock Tokens have jurisdiction limits). The external
