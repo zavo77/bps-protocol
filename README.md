@@ -15,10 +15,19 @@ reserve); and `UniswapV3BPSSwapAdapter`, the production `IBPSSwapAdapter` that r
 frozen BPS↔WETH router leg through exactly one Uniswap v3 pool via a single
 `SwapRouter02.exactInputSingle` (immutable router/pair/router02/pool-fee, adapter-enforced
 deadline, direct-recipient delivery with double balance-delta verification, no residual
-custody, no arbitrary path/calldata/target/fee, no owner/upgrade). All assets, addresses,
-adapters, budgets, burns, claims, and transactions are fictional and local-only. Nothing is
-deployed to any network, mainnet or otherwise, and no on-chain claim, trade, swap,
-acquisition, or burn is executed.
+custody, no arbitrary path/calldata/target/fee, no owner/upgrade);
+`RialtoStockAcquisitionAdapter`, the production `IStockAcquisitionAdapter` that acquires an
+approved stock token by executing a Rialto allowance-settlement quote against the current
+registry-locked (feature ID 2) router with strict exact-input, minimum, residual, and
+atomicity invariants; and `DistributionFundingCoordinator`, which funds a
+`DistributionClaimManager` cycle with exactly the vault's released 80% distribution stock.
+A server-only Rialto quote client (`@bps/rialto`) forces allowance settlement on chain 4663,
+validates the full response, and reads its API key server-side only (never exposed). A
+complete local Foundry end-to-end test proves buy → stock acquisition → 80/20 split →
+reserve delivery → distribution funding → proof-based claim. All assets, addresses,
+adapters, quotes, budgets, burns, claims, and transactions are fictional and local-only.
+Nothing is deployed to any network, no Rialto API is called, no credential is read or
+exposed, and no on-chain claim, trade, swap, acquisition, or burn is executed.
 
 ## Prerequisites
 
@@ -29,16 +38,16 @@ acquisition, or burn is executed.
 
 ## Repository layout
 
-| Path                 | Package          | Purpose                                                                                                                                  |
-| -------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`           | `@bps/web`       | Next.js (App Router) web application                                                                                                     |
-| `apps/indexer`       | `@bps/indexer`   | Chain indexer service (scaffold)                                                                                                         |
-| `apps/worker`        | `@bps/worker`    | Background worker service (scaffold)                                                                                                     |
-| `packages/contracts` | `@bps/contracts` | Foundry: `BPSToken`, `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter`, `StockAcquisitionVault`, `UniswapV3BPSSwapAdapter` |
-| `packages/shared`    | `@bps/shared`    | Proof-of-Distribution domain logic                                                                                                       |
-| `packages/db`        | `@bps/db`        | Database access layer (scaffold)                                                                                                         |
-| `packages/rialto`    | `@bps/rialto`    | Rialto integration (scaffold)                                                                                                            |
-| `packages/pilot`     | `@bps/pilot`     | PoD local fixture runner + CLI                                                                                                           |
+| Path                 | Package          | Purpose                                                                                                                                                                                                     |
+| -------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`           | `@bps/web`       | Next.js (App Router) web application                                                                                                                                                                        |
+| `apps/indexer`       | `@bps/indexer`   | Chain indexer service (scaffold)                                                                                                                                                                            |
+| `apps/worker`        | `@bps/worker`    | Background worker service (scaffold)                                                                                                                                                                        |
+| `packages/contracts` | `@bps/contracts` | Foundry: `BPSToken`, `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter`, `StockAcquisitionVault`, `UniswapV3BPSSwapAdapter`, `RialtoStockAcquisitionAdapter`, `DistributionFundingCoordinator` |
+| `packages/shared`    | `@bps/shared`    | Proof-of-Distribution domain logic                                                                                                                                                                          |
+| `packages/db`        | `@bps/db`        | Database access layer (scaffold)                                                                                                                                                                            |
+| `packages/rialto`    | `@bps/rialto`    | Server-only Rialto quote client (allowance settlement)                                                                                                                                                      |
+| `packages/pilot`     | `@bps/pilot`     | PoD local fixture runner + CLI                                                                                                                                                                              |
 
 ## Install
 
@@ -116,13 +125,19 @@ and `UniswapV3BPSSwapAdapter` (the production `IBPSSwapAdapter` — a narrow dir
 only the router may call, only the BPS↔WETH pair, deadline enforced by the adapter, output
 delivered directly to the recipient with double balance-delta verification, no residual
 custody, rejected recipient sentinels, no arbitrary path/calldata/target/fee, no
-owner/setter/pause/sweep/rescue/withdrawal, no delegatecall/proxy/upgrade). Not implemented:
-the concrete Rialto stock-acquisition adapter + backend quote executor (6B-2), the
-`DistributionFundingCoordinator`, eligibility contract, the 15-minute epoch indexer,
-database, and UI features. No contract is deployed; `StockAcquisitionVault` and
-`UniswapV3BPSSwapAdapter` are not deployable until their address/fee/liquidity/coordinator
-and the deterministic router↔adapter deployment sequence are finalized. There is no mainnet
-deployment.
+owner/setter/pause/sweep/rescue/withdrawal, no delegatecall/proxy/upgrade);
+`RialtoStockAcquisitionAdapter` (the production `IStockAcquisitionAdapter` — executes a
+Rialto allowance-settlement quote against the registry-locked feature-2 router with
+exact-input, observed-delta minimum, no-residual, cleared-approval, and atomic-revert
+invariants; no owner/sweep/withdrawal/Permit2/gasless/Universal-Router/delegatecall/upgrade);
+and `DistributionFundingCoordinator` (funds a claim cycle with exactly the vault's released
+80% distribution stock, bounded on-chain, governed root publisher, no arbitrary
+recipient/withdrawal). A server-only Rialto quote client (`@bps/rialto`) and a complete local
+end-to-end Foundry test are included. Not implemented: production frontend/UI, eligibility
+contract, the 15-minute epoch indexer, database, transferable veBPS, and an on-chain
+price/oracle slippage guard. No contract is deployed; none is deployable until the verified
+addresses, fee tier, liquidity, circular deployment sequences, operational controls, and
+legal/eligibility review are resolved. There is no mainnet deployment.
 
 **Economics — `BPS-ECON-2.0` only:** buy 3% (2% stock acquisition + 1% burn); sell 4%
 (2% stock acquisition + 2% burn). There is no stewardship, treasury, creation, or
@@ -142,4 +157,16 @@ changing any of them requires a new vault (and hence a new router). (4) `BPSTrad
 production deployment needs a reviewed deterministic / nonce-predicted sequence that
 constructs the second contract at the first's predicted address and then verifies both
 immutables on-chain — there is no one-time setter. The adapter's WETH/BPS/pool addresses,
-fee tier, and pool liquidity are also unresolved deployment gates.
+fee tier, and pool liquidity are also unresolved deployment gates. (5) The
+`RialtoStockAcquisitionAdapter` (vault↔adapter) and `DistributionFundingCoordinator`
+(vault↔coordinator, and claim-manager owner = coordinator) add the same predicted-address
+cycles; and the Rialto adapter needs the verified feature-2 router (from Router Registry
+`0x71a120…687E`), WETH, and stock-token addresses plus the exact registry/router ABI.
+
+**Not deployable / beta blockers.** Beyond addresses and the deployment cycles: the
+acquisition path is **not fully permissionless or decentralized** — it depends on a trusted
+governance executor/root-publisher and the centralized, protected Rialto quote service; a
+price/oracle slippage guard is required for a safe permissionless flow. **Robinhood Stock
+Tokens carry jurisdiction and eligibility restrictions** — a public-beta launch blocker
+requiring external legal and eligibility review (BPS provides no legal conclusion). See
+`HANDOVER.md` §11 for the full code / configuration / operational / legal blocker breakdown.

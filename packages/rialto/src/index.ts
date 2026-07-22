@@ -5,5 +5,8 @@ export interface WorkspaceInfo {
 
 export const workspaceInfo: WorkspaceInfo = {
   name: "@bps/rialto",
-  implemented: false,
+  implemented: true,
 };
+
+// Server-only Rialto quote boundary (never import into browser/client code).
+export * from "./quote-client.js";
