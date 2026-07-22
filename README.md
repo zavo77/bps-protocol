@@ -11,9 +11,14 @@ WETH stock-acquisition budget, and a true BPS repurchase-and-burn that reduces t
 supply); and `StockAcquisitionVault`, the production-shaped multi-asset custody boundary
 that converts the WETH stock-acquisition budget into approved stock tokens through an
 immutable adapter and applies a frozen 80/20 split (distribution retained, remainder to the
-reserve). All assets, addresses, adapters, budgets, burns, claims, and transactions are
-fictional and local-only. Nothing is deployed to any network, mainnet or otherwise, and no
-on-chain claim, trade, swap, acquisition, or burn is executed.
+reserve); and `UniswapV3BPSSwapAdapter`, the production `IBPSSwapAdapter` that routes each
+frozen BPS↔WETH router leg through exactly one Uniswap v3 pool via a single
+`SwapRouter02.exactInputSingle` (immutable router/pair/router02/pool-fee, adapter-enforced
+deadline, direct-recipient delivery with double balance-delta verification, no residual
+custody, no arbitrary path/calldata/target/fee, no owner/upgrade). All assets, addresses,
+adapters, budgets, burns, claims, and transactions are fictional and local-only. Nothing is
+deployed to any network, mainnet or otherwise, and no on-chain claim, trade, swap,
+acquisition, or burn is executed.
 
 ## Prerequisites
 
@@ -24,16 +29,16 @@ on-chain claim, trade, swap, acquisition, or burn is executed.
 
 ## Repository layout
 
-| Path                 | Package          | Purpose                                                                                                       |
-| -------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------- |
-| `apps/web`           | `@bps/web`       | Next.js (App Router) web application                                                                          |
-| `apps/indexer`       | `@bps/indexer`   | Chain indexer service (scaffold)                                                                              |
-| `apps/worker`        | `@bps/worker`    | Background worker service (scaffold)                                                                          |
-| `packages/contracts` | `@bps/contracts` | Foundry: `BPSToken`, `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter`, `StockAcquisitionVault` |
-| `packages/shared`    | `@bps/shared`    | Proof-of-Distribution domain logic                                                                            |
-| `packages/db`        | `@bps/db`        | Database access layer (scaffold)                                                                              |
-| `packages/rialto`    | `@bps/rialto`    | Rialto integration (scaffold)                                                                                 |
-| `packages/pilot`     | `@bps/pilot`     | PoD local fixture runner + CLI                                                                                |
+| Path                 | Package          | Purpose                                                                                                                                  |
+| -------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`           | `@bps/web`       | Next.js (App Router) web application                                                                                                     |
+| `apps/indexer`       | `@bps/indexer`   | Chain indexer service (scaffold)                                                                                                         |
+| `apps/worker`        | `@bps/worker`    | Background worker service (scaffold)                                                                                                     |
+| `packages/contracts` | `@bps/contracts` | Foundry: `BPSToken`, `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter`, `StockAcquisitionVault`, `UniswapV3BPSSwapAdapter` |
+| `packages/shared`    | `@bps/shared`    | Proof-of-Distribution domain logic                                                                                                       |
+| `packages/db`        | `@bps/db`        | Database access layer (scaffold)                                                                                                         |
+| `packages/rialto`    | `@bps/rialto`    | Rialto integration (scaffold)                                                                                                            |
+| `packages/pilot`     | `@bps/pilot`     | PoD local fixture runner + CLI                                                                                                           |
 
 ## Install
 
@@ -105,12 +110,18 @@ stock token through an immutable acquisition adapter, verifying exact WETH spend
 observed stock delta, and that the adapter keeps no new net residual custody of WETH or
 acquired stock, then applies a frozen 80/20 split with the rounding remainder to the
 reserve and the distribution portion releasable only to an immutable coordinator; no owner,
-no pause, no basket mutation, no sweep/withdrawal, no arbitrary recipient/call, no upgrade).
-Not implemented: the production conventional-DEX BPS/WETH swap adapter (6B-1B), the concrete
-Rialto stock-acquisition adapter + backend quote executor (6B-2), the
+no pause, no basket mutation, no sweep/withdrawal, no arbitrary recipient/call, no upgrade);
+and `UniswapV3BPSSwapAdapter` (the production `IBPSSwapAdapter` — a narrow direct Uniswap v3
+`SwapRouter02.exactInputSingle` adapter, immutable router/BPS/WETH/SwapRouter02/pool-fee,
+only the router may call, only the BPS↔WETH pair, deadline enforced by the adapter, output
+delivered directly to the recipient with double balance-delta verification, no residual
+custody, rejected recipient sentinels, no arbitrary path/calldata/target/fee, no
+owner/setter/pause/sweep/rescue/withdrawal, no delegatecall/proxy/upgrade). Not implemented:
+the concrete Rialto stock-acquisition adapter + backend quote executor (6B-2), the
 `DistributionFundingCoordinator`, eligibility contract, the 15-minute epoch indexer,
-database, and UI features. No contract is deployed; `StockAcquisitionVault` is not
-deployable until the coordinator and governance sequence are finalized. There is no mainnet
+database, and UI features. No contract is deployed; `StockAcquisitionVault` and
+`UniswapV3BPSSwapAdapter` are not deployable until their address/fee/liquidity/coordinator
+and the deterministic router↔adapter deployment sequence are finalized. There is no mainnet
 deployment.
 
 **Economics — `BPS-ECON-2.0` only:** buy 3% (2% stock acquisition + 1% burn); sell 4%
@@ -126,4 +137,9 @@ immutable, so a trusted production swap adapter and `StockAcquisitionVault` must
 `StockAcquisitionVault`'s adapter, executor, reserve recipient, distribution coordinator,
 and approved basket are all immutable, so the concrete `DistributionFundingCoordinator` and
 the governance/authorization sequence must be finalized **before** the vault is deployed;
-changing any of them requires a new vault (and hence a new router).
+changing any of them requires a new vault (and hence a new router). (4) `BPSTradeRouter` and
+`UniswapV3BPSSwapAdapter` each store the other immutably (a circular dependency), so
+production deployment needs a reviewed deterministic / nonce-predicted sequence that
+constructs the second contract at the first's predicted address and then verifies both
+immutables on-chain — there is no one-time setter. The adapter's WETH/BPS/pool addresses,
+fee tier, and pool liquidity are also unresolved deployment gates.
