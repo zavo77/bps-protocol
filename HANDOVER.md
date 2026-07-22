@@ -1,29 +1,38 @@
 # HANDOVER — BPS Experiment
 
 Last updated: 2026-07-22 (local machine time; verification timestamps below are from command output).
-TASK 5 (`BPSLockingVault` — fixed-term BPS locking under the frozen `vebps-1` policy) is complete
-and fully tested under Forge 1.7.1. All assets, addresses, positions, and transactions are
-**fictional and local-only**; nothing is deployed or connected to any network, and no real lock,
-withdrawal, or claim executes outside the local Foundry test VM.
+TASK 6A (`BPSTradeRouter` — the official BPS trade router: true BPS burning and stock-acquisition
+budget under `BPS-ECON-2.0`) is complete and fully tested under Forge 1.7.1. All assets, addresses,
+adapters, budgets, burns, and transactions are **fictional and local-only**; nothing is deployed or
+connected to any network, no RPC/wallet/credential is used, no liquidity is created, and no real
+trade, swap, or burn executes outside the local Foundry test VM. TASK 6B and any later task have
+**not** begun.
 
 ## 1. Project snapshot
 
 This repository contains the monorepo foundation (TASK 1), the canonical fixed-supply `BPSToken`
 ERC-20 (TASK 2), a deterministic mock-asset Proof-of-Distribution engine (TASK 3), the
-`DistributionClaimManager` claim contract (TASK 4), and the `BPSLockingVault` locking contract
-(TASK 5). The PoD engine turns a validated cycle fixture into canonical artifacts (15-minute-epoch
-TWAB, veBPS weights, 80/20 split, floor allocations, a StandardMerkleTree, reconciliation) with
-integer-only, byte-reproducible output. `DistributionClaimManager` consumes that Merkle standard
-on-chain (owner publishes-and-funds immutable per-cycle roots; participants claim; anyone sweeps
-unclaimed funds post-deadline to an immutable recipient). `BPSLockingVault` lets users lock real
-BPS for one of four fixed terms (7/14/21/30 days) and exposes deterministic non-transferable
-reward weight (veBPS) under the frozen `vebps-1` policy; it preserves principal exactly, supports
-multiple independent positions, self-service withdrawal at/after unlock, and a one-way owner
-emergency exit — with no discretionary economic or token-withdrawal authority. All three contracts
-are implemented and unit-tested but **not deployed**. **Still unimplemented**: trade router,
-protocol fees, buy-and-burn execution, transferable veBPS, eligibility contract, the 15-minute
-epoch indexer / TWAB aggregation, database, UI, and any deployment. Economics is **BPS-ECON-2.0**
-only. Current execution target: await TASK 6 (see §13).
+`DistributionClaimManager` claim contract (TASK 4), the `BPSLockingVault` locking contract
+(TASK 5), and the `BPSTradeRouter` official trade router (TASK 6A). The PoD engine turns a
+validated cycle fixture into canonical artifacts (15-minute-epoch TWAB, veBPS weights, 80/20 split,
+floor allocations, a StandardMerkleTree, reconciliation) with integer-only, byte-reproducible
+output. `DistributionClaimManager` consumes that Merkle standard on-chain (owner publishes-and-funds
+immutable per-cycle roots; participants claim; anyone sweeps unclaimed funds post-deadline to an
+immutable recipient). `BPSLockingVault` lets users lock real BPS for one of four fixed terms
+(7/14/21/30 days) and exposes deterministic non-transferable reward weight (veBPS) under the frozen
+`vebps-1` policy. `BPSTradeRouter` is the official BPS trade core: an official buy applies a 3%
+allocation (2% WETH stock-acquisition budget + 1% BPS repurchase-and-burn, 97% to the user) and an
+official sell applies a 4% allocation (2% stock + 2% burn, 96% to the user, computed from **actual**
+WETH proceeds); the burn is a **true `totalSupply` reduction** — the router repurchases BPS with the
+WETH burn budget through an immutable swap adapter and burns the BPS it receives via the token's
+self-burn. All economics, token, adapter, and recipient wiring is immutable; the only owner power is
+pause/unpause and two-step ownership (renounce is disabled). All four contracts are implemented and
+unit-tested but **not deployed**. **Still unimplemented**: the production Uniswap swap adapter, the
+real stock-acquisition vault, the Rialto adapter, protocol-fee-on-transfer (there is none —
+economics is trade-routed only), transferable veBPS, eligibility contract, the 15-minute epoch
+indexer / TWAB aggregation, database, UI, and any deployment. Economics is **BPS-ECON-2.0** only.
+Current execution target: await an explicit TASK 6B (production adapters / vault) definition — do
+not begin it (see §13).
 
 ## 2. Repository map
 
@@ -38,19 +47,29 @@ only. Current execution target: await TASK 6 (see §13).
   remapping to npm-installed OpenZeppelin, `allow_paths` for the hoisted root `node_modules`).
   Sources: `src/BPSToken.sol` (canonical fixed-supply ERC-20, frozen/unchanged),
   `src/DistributionClaimManager.sol` (funded immutable Merkle claim manager, frozen/unchanged),
-  `src/BPSLockingVault.sol` (fixed-term BPS locking / `vebps-1` policy), `src/BuildProbe.sol`
-  (harmless probe). Tests (dependency-free: `require`/inline `Vm`, no forge-std) — TASK 1–4:
-  `test/BPSToken.t.sol` (23), `test/BuildProbe.t.sol` (1), `test/LeafVector.t.sol` (3),
+  `src/BPSLockingVault.sol` (fixed-term BPS locking / `vebps-1` policy),
+  `src/BPSTradeRouter.sol` (official BPS trade router / `BPS-ECON-2.0`, TASK 6A),
+  `src/interfaces/IBPSSwapAdapter.sol` (the exact-input swap-adapter boundary the router calls) and
+  `src/interfaces/IBPSBurnable.sol` (the `burn(uint256)` self-burn the router invokes on BPSToken),
+  `src/BuildProbe.sol` (harmless probe). Tests (dependency-free: `require`/inline `Vm`, no forge-std)
+  — TASK 1–4: `test/BPSToken.t.sol` (23), `test/BuildProbe.t.sol` (1), `test/LeafVector.t.sol` (3),
   `test/Publication.t.sol` (18), `test/Claims.t.sol` (21), `test/RecoveryAccounting.t.sol` (12),
   `test/Fuzz.t.sol` (4), `test/ClaimManagerBase.t.sol` (abstract base). TASK 5 vault:
   `test/LockingVaultBase.t.sol` (abstract base + inline `Vm`), `test/LockingVaultPolicy.t.sol` (8),
   `test/LockingVaultLifecycle.t.sol` (20), `test/LockingVaultWeight.t.sol` (4),
   `test/LockingVaultEmergency.t.sol` (6), `test/LockingVaultAccounting.t.sol` (4),
-  `test/LockingVaultHostile.t.sol` (4), `test/LockingVaultFuzz.t.sol` (4 fuzz). Test-only mocks
-  under `test/mocks/`: `MockERC20.sol`, `MockFeeOnTransferERC20.sol`, `ReentrancyProbeERC20.sol`
-  (TASK 4), and `FailingERC20Mock.sol` (toggleable failing transfer) + `ReentrantBPSMock.sol`
-  (re-enters the vault) (TASK 5). Empty `script/` directory. npm scripts `forge:build` /
-  `forge:test` / `forge:fmt` wrap forge. Depends on `@openzeppelin/contracts` (npm, pinned exact).
+  `test/LockingVaultHostile.t.sol` (4), `test/LockingVaultFuzz.t.sol` (4 fuzz). TASK 6A router:
+  `test/RouterBase.t.sol` (abstract base + inline `Vm`, deploys BPSToken/MockWETH/MockSwapAdapter/
+  router with seeded local liquidity), `test/RouterConstructor.t.sol` (10),
+  `test/RouterBuy.t.sol` (19), `test/RouterSell.t.sol` (19), `test/RouterSecurity.t.sol` (13),
+  `test/RouterFuzz.t.sol` (3 fuzz), `test/BurnProof.t.sol` (6, proves the BPSToken self-burn
+  properties additively without touching `BPSToken.t.sol`). Test-only mocks under `test/mocks/`:
+  `MockERC20.sol`, `MockFeeOnTransferERC20.sol`, `ReentrancyProbeERC20.sol` (TASK 4),
+  `FailingERC20Mock.sol` + `ReentrantBPSMock.sol` (TASK 5), and `MockWETH.sol` (18-dec WETH stand-in
+  with `mint`), `MockSwapAdapter.sol` (honest deterministic fixed-rate BPS/WETH adapter),
+  `HostileSwapAdapter.sol` (configurable misbehaving adapter: HONEST/LIE_OVER/LIE_UNDER/SHORT_SPEND/
+  FAIL/REENTER) (TASK 6A). Empty `script/` directory. npm scripts `forge:build` / `forge:test` /
+  `forge:fmt` wrap forge. Depends on `@openzeppelin/contracts` (npm, pinned exact).
 - `packages/shared` — `@bps/shared`. **Proof-of-Distribution domain logic** under
   `src/proof-of-distribution/`: `constants.ts` (ECON version, tiers, exclusion categories, leaf
   ABI), `numeric.ts` (integer/bigint helpers), `address.ts` (normalization), `schemas.ts` (zod
@@ -136,27 +155,75 @@ only. Current execution target: await TASK 6 (see §13).
   paths. Control surface (see §7): 20 external functions, 5 events, 15 errors; no mint/burn, no
   policy setters, no early unlock, no owner participant-fund withdrawal, no arbitrary recipient, no
   drain/rescue, no pause, no upgrade, and no transferable veBPS surface.
-- `BPSToken` and `DistributionClaimManager` are frozen and unchanged (byte-identical hashes to the
-  TASK 4 audit); their tests (23 + 79) still pass.
+- **`BPSTradeRouter` (TASK 6A)** — the official BPS trade router implementing `BPS-ECON-2.0`.
+  Verified with Forge 1.7.1: `forge fmt --check` clean, `forge build` no warnings, `forge test`
+  202 tests pass (70 new router/burn tests + the 132 preserved TASK 1–5 tests). Behavior proven by
+  tests: constructor stores immutable BPS/WETH/adapter/stock-recipient and rejects zero addresses,
+  `bps == weth`, an adapter aliasing a token, and a stock recipient aliasing the router/tokens/
+  adapter; fee constants are exactly 10000/200/100/200/200. **Buy** (`buyExactWethForBps`): pulls
+  exactly `grossWethInput` WETH (balance-delta verified; fee-on-transfer/short funding reverts),
+  `stockBudget = floor(G*200/10000)`, `burnBudget = floor(G*100/10000)`, `userWethBudget = G −
+stock − burn` (remainder to the user; invariant `stock+burn+user==G`), delivers the stock budget
+  to the immutable recipient, swaps the user budget WETH→BPS straight to the recipient, repurchases
+  BPS with the burn budget and truly burns it, then asserts no new residue. **Sell**
+  (`sellExactBpsForWeth`): pulls exactly `grossBpsInput` BPS, swaps the **entire** input BPS→WETH
+  into the router, and allocates from the **actual** WETH proceeds `W` — `stock = floor(W*200/10000)`,
+  `burn = floor(W*200/10000)`, `user = W − stock − burn` (remainder to the user) — delivers stock and
+  user WETH, repurchases-and-burns, asserts no residue. The seller's own input BPS is sold for WETH
+  (it is not the burned amount); only the WETH-funded buyback reduces `totalSupply`. Minimums
+  (`minimumUserBpsOutput` / `minimumGrossWethOutput` / `minimumUserWethOutput` / `minimumBurnBpsOutput`)
+  are enforced by the router against **actual** balance deltas (proven via a min-ignoring adapter so
+  the router's own `MinimumOutputNotMet` — not the adapter's — fires); the deadline is inclusive; a
+  zero budget performs no external swap and requires a zero minimum. The adapter boundary is
+  hardened: exact `forceApprove` cleared to 0 after each swap, independent spend/output balance-delta
+  verification, and every dishonest adapter (lie-over, lie-under, short-spend, fail, re-enter) reverts
+  the whole trade. Preexisting BPS/WETH donations are excluded from allocation, burning, accounting,
+  and the residue check. Owner power is limited to `pause`/`unpause` and two-step ownership;
+  `renounceOwnership` reverts `RenounceDisabled`; direct native-ETH transfer reverts
+  `NativeTransferNotAllowed`; reentrancy is blocked on both trade paths. Cumulative accounting
+  (`tradeCount`, `totalBuys`, `totalSells`, `totalGrossWethInFromBuys`, `totalGrossBpsInFromSells`,
+  `totalStockBudgetDelivered`, `totalBurnBudgetConsumed`, `totalBpsBurned`) accumulates correctly
+  across mixed trades. Fuzz (256 runs each) proves the buy/sell split conserves the whole and the
+  remainder always favors the user. Control surface (see §7): 28 external functions (2 trade + pause/
+  unpause + two-step ownership + renounce-revert + view getters), 4 router events + 2 OZ ownership
+  events, 16 custom errors + OZ errors; no fee/token/adapter/recipient/trade-math/burn setter, no
+  proxy/upgrade/delegatecall, no arbitrary call, no fund sweep/rescue/withdraw/seize, no third-party
+  burn.
+- **`BPSToken` self-burn (TASK 6A inspection)** — the router's true burn uses the token's existing
+  OZ `ERC20Burnable` `burn(uint256)` (burns only `msg.sender`'s own balance, reduces balance and
+  `totalSupply` by exactly the amount, emits `Transfer` to `address(0)`, cannot burn another wallet's
+  tokens without an explicit allowance). This is a **correct pre-existing permissionless self-burn**,
+  so **`BPSToken` was not modified**; `test/BurnProof.t.sol` proves these properties additively.
+- `BPSToken`, `DistributionClaimManager`, and `BPSLockingVault` are frozen and unchanged for TASK 6A
+  (byte-identical; `BPSToken.sol`/`BPSToken.t.sol` show no git diff); their tests (23 + 79 + 50) still
+  pass.
 - Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; 68 TS tests,
-  132 Foundry tests).
-- Git repository initialized. Nothing committed yet (user instruction: do not commit).
+  202 Foundry tests) when `forge` is on PATH (see §11 PATH note).
+- Git repository: TASK 1–5 are committed at checkpoint `c443b925c0c59488bbe4a3404fe929dafd694b22`
+  ("checkpoint: complete BPS tasks 1-5"), which is HEAD. TASK 6A files are staged-work-tree only and
+  **not committed** (user instruction: do not commit without explicit request).
 
 ## 4. In progress
 
-Nothing is mid-implementation. All TASK 1–5 verification is complete. Awaiting TASK 6 from the user.
+Nothing is mid-implementation. All TASK 1–5 and TASK 6A verification is complete. TASK 6B and any
+later task have not begun and must not be started without an explicit definition from the user.
 
 ## 5. Not started
 
-- On-chain / live components: `BPSTradeRouter`, protocol fee collection, market buy-and-burn,
-  Uniswap/Rialto integration, real Stock Token registry, the 15-minute epoch indexer (direct-wallet
-  TWAB from BPSToken `Transfer` logs combined with lock-position state from `BPSLockingVault`
-  events), RPC access / live event indexer, reorg persistence, PostgreSQL / migrations, transferable
-  veBPS, eligibility smart contract / live screening, wallet connection, proof API, real claim/lock
-  transactions, website/dashboard pages, deployment scripts, and any Anvil / testnet / mainnet
-  deployment. None exist; none should be added without an explicit task. `DistributionClaimManager`
-  and `BPSLockingVault` are exercised only in the local Foundry test VM — neither is deployed and no
-  real claim, lock, or withdrawal has executed.
+- **TASK 6B and beyond (explicitly deferred):** the production Uniswap swap adapter implementing
+  `IBPSSwapAdapter` against real pools, the real `StockAcquisitionVault` (the production
+  `stockBudgetRecipient`), and the Rialto adapter. None exist; TASK 6A created only the router and
+  its interfaces plus test-only mock adapters. Do not create the production adapter, acquisition
+  vault, or Rialto adapter here.
+- On-chain / live components: liquidity provisioning, real Stock Token registry, the 15-minute epoch
+  indexer (direct-wallet TWAB from BPSToken `Transfer` logs combined with lock-position state from
+  `BPSLockingVault` events), RPC access / live event indexer, reorg persistence, PostgreSQL /
+  migrations, transferable veBPS, eligibility smart contract / live screening, wallet connection,
+  proof API, real claim/lock/trade transactions, website/dashboard pages, deployment scripts, and any
+  Anvil / testnet / mainnet deployment. None exist; none should be added without an explicit task.
+  `DistributionClaimManager`, `BPSLockingVault`, and `BPSTradeRouter` are exercised only in the local
+  Foundry test VM — none is deployed and no real claim, lock, withdrawal, trade, swap, or burn has
+  executed.
 
 ## 6. Canonical technical rules
 
@@ -345,6 +412,60 @@ totalLockedPrincipal`. Unsolicited BPS donations never create a position or chan
     arbitrary calls, or upgrade. `renounceOwnership` (inherited) is retained — see §11 (availability
     risk): after renunciation matured/self-service withdrawals still work but emergency exit can no
     longer be enabled.
+- **`BPSTradeRouter` / `BPS-ECON-2.0` router rules (must not be silently changed):**
+  - Frozen allocation constants (basis points, denominator 10_000, all `public constant`):
+    `BPS_DENOMINATOR = 10_000`, `BUY_STOCK_BPS = 200`, `BUY_BURN_BPS = 100`, `SELL_STOCK_BPS = 200`,
+    `SELL_BURN_BPS = 200`. There is **no** stewardship/treasury/creation/graduation fee, transfer
+    tax, rebase, reflection, or post-deployment mint anywhere in the router. Buy total = 3% (2% stock
+    - 1% burn); sell total = 4% (2% stock + 2% burn). These are the only economics.
+  - Immutable wiring (set once in the constructor, no setter exists): `bpsToken`, `weth`,
+    `swapAdapter`, `stockBudgetRecipient`. Constructor rejects any zero address, `bps == weth`, an
+    adapter equal to either token, and a stock recipient equal to the router/either token/the adapter.
+  - Buy arithmetic (`buyExactWethForBps(grossWethInput, minimumUserBpsOutput, minimumBurnBpsOutput,
+recipient, deadline)`): `stockBudget = floor(G*200/10000)`, `burnBudget = floor(G*100/10000)`,
+    `userWethBudget = G − stockBudget − burnBudget` via `Math.mulDiv` (floor). Invariant
+    `stock+burn+user == G`; the flooring remainder always goes to the user. Returns
+    `(userBpsOutput, bpsBurned)`.
+  - Sell arithmetic (`sellExactBpsForWeth(grossBpsInput, minimumGrossWethOutput, minimumUserWethOutput,
+minimumBurnBpsOutput, recipient, deadline)`): swap **all** `Q` BPS→WETH first, measure the
+    **actual** proceeds `W` (never a price oracle), then `stockBudget = floor(W*200/10000)`,
+    `burnBudget = floor(W*200/10000)`, `userWethOutput = W − stock − burn` (remainder to the user).
+    Returns `(grossWethOutput, userWethOutput, bpsBurned)`.
+  - Both trade functions are `nonReentrant` + `whenNotPaused`; deadline is inclusive
+    (`block.timestamp > deadline` reverts); recipient may not be zero/router/either token/the adapter;
+    zero input reverts. Funding is pulled with an exact received balance-delta check
+    (`FundingMismatch` on any shortfall, so fee-on-transfer inputs revert). Every stock/user/burn
+    delivery is verified by an independent balance-delta on the destination. A successful trade must
+    leave **no new** trade-derived BPS or WETH in the router (`UnexpectedResidue`); preexisting
+    donations (captured as baselines at entry) are never counted, allocated, delivered, or burned.
+  - Adapter boundary (`IBPSSwapAdapter.swapExactInput`): the adapter is immutable; the router never
+    accepts a user-supplied target/path/calldata. Per swap the router `forceApprove`s exactly the
+    input amount and clears the approval to 0 afterward, then independently verifies the actual input
+    spent equals the requested amount (`AdapterSpendMismatch`) and the actual output received equals
+    the adapter's reported return (`AdapterOutputMismatch`), and finally enforces the caller minimum
+    against the **actual** received amount (`MinimumOutputNotMet`). A lying, short-spending, or
+    failing adapter reverts the entire trade. A zero budget performs **no** external call and requires
+    a zero minimum (`InvalidZeroBudgetMinimum` otherwise).
+  - Owner powers are limited to `pause()`/`unpause()` and two-step ownership
+    (`transferOwnership`/`acceptOwnership`, OZ `Ownable2Step`). `renounceOwnership()` is **overridden
+    to revert `RenounceDisabled`** (the router must never be stranded ownerless or lose its emergency
+    pause). The owner cannot change fees/tokens/adapter/recipient/trade-math/burn, redirect output,
+    withdraw/sweep/seize funds, mint or burn anyone's BPS, make arbitrary calls, or upgrade. Direct
+    native-ETH transfer reverts (`receive()` → `NativeTransferNotAllowed`); there is no generic
+    rescue and no proxy/initializer/delegatecall/multicall/upgrade surface.
+- **Burn-truth rule (critical):** the router's BPS burn is a **true supply reduction**, not a
+  transfer to a dead address or an internal accounting entry. It repurchases BPS from the market with
+  the WETH burn budget through the immutable adapter, then calls the token's own
+  `burn(uint256)` (OZ `ERC20Burnable`, via `IBPSBurnable`) and asserts the router's BPS balance and
+  the token `totalSupply` each fall by exactly the burned amount (`BurnSupplyMismatch` otherwise). A
+  zero burn budget performs no swap and no zero-value burn. The router never burns another wallet's
+  BPS and never uses `burnFrom`. Any future adapter/vault must preserve this exact behavior.
+- **Deployment-order rule (router, critical):** the router is non-upgradeable and its BPS/WETH/
+  adapter/stock-recipient are immutable, so the production swap adapter and the real
+  stock-acquisition vault (the `stockBudgetRecipient`) must exist and be trusted **before** the
+  router is constructed; a new adapter or recipient requires a new router deployment. Only trades
+  routed through this router fund stock acquisition and BPS burning — direct-pool trades bypass it
+  entirely. (TASK 6A builds and tests the router locally only; nothing is deployed.)
 - **Epoch-indexer rule (critical, for the future TASK-8 indexer):** the indexer must process
   BPSToken `Transfer` events and `BPSLockingVault` events in canonical block/transaction/log order.
   Direct-wallet TWAB and locked-vault weight must be **mutually exclusive for the same BPS unit**
@@ -437,10 +558,51 @@ totalLockedPrincipal`. Unsolicited BPS donations never create a position or chan
   three flagged names — `emergencyExitEnabled`, `emergencyExitEnabledAt`, `enableEmergencyExit` —
   are false positives from the substring "merge" inside "emergency"). **Not deployed**; no
   address/transaction/owner exists on any network.
+- `BPSTradeRouter.sol` (`packages/contracts/src`) — official BPS trade router / `BPS-ECON-2.0`.
+  Inherits OZ `Ownable2Step` + `Pausable` + `ReentrancyGuard`; uses OZ `SafeERC20`,
+  `Math` (mulDiv). Calls `IBPSSwapAdapter` (`src/interfaces/IBPSSwapAdapter.sol`) for swaps and
+  `IBPSBurnable` (`src/interfaces/IBPSBurnable.sol`) for the token self-burn. Constructor
+  `(address initialOwner, address bps, address weth_, address adapter_, address stockRecipient_)`;
+  `bpsToken`/`weth`/`swapAdapter`/`stockBudgetRecipient` are all `immutable`. Control surface from
+  `forge inspect ... methods` — **28 externally callable functions**: 2 trade
+  (`buyExactWethForBps(uint256,uint256,uint256,address,uint256)`,
+  `sellExactBpsForWeth(uint256,uint256,uint256,uint256,address,uint256)`), `pause`, `unpause`, the OZ
+  ownership set (`owner`, `pendingOwner`, `transferOwnership`, `acceptOwnership`, `renounceOwnership`
+  — the last reverts `RenounceDisabled`), `paused`, the 5 fee constants
+  (`BPS_DENOMINATOR`/`BUY_STOCK_BPS`/`BUY_BURN_BPS`/`SELL_STOCK_BPS`/`SELL_BURN_BPS`), the 4 immutable
+  getters (`bpsToken`/`weth`/`swapAdapter`/`stockBudgetRecipient`), and the 8 cumulative-accounting
+  getters (`tradeCount`/`totalBuys`/`totalSells`/`totalGrossWethInFromBuys`/`totalGrossBpsInFromSells`/
+  `totalStockBudgetDelivered`/`totalBurnBudgetConsumed`/`totalBpsBurned`). ABI also has 1 constructor
+  (not counted), **6 events** (`OfficialBuy`, `OfficialSell`, `StockBudgetDelivered`,
+  `BpsRepurchasedAndBurned`, plus OZ `OwnershipTransferStarted`/`OwnershipTransferred`; note
+  `Paused`/`Unpaused` are the OZ `Pausable` events, emitted by pause/unpause), and **16 custom errors**
+  (`ZeroAddress`, `InvalidTokenPair`, `InvalidSystemAddress`, `ZeroInput`, `InvalidRecipient`,
+  `ExpiredDeadline`, `FundingMismatch`, `AdapterSpendMismatch`, `AdapterOutputMismatch`,
+  `MinimumOutputNotMet`, `StockBudgetDeliveryMismatch`, `BurnSupplyMismatch`, `UnexpectedResidue`,
+  `InvalidZeroBudgetMinimum`, `RenounceDisabled`, `NativeTransferNotAllowed`) plus OZ errors
+  (`OwnableInvalidOwner`, `OwnableUnauthorizedAccount`, `EnforcedPause`, `ExpectedPause`,
+  `ReentrancyGuardReentrantCall`, `SafeERC20FailedOperation`). `storage-layout` reports **11
+  compiler-declared slots**: `_owner` (s0), `_pendingOwner` + `_paused` packed (s1), then the 8
+  cumulative counters `tradeCount`/`totalBuys`/`totalSells`/`totalGrossWethInFromBuys`/
+  `totalGrossBpsInFromSells`/`totalStockBudgetDelivered`/`totalBurnBudgetConsumed`/`totalBpsBurned`
+  (s2–s9). The four `immutable` dependencies live in bytecode (not slots); the inherited **standard,
+  storage-based** OZ `ReentrancyGuard` uses its fixed ERC-7201 namespaced slot
+  `0x9b779b17422d0df92223018b32b4d1fa46e071723d6817e2486d003becc55f00` (a real persistent slot not
+  shown by `storage-layout`; **not** transient storage). A forbidden-surface scan confirmed **no**
+  fee/token/adapter/recipient/trade-math/burn setter, no fund sweep/rescue/withdraw/seize, no
+  third-party burn, no arbitrary external call, and no proxy/upgrade/delegatecall/initializer.
+  **Not deployed**; no address/transaction/owner exists on any network. No production
+  `stockBudgetRecipient` or swap adapter has been chosen — the tests use fictional local ones.
+- `IBPSSwapAdapter.sol` / `IBPSBurnable.sol` (`packages/contracts/src/interfaces`) — the two minimal
+  interfaces the router depends on: `swapExactInput(address tokenIn, address tokenOut, uint256
+amountIn, uint256 minimumAmountOut, address recipient, uint256 deadline) returns (uint256)` and
+  `burn(uint256)`. No implementation of `IBPSSwapAdapter` is shipped in `src/` (production adapter is
+  deferred to TASK 6B); only test mocks implement it.
 - `BuildProbe.sol` (`packages/contracts/src`) — toolchain probe only, compiles (Solc 0.8.26)
   and its test passes under Forge 1.7.1. **Not deployed**, must never be deployed.
 - No deployments on any network. No addresses, transaction hashes, or roles exist. No deployment
-  scripts exist. The claim manager and locking vault are exercised only in the local Foundry test VM.
+  scripts exist. The claim manager, locking vault, and trade router are exercised only in the local
+  Foundry test VM.
 
 ## 8. Data and integrations
 
@@ -490,13 +652,56 @@ All run from the repository root:
 - Inspect a contract's surface (run from `packages/contracts`, each also `abi` / `storage-layout`):
   `forge inspect src/BPSToken.sol:BPSToken methods`;
   `forge inspect src/DistributionClaimManager.sol:DistributionClaimManager methods`;
-  `forge inspect src/BPSLockingVault.sol:BPSLockingVault methods`.
+  `forge inspect src/BPSLockingVault.sol:BPSLockingVault methods`;
+  `forge inspect src/BPSTradeRouter.sol:BPSTradeRouter methods`.
+- Run only the router/burn suites: `forge test --match-contract
+"RouterConstructor|RouterBuy|RouterSell|RouterSecurity|RouterFuzz|BurnProof"` (from
+  `packages/contracts`).
 
 Note: `typecheck`, `test`, `build`, and `proof:mock` first run `build:shared`
 (`npm run build --workspace @bps/shared`) so consumers of `@bps/shared` resolve its built `dist`
 types/JS. This is required because `@bps/pilot` imports `@bps/shared`.
 
 ## 10. Latest verification
+
+TASK 6A verification run 2026-07-22 with Forge 1.7.1 and Node 24.18.0. Baseline confirmed at commit
+`c443b925c0c59488bbe4a3404fe929dafd694b22` (HEAD). Commands actually run:
+
+- `forge fmt --check` — PASS. `forge build` — PASS, **no warnings** (the four
+  `erc20-unchecked-transfer` lint notes on the two test-only mock adapters —
+  `MockSwapAdapter.sol`, `HostileSwapAdapter.sol` — are intentionally suppressed with scoped
+  `forge-lint: disable-next-line(erc20-unchecked-transfer)` comments; the production
+  `BPSTradeRouter.sol` uses OZ `SafeERC20` throughout and is warning-clean).
+- `forge test` — **202 tests pass, 0 failed** across 20 suites: the 132 preserved TASK 1–5 tests
+  plus **70 new** — `RouterConstructorTest` 10, `RouterBuyTest` 19, `RouterSellTest` 19,
+  `RouterSecurityTest` 13, `RouterFuzzTest` 3 (@ 256 runs), `BurnProofTest` 6. Covers buy/sell
+  arithmetic and rounding-to-user, exact-delta funding/delivery, true burn with `totalSupply`
+  verification, no-residue, donation exclusion, router-enforced minimums, inclusive deadlines,
+  zero-budget skips, hostile-adapter rejection (lie/short/fail/reenter), pause/ownership/renounce-
+  disabled/native-ETH-reject, cumulative accounting across mixed trades, and the BPSToken self-burn
+  properties.
+- `forge inspect src/BPSTradeRouter.sol:BPSTradeRouter methods / storage-layout` — 28 external
+  functions (constructor not counted), 11 compiler-declared storage slots (see §7); forbidden-surface
+  scan clean (no fee/token/adapter/recipient/burn setter, no sweep/rescue/withdraw/seize, no arbitrary
+  call, no upgrade/proxy/delegatecall). `forge inspect src/BPSToken.sol:BPSToken methods` — unchanged
+  12-function surface (`burn`/`burnFrom` present via `ERC20Burnable`), confirming no token change was
+  needed.
+- `npm run check` — all TS stages PASS (format:check, lint, typecheck, test = 68 TS tests, build);
+  the three Foundry stages (`fmt:contracts`, `build:contracts`, `test:contracts` = 202 tests) PASS
+  **when `forge` is on PATH** (verified by running the three contract npm scripts directly with the
+  Foundry bin prepended — see §11 PATH note). The single non-code failure in a bare `npm run check`
+  is only that the npm-spawned shell did not inherit the Foundry bin on PATH; it is an environment
+  issue, not a code defect.
+- Repository search over the new TASK 6A files (`BPSTradeRouter.sol`, `interfaces/*.sol`,
+  `Router*.t.sol`, `BurnProof.t.sol`, `MockWETH.sol`, `MockSwapAdapter.sol`, `HostileSwapAdapter.sol`)
+  for private keys/seeds, RPC URLs, real token/personal addresses, `.env`/`vm.env`/`ffi`,
+  `delegatecall`/`selfdestruct`/`tx.origin`, and obsolete economics
+  (stewardship/treasury/graduation/rebase/reflection/transfer-tax) — **zero matches**; the only hits
+  were event names and comment text.
+- Frozen files confirmed unchanged: `git status` shows **no diff** for `BPSToken.sol`,
+  `BPSToken.t.sol`, `DistributionClaimManager.sol`, or `BPSLockingVault.sol`; the only tracked change
+  is `.gitignore` (added `.claude/settings.local.json`, which `git check-ignore` confirms is now
+  ignored and untracked). All other TASK 6A files are new/untracked.
 
 TASK 5 verification run 2026-07-22 with Forge 1.7.1 and Node 24.18.0. Commands actually run:
 
@@ -632,7 +837,17 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 ## 11. Known issues and blockers
 
-- **No functional blockers.** All TASK 1–5 verification passes.
+- **No functional blockers.** All TASK 1–5 and TASK 6A verification passes.
+- Router ownership hardening (by design, not a risk): unlike the claim manager and locking vault,
+  `BPSTradeRouter` **disables** `renounceOwnership` (reverts `RenounceDisabled`) so it can never be
+  stranded ownerless or lose its emergency pause. Ownership moves only through the two-step
+  `transferOwnership`/`acceptOwnership` flow. The owner has no economic or fund authority — only
+  pause/unpause.
+- Router dependency prerequisite (not a defect): the router's swap adapter and stock-budget recipient
+  are immutable, so a **trusted production `IBPSSwapAdapter` and a real stock-acquisition vault must
+  exist before the router is deployed** (TASK 6B). Deploying against a wrong/malicious adapter or
+  recipient would require redeploying the router. TASK 6A ships only the interfaces and test mocks; no
+  production adapter/vault exists yet.
 - Availability risk (not a defect): `BPSLockingVault` retains OZ `Ownable`'s single-step
   `renounceOwnership`. Assessment: **acceptable / documented (option B)** — it does not conflict
   with the frozen requirements. Matured and self-service withdrawals are permissionless and remain
@@ -663,6 +878,27 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 ## 12. Recent change log
 
+- **2026-07-22 (TASK 6A)** — Implemented `BPSTradeRouter` (the official BPS trade router under
+  `BPS-ECON-2.0`: 3% buy / 4% sell allocation, 2% WETH stock-acquisition budget, and a **true** BPS
+  repurchase-and-burn that reduces `totalSupply`). New source: `src/BPSTradeRouter.sol`,
+  `src/interfaces/IBPSSwapAdapter.sol`, `src/interfaces/IBPSBurnable.sol`. New tests:
+  `test/RouterBase.t.sol`, `test/RouterConstructor.t.sol`, `test/RouterBuy.t.sol`,
+  `test/RouterSell.t.sol`, `test/RouterSecurity.t.sol`, `test/RouterFuzz.t.sol`,
+  `test/BurnProof.t.sol`. New test-only mocks: `test/mocks/MockWETH.sol`,
+  `test/mocks/MockSwapAdapter.sol`, `test/mocks/HostileSwapAdapter.sol`. Inspection determined
+  `BPSToken` already has a correct permissionless self-burn (OZ `ERC20Burnable` `burn(uint256)`), so
+  **`BPSToken` was not modified**; `BurnProof.t.sol` proves the burn properties additively. Uses
+  existing OZ `@openzeppelin/contracts` 5.6.1 (`Ownable2Step`, `Pausable`, `ReentrancyGuard`,
+  `SafeERC20`, `Math`); no new dependency. `.gitignore` updated to ignore
+  `.claude/settings.local.json` only (the rest of `.claude/` stays shared). Updated `README.md` and
+  this handover. Verification: `forge fmt --check`, `forge build` (no warnings), `forge test`
+  (202 pass = 132 preserved + 70 new), `forge inspect` (28 functions / router events / 16 custom
+  errors / 11 storage slots, no forbidden surface), the three contract npm scripts + all TS stages of
+  `npm run check` — all PASS; new-file secret/economics/dangerous-surface scan clean.
+  `BPSToken.sol`, `BPSToken.t.sol`, `DistributionClaimManager.sol`, `BPSLockingVault.sol`, and all
+  TASK 3 logic/fixtures/artifacts unchanged (no git diff). Status: TASK 6A complete and verified;
+  nothing committed (baseline HEAD remains checkpoint `c443b925…`); no deployment; no real
+  trade/swap/burn; TASK 6B not begun.
 - **2026-07-22 (TASK 5)** — Implemented `BPSLockingVault` (fixed-term BPS locking under the frozen
   `vebps-1` policy). New files: `packages/contracts/src/BPSLockingVault.sol`; tests
   `test/LockingVaultBase.t.sol`, `test/LockingVaultPolicy.t.sol`, `test/LockingVaultLifecycle.t.sol`,
@@ -749,19 +985,24 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 1. Read `CLAUDE.md` and this file first.
 2. Ensure Forge is on PATH (see §11 PATH note). Run `npm install` (if `node_modules` is missing),
-   then `npm run check` — expect a full end-to-end PASS (68 TS tests, 132 Foundry tests). Optionally
-   run `npm run proof:mock -- --out <tmp>` to regenerate PoD artifacts (writes only to `<tmp>`).
-3. **Await an explicit TASK 6 definition before adding any new component.** Do not begin it here.
-   Natural, still-unimplemented next pieces (pick per the user's instruction, do not invent scope):
-   the `BPSTradeRouter` + buy-and-burn execution under `BPS-ECON-2.0` (Buy 3% = 2% stock + 1% burn;
-   Sell 4% = 2% stock + 2% burn; no stewardship fee), or the 15-minute epoch indexer that combines
-   direct-wallet BPS `Transfer` TWAB with `BPSLockingVault` lock-position weight (honor the
-   **epoch-indexer rule** in §6: the same BPS unit is never both a direct-wallet balance and locked
-   principal; bonus weight only before `unlockTime` and before `emergencyExitEnabledAt`), or a
-   reviewed deployment script (honor the §6 **deployment-order rule**: fix the real claim-manager
-   address and chain id before generating production Merkle artifacts). Do not modify the frozen
-   `BPSToken`, PoD, `DistributionClaimManager`, or `BPSLockingVault`/`vebps-1` rules in §6, or the
-   audited TASK 3 artifacts, without an explicit instruction, and introduce no economics other than
-   `BPS-ECON-2.0`. Relevant files: `packages/contracts/src/BPSLockingVault.sol`,
-   `packages/contracts/src/DistributionClaimManager.sol`, `packages/contracts/test/`,
-   `packages/shared/src/proof-of-distribution/`, `packages/pilot/fixtures/canonical-cycle.json`.
+   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (68 TS tests, 202 Foundry
+   tests). A quick router re-check: `forge test --match-contract
+"RouterConstructor|RouterBuy|RouterSell|RouterSecurity|RouterFuzz|BurnProof"` from
+   `packages/contracts`. Optionally `npm run proof:mock -- --out <tmp>` (writes only to `<tmp>`).
+3. **Await an explicit TASK 6B (or later) definition before adding any new component.** Do not begin
+   it here. TASK 6A intentionally shipped only `BPSTradeRouter` + its two interfaces + test mocks; the
+   production `IBPSSwapAdapter` (real Uniswap adapter), the real `StockAcquisitionVault` (production
+   `stockBudgetRecipient`), and the Rialto adapter were **explicitly out of scope** and must not be
+   created without an explicit task. When TASK 6B is defined, honor the §6 **router rules**
+   (immutable wiring, adapter-boundary hardening, exact-delta verification), the **burn-truth rule**
+   (a real `totalSupply` reduction, never a dead-address transfer or accounting entry), and the
+   **router deployment-order rule** (a trusted adapter + acquisition vault must exist before the
+   router is constructed). Do not modify the frozen `BPSToken`, PoD, `DistributionClaimManager`,
+   `BPSLockingVault`/`vebps-1`, or `BPSTradeRouter`/`BPS-ECON-2.0` rules in §6, or the audited TASK 3
+   artifacts, without an explicit instruction, and introduce no economics other than `BPS-ECON-2.0`.
+   Relevant files: `packages/contracts/src/BPSTradeRouter.sol`,
+   `packages/contracts/src/interfaces/IBPSSwapAdapter.sol`,
+   `packages/contracts/src/interfaces/IBPSBurnable.sol`, `packages/contracts/test/Router*.t.sol`,
+   `packages/contracts/test/mocks/{MockWETH,MockSwapAdapter,HostileSwapAdapter}.sol`,
+   `packages/contracts/src/BPSLockingVault.sol`,
+   `packages/contracts/src/DistributionClaimManager.sol`.

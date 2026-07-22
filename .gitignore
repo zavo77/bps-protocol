@@ -38,6 +38,9 @@ deployments/local/
 *.log
 npm-debug.log*
 
+# Local-only Claude settings (keep the rest of .claude/ for shared project config)
+.claude/settings.local.json
+
 # Editor and OS files
 .vscode/
 .idea/
