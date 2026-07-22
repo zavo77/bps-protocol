@@ -33,6 +33,8 @@ keystore/
 secrets/
 *.secret
 deployments/local/
+# Generated deployment preflight manifest (the committed dry-run/schema stay tracked)
+packages/contracts/deploy/manifest.out.json
 
 # Logs
 *.log

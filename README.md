@@ -181,3 +181,16 @@ price/oracle slippage guard is required for a safe permissionless flow. **Robinh
 Tokens carry jurisdiction and eligibility restrictions** — a public-beta launch blocker
 requiring external legal and eligibility review (BPS provides no legal conclusion). See
 `HANDOVER.md` §11 for the full code / configuration / operational / legal blocker breakdown.
+
+**Deployment package (verified, not broadcast).** `packages/contracts/script/` +
+`packages/contracts/deploy/` contain a broadcast-free deployment surface: a deterministic,
+no-setter CREATE-nonce plan resolving every circular immutable dependency, fail-closed config
+validation, a manifest schema + dry-run manifest, and an operator runbook. The Robinhood Chain
+(id 4663) external dependencies — WETH, the Rialto Router Registry (with fail-closed `ownerOf(2)`
+semantics), the live feature-2 router, Uniswap v3 SwapRouter02 + factory, and stock-token
+candidates — are independently verified via a read-only RPC and official documentation. A
+mainnet-fork rehearsal (`ROBINHOOD_FORK_RPC=<rpc> forge test --match-contract ForkDeployRehearsal`)
+deploys the whole stack against the real externals and asserts every predicted address and
+immutable role. **Nothing is deployed, broadcast, signed, or pooled.** The first live deployment
+decision is **NO-GO** until the pool/fee tier, deployer/role/basket inputs, an on-chain slippage
+guard, and legal/eligibility review are resolved.

@@ -1,0 +1,183 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://bps.local/schemas/deploy-manifest-1.0.0.json",
+  "title": "BPS Robinhood Chain Deployment Manifest",
+  "description": "Versioned, secret-free record of a BPS protocol deployment configuration and result. A manifest is broadcast-ready ONLY when broadcastReady is true, every required address is a real verified value (no null / placeholder), and all external runtimeCodeHash values match the on-chain contracts at deployBlock.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "chainId",
+    "sourceCommit",
+    "compiler",
+    "broadcastReady",
+    "deployer",
+    "startNonce",
+    "external",
+    "predicted",
+    "actual",
+    "roles",
+    "stockBasket",
+    "economics",
+    "verificationStatus",
+    "blockers",
+    "generatedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "chainId": { "const": 4663 },
+    "sourceCommit": { "type": "string", "description": "Git commit the bytecode was built from." },
+    "compiler": {
+      "type": "object",
+      "required": ["solc", "optimizer", "runs", "evmVersion"],
+      "properties": {
+        "solc": { "type": "string" },
+        "optimizer": { "type": "boolean" },
+        "runs": { "type": "integer" },
+        "evmVersion": { "type": "string" }
+      }
+    },
+    "broadcastReady": {
+      "type": "boolean",
+      "description": "MUST be false while any required address is null/placeholder or any verification is BLOCKED."
+    },
+    "deployBlock": {
+      "type": ["integer", "null"],
+      "description": "Block number the stack was broadcast at; null before broadcast."
+    },
+    "deployer": { "type": ["string", "null"], "pattern": "^0x[0-9a-fA-F]{40}$" },
+    "startNonce": { "type": ["integer", "null"] },
+    "external": {
+      "type": "object",
+      "description": "Independently verified external dependencies. Each has an address and the keccak256 of its on-chain runtime code observed during verification.",
+      "additionalProperties": false,
+      "required": ["weth", "rialtoRegistry", "swapRouter02", "uniswapV3Factory", "feature2Router"],
+      "properties": {
+        "weth": { "$ref": "#/definitions/verifiedContract" },
+        "rialtoRegistry": { "$ref": "#/definitions/verifiedContract" },
+        "swapRouter02": { "$ref": "#/definitions/verifiedContract" },
+        "uniswapV3Factory": { "$ref": "#/definitions/verifiedContract" },
+        "feature2Router": {
+          "allOf": [{ "$ref": "#/definitions/verifiedContract" }],
+          "description": "DYNAMIC value read from rialtoRegistry.ownerOf(2) at verification time; never hardcoded into the adapter. May change on a Rialto migration."
+        }
+      }
+    },
+    "predicted": { "$ref": "#/definitions/contractSet" },
+    "actual": { "$ref": "#/definitions/contractSetNullable" },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bpsTreasury",
+        "protocolOwner",
+        "reserveRecipient",
+        "acquisitionOperator",
+        "rootPublisher",
+        "claimRecoveryRecipient"
+      ],
+      "properties": {
+        "bpsTreasury": { "type": ["string", "null"] },
+        "protocolOwner": { "type": ["string", "null"] },
+        "reserveRecipient": { "type": ["string", "null"] },
+        "acquisitionOperator": { "type": ["string", "null"] },
+        "rootPublisher": { "type": ["string", "null"] },
+        "claimRecoveryRecipient": { "type": ["string", "null"] }
+      }
+    },
+    "stockBasket": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["symbol", "address", "decimals", "verified"],
+        "properties": {
+          "symbol": { "type": "string" },
+          "address": { "type": "string" },
+          "decimals": { "type": "integer" },
+          "verified": { "type": "boolean" }
+        }
+      }
+    },
+    "economics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "buyStockBps",
+        "buyBurnBps",
+        "sellStockBps",
+        "sellBurnBps",
+        "denominator",
+        "distributionPercent",
+        "splitDenominator"
+      ],
+      "properties": {
+        "version": { "const": "BPS-ECON-2.0" },
+        "buyStockBps": { "const": 200 },
+        "buyBurnBps": { "const": 100 },
+        "sellStockBps": { "const": 200 },
+        "sellBurnBps": { "const": 200 },
+        "denominator": { "const": 10000 },
+        "distributionPercent": { "const": 80 },
+        "splitDenominator": { "const": 100 }
+      }
+    },
+    "artifactHashes": {
+      "type": "object",
+      "description": "Optional keccak256 of each contract's creation/runtime bytecode for pre-broadcast integrity checks.",
+      "additionalProperties": { "type": "string" }
+    },
+    "transactions": {
+      "type": "object",
+      "description": "Per-contract deployment transaction hashes; every value MUST be null before broadcast.",
+      "additionalProperties": { "type": ["string", "null"] }
+    },
+    "verificationStatus": {
+      "type": "object",
+      "additionalProperties": {
+        "enum": ["VERIFIED", "BLOCKED", "USER_INPUT_REQUIRED", "EXTERNAL_REVIEW_REQUIRED"]
+      }
+    },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "generatedAt": { "type": "string" }
+  },
+  "definitions": {
+    "verifiedContract": {
+      "type": "object",
+      "required": ["address", "runtimeCodeHash", "sourceUrl", "status"],
+      "properties": {
+        "address": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "runtimeCodeHash": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" },
+        "decimals": { "type": "integer" },
+        "sourceUrl": { "type": "string" },
+        "observedBlock": { "type": "integer" },
+        "status": { "enum": ["VERIFIED", "BLOCKED"] }
+      }
+    },
+    "contractSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bpsToken",
+        "lockingVault",
+        "claimManager",
+        "rialtoAdapter",
+        "coordinator",
+        "stockVault",
+        "uniswapAdapter",
+        "tradeRouter"
+      ],
+      "properties": {
+        "bpsToken": { "type": ["string", "null"] },
+        "lockingVault": { "type": ["string", "null"] },
+        "claimManager": { "type": ["string", "null"] },
+        "rialtoAdapter": { "type": ["string", "null"] },
+        "coordinator": { "type": ["string", "null"] },
+        "stockVault": { "type": ["string", "null"] },
+        "uniswapAdapter": { "type": ["string", "null"] },
+        "tradeRouter": { "type": ["string", "null"] }
+      }
+    },
+    "contractSetNullable": { "$ref": "#/definitions/contractSet" }
+  }
+}

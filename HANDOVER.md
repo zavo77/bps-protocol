@@ -135,8 +135,15 @@ any deployment; do not begin frontend or deployment work (see §13).
   **SKIM_STOCK**/REENTER/REVERT) (TASK 6B-1A), `MockSwapRouter02.sol` (honest SwapRouter02
   `exactInputSingle` stand-in that records the exact params passed) and `HostileSwapRouter02.sol`
   (configurable misbehaving venue: HONEST/REVERT/PARTIAL_SPEND/NO_SPEND/UNDER_DELIVER/NO_OUTPUT/
-  WRONG_TOKEN/LIE_OVER/LIE_UNDER/OUTPUT_TO_ADAPTER/EXCESS_PULL/REENTER) (TASK 6B-1B). Empty `script/`
-  directory. npm scripts `forge:build` /
+  WRONG_TOKEN/LIE_OVER/LIE_UNDER/OUTPUT_TO_ADAPTER/EXCESS_PULL/REENTER) (TASK 6B-1B). TASK 7 test-only
+  mocks: `test/mocks/HostileFundingManager.sol` (under-retaining claim-manager) and
+  `test/mocks/AllowanceTrapERC20.sol` (never clears allowance). TASK 7 deployment surface under
+  `script/`: `BPSDeployment.sol` (deterministic no-setter deploy plan + fail-closed validation +
+  prediction + immutable assertions) and `DeployBPS.s.sol` (broadcast-free operator preflight + sanitized
+  manifest); `deploy/` holds `manifest.schema.json`, `robinhood-mainnet.dryrun.json`, `RUNBOOK.md`;
+  `.env.example` lists env-var names only. TASK 7 tests: `test/CoordinatorFundingRollback.t.sol` (2),
+  `test/DeployConfigValidation.t.sol` (13), `test/ForkDeployRehearsal.t.sol` (1, mainnet-fork, opt-in via
+  `ROBINHOOD_FORK_RPC`). npm scripts `forge:build` /
   `forge:test` / `forge:fmt` wrap forge. Depends on `@openzeppelin/contracts` (npm, pinned exact).
 - `packages/shared` — `@bps/shared`. **Proof-of-Distribution domain logic** under
   `src/proof-of-distribution/`: `constants.ts` (ECON version, tiers, exclusion categories, leaf
@@ -398,15 +405,20 @@ cycleId)` is rootPublisher-only, `nonReentrant`: it requires status == RECORDED 
 - `BPSToken`, `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter`, `StockAcquisitionVault`,
   `UniswapV3BPSSwapAdapter`, and all frozen interfaces (`IBPSSwapAdapter`, `IBPSBurnable`,
   `IStockAcquisitionAdapter`, `ISwapRouter02`) are unchanged (no git diff on any of them or their
-  tests); the `packages/shared/src` PoD engine is unchanged. Their tests still pass within the 382-test
+  tests); the `packages/shared/src` PoD engine is unchanged. Their tests still pass within the 398-test
   suite.
 - Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; **97 TS tests**
-  incl. 27 quote-client + 3 boundary/workspace, **382 Foundry tests**) when `forge` is on PATH (see §11).
+  incl. 27 quote-client + 3 boundary/workspace, **398 Foundry tests**) when `forge` is on PATH (see §11).
+  The 398 include the TASK 7 additions: 2 coordinator funding-rollback tests, 13 deployment-config
+  validation/prediction tests, and 1 mainnet-fork deploy-rehearsal test that skips when
+  `ROBINHOOD_FORK_RPC` is unset (so the offline suite stays green) and runs the full stack against the
+  real Robinhood Chain externals when it is set.
 - Git repository: prior checkpoints `c443b925…` (1–5), `33062815…` (6A), `0f326913…` (6B-1A),
-  `64825a3…` (6B-1B), `41d86ccaa9b53a3f7a837790d2bc9e2f03e65bf3` (6B-2 + coordinator + e2e,
-  "feat(protocol): integrate Rialto stock funding flow", HEAD). The acquisition-recording redesign
-  (dual-role coordinator, chain-4663 adapter guard, server subpath boundary) is working-tree only until
-  the authorized `fix(protocol): bind funding to recorded acquisitions` commit.
+  `64825a3…` (6B-1B), `41d86cc…` (6B-2 + coordinator + e2e), `90e338ae13fd13258128d6aa659b2162d9c37caa`
+  (acquisition-recording redesign, "fix(protocol): bind funding to recorded acquisitions", HEAD). The
+  TASK 7 deployment package (rollback tests, verified externals, deterministic deploy plan + fork
+  rehearsal, manifest/runbook) is working-tree only until the authorized
+  `feat(deploy): prepare restricted beta release` commit.
 
 ## 4. In progress
 
@@ -849,6 +861,43 @@ Math.mulDiv(acquired, DISTRIBUTION_PERCENT, SPLIT_DENOMINATOR)` (read from the v
 
 ## 7. Contracts and deployments
 
+- **No BPS protocol contract is deployed on any network.** Every contract below is exercised only in the
+  local Foundry VM and (for the deployment sequence) in an ephemeral mainnet-fork rehearsal.
+- **Independently verified Robinhood Chain (id 4663) externals (TASK 7, observed block 16726801 via the
+  read-only public RPC + official Rialto/Uniswap sources; recorded in
+  `packages/contracts/deploy/robinhood-mainnet.dryrun.json`).** These are external dependencies, NOT BPS
+  deployments; addresses are passed to constructors, never hardcoded into protocol logic:
+  - WETH `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` — 18 decimals, symbol/name "WETH"; cross-confirmed
+    by `SwapRouter02.WETH9()` and the public Rialto `/tokens` list. codehash
+    `0x5706be52…5f5353`.
+  - Rialto Router Registry `0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E` — codehash `0xf8b9b92c…68a01e`.
+    `ownerOf(2)` FAILS CLOSED (reverts on paused/uninitialized; empirically `ownerOf(9999)`/`ownerOf(0)`
+    revert with custom errors, never a zero return). `getFeature(2)` returned
+    `(prev=0x0, current=<router>, next=0x0, paused=false)`. Docs confirm `prev/next/getFeature` take
+    `uint128` while `ownerOf` takes `uint256` — matching the frozen `IRialtoRouterRegistry.ownerOf`.
+  - Current feature-2 router `0xC94135b63772b91D79d0A2DaAb2a8801f32359bD` — a DYNAMIC value from
+    `ownerOf(2)`; has code (codehash `0xa7041268…f27611`); may change on a Rialto migration.
+  - Uniswap v3 SwapRouter02 `0xCaf681a66D020601342297493863E78C959E5cb2` — codehash `0x6f36c378…cb25dc`;
+    `WETH9()==WETH`, `factory()==0x1f7d7550B1b028f7571E69A784071F0205FD2EfA` (v3 factory, codehash
+    `0xec72b1ab…091739`). BPS uses ONLY direct v3 SwapRouter02 — no Universal Router, no Permit2.
+  - Restricted-beta stock candidates: 19 whitelisted 18-decimal stock tokens from the public Rialto
+    `/tokens` endpoint (`https://rialto-trade-api.rialto.xyz/tokens`, chain_id 4663). AAPL
+    `0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9` and NVDA `0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC`
+    re-verified on-chain (code present, 18 decimals). The beta basket selection is a product/legal
+    decision (deliberately not made here).
+- **Deployment surface (TASK 7, NOT executed live): `packages/contracts/script/BPSDeployment.sol`** — a
+  broadcast-free abstract library that encodes the single deterministic CREATE-nonce deploy plan
+  resolving all circular immutable dependencies without a setter (order n0+0..n0+7: BPSToken,
+  BPSLockingVault, DistributionClaimManager, RialtoStockAcquisitionAdapter, DistributionFundingCoordinator
+  (== both vault roles), StockAcquisitionVault, UniswapV3BPSSwapAdapter, BPSTradeRouter). It exposes
+  `_predict` (pure address prediction), `_validate` (fail-closed: wrong chain, zero/placeholder/aliased
+  roles, no-code externals, unresolved feature-2 router, empty/duplicate/zero/weth-aliasing basket), and
+  `_deployAndVerify` (executes the sequence and asserts every prediction, immutable role, and the
+  coordinator-occupies-both-vault-roles invariant). `script/DeployBPS.s.sol` is the operator preflight
+  wrapper (env-driven, fails closed, writes a sanitized `deploy/manifest.out.json`; broadcast-free, never
+  reads a secret). `deploy/manifest.schema.json` + `deploy/robinhood-mainnet.dryrun.json` +
+  `deploy/RUNBOOK.md` + `.env.example` complete the package. A mainnet-fork rehearsal
+  (`test/ForkDeployRehearsal.t.sol`) deploys the whole stack against the real externals and passes.
 - `BPSToken.sol` (`packages/contracts/src`) — canonical fixed-supply ERC-20. Inherits OZ
   `ERC20` + `ERC20Burnable`. Constructor signature: `constructor(address recipient)`; it mints
   `MAX_SUPPLY` (1e9 * 1e18) to `recipient` exactly once and reverts if `recipient` is the zero
@@ -1467,7 +1516,8 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 ## 11. Known issues and blockers
 
 - **No local functional blockers.** All TASK 1–5, 6A, 6B-1A, 6B-1B, and the 6B-2 milestone with the
-  acquisition-recording coordinator pass locally (382 Foundry + 97 TS tests). The remaining blockers
+  acquisition-recording coordinator pass locally (398 Foundry + 97 TS tests; TASK 7 closed the two
+  funding-rollback gaps and added the deployment-validation + fork-rehearsal suites). The remaining blockers
   below prevent any deployment / public beta and are grouped by kind.
 - **Code blockers (local):** none — the local architecture is complete and safe. One design decision to
   finalize before deployment: whether to pin an exact Rialto settlement selector in the adapter. This
@@ -1564,6 +1614,32 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 ## 12. Recent change log
 
+- **2026-07-22 (TASK 7 — verified deployment configuration + restricted-beta rehearsal)** — Prepared a
+  production-shaped, independently verified Robinhood Chain deployment package and a deterministic
+  deployment rehearsal; **no live broadcast, deploy, sign, pool, or liquidity action was performed**, no
+  wallet/key/credential/protected-Rialto endpoint was accessed, and no frozen contract/interface/test or
+  `packages/shared/src` was modified. (A) Closed the two admitted Task 6B funding-rollback test gaps with
+  test-only fixtures (`test/mocks/HostileFundingManager.sol` under-retains → `ManagerReceiptMismatch`;
+  `test/mocks/AllowanceTrapERC20.sol` never clears its allowance → `AllowanceNotCleared`) and
+  `test/CoordinatorFundingRollback.t.sol` (2 tests) proving the entire funding operation rolls back
+  (status, cycle linkage, vault `distributionReleased`, balances, allowance, reserve accounting). (B/C/G)
+  Verified externals via the read-only public RPC + official docs and recorded them in
+  `deploy/robinhood-mainnet.dryrun.json`: chain 4663; WETH (18-dec, triple-confirmed); the Rialto
+  registry with `ownerOf(2)` FAIL-CLOSED semantics (empirically + docs) matching the frozen
+  `IRialtoRouterRegistry`; the live feature-2 router; SwapRouter02 (`WETH9()==WETH`) + v3 factory; and 19
+  whitelisted stock candidates (AAPL/NVDA re-verified on-chain). (D/E/F) Added `script/BPSDeployment.sol`
+  (deterministic no-setter deploy plan + fail-closed validation + prediction + immutable assertions),
+  `script/DeployBPS.s.sol` (broadcast-free operator preflight + sanitized manifest),
+  `deploy/manifest.schema.json`, `deploy/robinhood-mainnet.dryrun.json`, `deploy/RUNBOOK.md`, and
+  `.env.example`; `foundry.toml` gained a `./deploy`-scoped `fs_permissions` and `.gitignore` ignores the
+  generated `manifest.out.json`. Tests: `test/DeployConfigValidation.t.sol` (13, offline) and
+  `test/ForkDeployRehearsal.t.sol` (1, mainnet-fork; skips when `ROBINHOOD_FORK_RPC` unset). Verification:
+  `forge fmt --check`, `forge build` (no warnings), `forge test` (398 pass offline), the fork rehearsal
+  (PASS against the live read-only RPC), full `npm run check` (97 TS + 398 Foundry, exit 0),
+  `git diff --check` clean. **Decision: NO-GO for live deployment** — blocked on the BPS/WETH pool +
+  fee tier, user-supplied deployer/role addresses, the beta basket selection, an on-chain slippage/oracle
+  guard, and external legal/eligibility review (see §11). The code, registry-safety, deterministic-
+  deployment, and external-address integrity are all GREEN.
 - **2026-07-22 (acquisition-recording coordinator redesign)** — Rebuilt `DistributionFundingCoordinator`
   to close the per-acquisition acceptance gap **without touching the frozen `StockAcquisitionVault`**.
   The coordinator now occupies **both** frozen vault roles (`acquisitionExecutor` +
@@ -1785,36 +1861,45 @@ IRialtoRouterRegistry,IDistributionClaimManagerFunding}.sol`, six `test/*.t.sol`
 
 1. Read `CLAUDE.md` and this file first.
 2. Ensure Forge is on PATH (see §11 PATH note). Run `npm install` (if `node_modules` is missing),
-   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (97 TS tests, 382 Foundry
-   tests). Quick subsets from `packages/contracts`: `forge test --match-contract
-"RialtoAdapter|CoordinatorFunding|RialtoEndToEnd"`, `forge test --match-contract "StockVault"`,
-   `forge test --match-contract "SwapAdapter|RouterUniswapIntegration"`. TS: `npm run test --workspace
-@bps/rialto`. Optionally `npm run proof:mock -- --out <tmp>`. The working tree carries the
-   acquisition-recording redesign unless it has been checkpointed as
-   `fix(protocol): bind funding to recorded acquisitions`.
-3. **The 6B-2 milestone with the acquisition-recording coordinator is complete.** The coordinator now
-   occupies both frozen vault roles (executor + distributionFundingCoordinator) and records/funds each
-   acquisition from exact vault deltas; the Rialto adapter is chain-4663-guarded; the quote client is
-   server-only via the `@bps/rialto/server` subpath. Do NOT begin deployment or frontend work. Before any
-   deployment, resolve the §11 blockers: verified WETH/BPS/stock/router/pool addresses + fee tier; the
-   exact Rialto router ABI (`ownerOf(2)`) and settlement selector; a price/oracle slippage guard;
-   operational controls; the circular deterministic deployment sequences (router↔Uniswap-adapter,
-   vault↔Rialto-adapter, vault↔coordinator **for both roles**, claim-manager owner = coordinator); and
-   external legal/eligibility review (Robinhood Stock Tokens have jurisdiction limits).
-   Do NOT create/use/expose the Rialto API key or make a live quote request. When resuming, honor the §6
-   rules (Rialto adapter, coordinator, 80/20, router, burn-truth) and the frozen contracts; introduce no
-   economics other than
-   `BPS-ECON-2.0` (WETH allocation) and the frozen 80/20 (acquired-stock split). Do not modify the frozen
-   `BPSToken`, PoD, `DistributionClaimManager`, `BPSLockingVault`/`vebps-1`, `BPSTradeRouter`, or
-   `StockAcquisitionVault`, or `UniswapV3BPSSwapAdapter` without an explicit instruction. Relevant
-   files: `packages/contracts/src/StockAcquisitionVault.sol`,
-   `packages/contracts/src/interfaces/IStockAcquisitionAdapter.sol`,
-   `packages/contracts/test/StockVault*.t.sol`,
-   `packages/contracts/test/mocks/{MockStockAcquisitionAdapter,HostileStockAcquisitionAdapter}.sol`,
-   `packages/contracts/src/adapters/UniswapV3BPSSwapAdapter.sol`,
-   `packages/contracts/src/interfaces/ISwapRouter02.sol`,
-   `packages/contracts/test/SwapAdapter*.t.sol`, `packages/contracts/test/RouterUniswapIntegration.t.sol`,
-   `packages/contracts/test/mocks/{MockSwapRouter02,HostileSwapRouter02}.sol`,
-   `packages/contracts/src/BPSTradeRouter.sol`,
-   `packages/contracts/src/interfaces/IBPSSwapAdapter.sol`,
-   `packages/contracts/src/DistributionClaimManager.sol`.
+   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (97 TS tests, 398 Foundry
+   tests). The mainnet-fork deploy rehearsal is opt-in: `ROBINHOOD_FORK_RPC=<read-only rpc> forge test
+--match-contract ForkDeployRehearsal` (it skips, counting as pass, when the env var is unset). Quick
+   subsets from `packages/contracts`: `forge test --match-contract
+"RialtoAdapter|CoordinatorFunding|RialtoEndToEnd"`, `forge test --match-contract
+"DeployConfigValidation"`, `forge test --match-contract "StockVault"`. TS: `npm run test --workspace
+@bps/rialto`. Optionally `npm run proof:mock -- --out <tmp>`. The working tree carries the TASK 7
+   deployment package unless it has been checkpointed as `feat(deploy): prepare restricted beta release`.
+3. **TASK 7 is complete and the decision is NO-GO for a live deployment** (blocked on the BPS/WETH pool +
+   fee tier, user-supplied deployer/role addresses, the beta basket selection, an on-chain slippage/oracle
+   guard, and external legal/eligibility review — all in §11). The deployment package is ready and fails
+   closed: `script/BPSDeployment.sol` + `script/DeployBPS.s.sol` + `deploy/` (schema, dry-run manifest,
+   runbook) + `.env.example`; the fork rehearsal proves the deterministic wiring against the real
+   externals. The coordinator occupies both frozen vault roles; the Rialto adapter is chain-4663-guarded;
+   the quote client is server-only via `@bps/rialto/server`. Do NOT begin deployment or frontend work.
+   Before any deployment, resolve the §11 blockers: the verified BPS/WETH pool + fee tier + liquidity;
+   the user-supplied deployer/role/basket values; a price/oracle slippage guard; operational controls; and
+   external legal/eligibility review (Robinhood Stock Tokens have jurisdiction limits). The external
+   Robinhood Chain dependencies (WETH, registry + fail-closed `ownerOf(2)`, feature-2 router, SwapRouter02
+   - factory, stock candidates) are already verified (§7). Before any
+     deployment, resolve the §11 blockers: verified WETH/BPS/stock/router/pool addresses + fee tier; the
+     exact Rialto router ABI (`ownerOf(2)`) and settlement selector; a price/oracle slippage guard;
+     operational controls; the circular deterministic deployment sequences (router↔Uniswap-adapter,
+     vault↔Rialto-adapter, vault↔coordinator **for both roles**, claim-manager owner = coordinator); and
+     external legal/eligibility review (Robinhood Stock Tokens have jurisdiction limits).
+     Do NOT create/use/expose the Rialto API key or make a live quote request. When resuming, honor the §6
+     rules (Rialto adapter, coordinator, 80/20, router, burn-truth) and the frozen contracts; introduce no
+     economics other than
+     `BPS-ECON-2.0` (WETH allocation) and the frozen 80/20 (acquired-stock split). Do not modify the frozen
+     `BPSToken`, PoD, `DistributionClaimManager`, `BPSLockingVault`/`vebps-1`, `BPSTradeRouter`, or
+     `StockAcquisitionVault`, or `UniswapV3BPSSwapAdapter` without an explicit instruction. Relevant
+     files: `packages/contracts/src/StockAcquisitionVault.sol`,
+     `packages/contracts/src/interfaces/IStockAcquisitionAdapter.sol`,
+     `packages/contracts/test/StockVault*.t.sol`,
+     `packages/contracts/test/mocks/{MockStockAcquisitionAdapter,HostileStockAcquisitionAdapter}.sol`,
+     `packages/contracts/src/adapters/UniswapV3BPSSwapAdapter.sol`,
+     `packages/contracts/src/interfaces/ISwapRouter02.sol`,
+     `packages/contracts/test/SwapAdapter*.t.sol`, `packages/contracts/test/RouterUniswapIntegration.t.sol`,
+     `packages/contracts/test/mocks/{MockSwapRouter02,HostileSwapRouter02}.sol`,
+     `packages/contracts/src/BPSTradeRouter.sol`,
+     `packages/contracts/src/interfaces/IBPSSwapAdapter.sol`,
+     `packages/contracts/src/DistributionClaimManager.sol`.
