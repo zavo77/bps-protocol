@@ -1,12 +1,14 @@
 # HANDOVER — BPS Experiment
 
 Last updated: 2026-07-22 (local machine time; verification timestamps below are from command output).
-TASK 6A (`BPSTradeRouter` — the official BPS trade router: true BPS burning and stock-acquisition
-budget under `BPS-ECON-2.0`) is complete and fully tested under Forge 1.7.1. All assets, addresses,
-adapters, budgets, burns, and transactions are **fictional and local-only**; nothing is deployed or
-connected to any network, no RPC/wallet/credential is used, no liquidity is created, and no real
-trade, swap, or burn executes outside the local Foundry test VM. TASK 6B and any later task have
-**not** begun.
+TASK 6B-1A (`StockAcquisitionVault` + `IStockAcquisitionAdapter` — the production-shaped, multi-asset
+WETH→stock acquisition custody boundary with the frozen 80/20 split) is complete and fully tested
+under Forge 1.7.1, on top of the committed TASK 6A checkpoint. All assets, addresses, adapters,
+budgets, splits, and transactions are **fictional and local-only**; nothing is deployed or connected
+to any network, no RPC/wallet/credential/API-key is used, no liquidity is created, and no real trade,
+swap, acquisition, or burn executes outside the local Foundry test VM. TASK 6B-1B (production DEX
+adapter), TASK 6B-2 (concrete Rialto adapter + backend quote executor), and the
+`DistributionFundingCoordinator` have **not** begun; the vault is **not deployable** yet.
 
 ## 1. Project snapshot
 
@@ -23,16 +25,22 @@ immutable recipient). `BPSLockingVault` lets users lock real BPS for one of four
 `vebps-1` policy. `BPSTradeRouter` is the official BPS trade core: an official buy applies a 3%
 allocation (2% WETH stock-acquisition budget + 1% BPS repurchase-and-burn, 97% to the user) and an
 official sell applies a 4% allocation (2% stock + 2% burn, 96% to the user, computed from **actual**
-WETH proceeds); the burn is a **true `totalSupply` reduction** — the router repurchases BPS with the
-WETH burn budget through an immutable swap adapter and burns the BPS it receives via the token's
-self-burn. All economics, token, adapter, and recipient wiring is immutable; the only owner power is
-pause/unpause and two-step ownership (renounce is disabled). All four contracts are implemented and
-unit-tested but **not deployed**. **Still unimplemented**: the production Uniswap swap adapter, the
-real stock-acquisition vault, the Rialto adapter, protocol-fee-on-transfer (there is none —
-economics is trade-routed only), transferable veBPS, eligibility contract, the 15-minute epoch
-indexer / TWAB aggregation, database, UI, and any deployment. Economics is **BPS-ECON-2.0** only.
-Current execution target: await an explicit TASK 6B (production adapters / vault) definition — do
-not begin it (see §13).
+WETH proceeds); the burn is a **true `totalSupply` reduction**. `StockAcquisitionVault` (TASK 6B-1A)
+is the production-shaped custody sink intended to be the router's immutable `stockBudgetRecipient`:
+it holds the 2% WETH stock-acquisition budget and, on the authority of a single immutable executor,
+converts exact WETH into an approved stock token through an immutable `IStockAcquisitionAdapter`,
+then applies a frozen 80/20 split — 80% (floored) retained as the distribution allocation (releasable
+only to an immutable `DistributionFundingCoordinator` placeholder) and the remaining 20% plus the
+entire rounding remainder delivered to an immutable reserve recipient. It verifies exact WETH spend
+and the observed stock-balance delta against the adapter's report, and has no owner, pause, sweep,
+withdrawal, arbitrary-call, or upgrade surface. All economics/token/adapter/recipient/basket wiring
+is immutable. Five contracts are implemented and unit-tested but **not deployed**. **Still
+unimplemented**: TASK 6B-1B (the production conventional-DEX BPS/WETH swap adapter for the router),
+TASK 6B-2 (the concrete Rialto stock-acquisition adapter + backend quote executor), the
+`DistributionFundingCoordinator` (funds `DistributionClaimManager` cycles), transferable veBPS,
+eligibility contract, the 15-minute epoch indexer / TWAB aggregation, database, UI, and any
+deployment. Economics is **BPS-ECON-2.0** only. Current execution target: await an explicit TASK
+6B-1B / 6B-2 / coordinator definition — do not begin them (see §13).
 
 ## 2. Repository map
 
@@ -49,9 +57,12 @@ not begin it (see §13).
   `src/DistributionClaimManager.sol` (funded immutable Merkle claim manager, frozen/unchanged),
   `src/BPSLockingVault.sol` (fixed-term BPS locking / `vebps-1` policy),
   `src/BPSTradeRouter.sol` (official BPS trade router / `BPS-ECON-2.0`, TASK 6A),
-  `src/interfaces/IBPSSwapAdapter.sol` (the exact-input swap-adapter boundary the router calls) and
+  `src/StockAcquisitionVault.sol` (multi-asset WETH→stock custody + 80/20 split, TASK 6B-1A),
+  `src/interfaces/IBPSSwapAdapter.sol` (the exact-input swap-adapter boundary the router calls),
   `src/interfaces/IBPSBurnable.sol` (the `burn(uint256)` self-burn the router invokes on BPSToken),
-  `src/BuildProbe.sol` (harmless probe). Tests (dependency-free: `require`/inline `Vm`, no forge-std)
+  `src/interfaces/IStockAcquisitionAdapter.sol` (the WETH→stock acquisition boundary the vault calls,
+  TASK 6B-1A), `src/BuildProbe.sol` (harmless probe). Tests (dependency-free: `require`/inline `Vm`,
+  no forge-std)
   — TASK 1–4: `test/BPSToken.t.sol` (23), `test/BuildProbe.t.sol` (1), `test/LeafVector.t.sol` (3),
   `test/Publication.t.sol` (18), `test/Claims.t.sol` (21), `test/RecoveryAccounting.t.sol` (12),
   `test/Fuzz.t.sol` (4), `test/ClaimManagerBase.t.sol` (abstract base). TASK 5 vault:
@@ -63,13 +74,24 @@ not begin it (see §13).
   router with seeded local liquidity), `test/RouterConstructor.t.sol` (10),
   `test/RouterBuy.t.sol` (19), `test/RouterSell.t.sol` (19), `test/RouterSecurity.t.sol` (13),
   `test/RouterFuzz.t.sol` (3 fuzz), `test/BurnProof.t.sol` (6, proves the BPSToken self-burn
-  properties additively without touching `BPSToken.t.sol`). Test-only mocks under `test/mocks/`:
-  `MockERC20.sol`, `MockFeeOnTransferERC20.sol`, `ReentrancyProbeERC20.sol` (TASK 4),
-  `FailingERC20Mock.sol` + `ReentrantBPSMock.sol` (TASK 5), and `MockWETH.sol` (18-dec WETH stand-in
-  with `mint`), `MockSwapAdapter.sol` (honest deterministic fixed-rate BPS/WETH adapter),
-  `HostileSwapAdapter.sol` (configurable misbehaving adapter: HONEST/LIE_OVER/LIE_UNDER/SHORT_SPEND/
-  FAIL/REENTER) (TASK 6A). Empty `script/` directory. npm scripts `forge:build` / `forge:test` /
-  `forge:fmt` wrap forge. Depends on `@openzeppelin/contracts` (npm, pinned exact).
+  properties additively without touching `BPSToken.t.sol`). TASK 6B-1A stock vault:
+  `test/StockVaultBase.t.sol` (abstract base + inline `Vm`, deploys MockWETH/two MockERC20 stock
+  tokens/pass-through adapter/vault with a seeded stock SOURCE, a WETH SINK, and a WETH budget),
+  `test/StockVaultConstructor.t.sol` (17), `test/StockVaultAcquisition.t.sol` (13),
+  `test/StockVaultHostile.t.sol` (12), `test/StockVaultRelease.t.sol` (8),
+  `test/StockVaultAccounting.t.sol` (5), `test/StockVaultResidual.t.sol` (4 — the net-residual-custody
+  security tests: retained-WETH, skimmed-stock, donation-tolerance, and donation-does-not-mask), and
+  `test/StockVaultFuzz.t.sol` (1 fuzz). Test-only mocks under `test/mocks/`: `MockERC20.sol`
+  (configurable-decimals ERC-20 + mint), `MockFeeOnTransferERC20.sol`, `ReentrancyProbeERC20.sol`
+  (TASK 4), `FailingERC20Mock.sol` + `ReentrantBPSMock.sol` (TASK 5), `MockWETH.sol` (18-dec WETH
+  stand-in with `mint`), `MockSwapAdapter.sol` (honest deterministic fixed-rate BPS/WETH adapter),
+  `HostileSwapAdapter.sol` (configurable misbehaving BPS/WETH adapter: HONEST/LIE_OVER/LIE_UNDER/
+  SHORT_SPEND/FAIL/REENTER) (TASK 6A), `MockStockAcquisitionAdapter.sol` (honest **pass-through**
+  WETH→stock adapter: routes WETH to a sink and stock from a source, holding no residual) and
+  `HostileStockAcquisitionAdapter.sol` (configurable misbehaving WETH→stock adapter: HONEST/LIE_OVER/
+  LIE_UNDER/UNDER_MIN/PARTIAL_SPEND/EXCESS_SPEND/WRONG_TOKEN/NO_DELIVERY/RETAIN_STOCK/**RETAIN_WETH**/
+  **SKIM_STOCK**/REENTER/REVERT) (TASK 6B-1A). Empty `script/` directory. npm scripts `forge:build` /
+  `forge:test` / `forge:fmt` wrap forge. Depends on `@openzeppelin/contracts` (npm, pinned exact).
 - `packages/shared` — `@bps/shared`. **Proof-of-Distribution domain logic** under
   `src/proof-of-distribution/`: `constants.ts` (ECON version, tiers, exclusion categories, leaf
   ABI), `numeric.ts` (integer/bigint helpers), `address.ts` (normalization), `schemas.ts` (zod
@@ -194,36 +216,72 @@ stock − burn` (remainder to the user; invariant `stock+burn+user==G`), deliver
   `totalSupply` by exactly the amount, emits `Transfer` to `address(0)`, cannot burn another wallet's
   tokens without an explicit allowance). This is a **correct pre-existing permissionless self-burn**,
   so **`BPSToken` was not modified**; `test/BurnProof.t.sol` proves these properties additively.
-- `BPSToken`, `DistributionClaimManager`, and `BPSLockingVault` are frozen and unchanged for TASK 6A
-  (byte-identical; `BPSToken.sol`/`BPSToken.t.sol` show no git diff); their tests (23 + 79 + 50) still
-  pass.
+- **`StockAcquisitionVault` (TASK 6B-1A)** — the production-shaped, multi-asset WETH→stock custody
+  boundary intended to be the router's immutable `stockBudgetRecipient`. Verified with Forge 1.7.1:
+  `forge fmt --check` clean, `forge build` no warnings, `forge test` 262 tests pass (60 new vault/adapter
+  tests + the 202 preserved TASK 1–6A tests). Behavior proven by tests: constructor stores immutable
+  WETH/adapter/executor/reserve/coordinator + frozen basket, rejecting zero addresses, adapter/reserve/
+  coordinator aliasing, reserve==coordinator, empty/duplicate/zero/aliasing basket entries.
+  `executeAcquisition` is executor-only, `nonReentrant`, rejects unapproved stock / zero amount / zero
+  minimum / expired deadline / insufficient WETH custody; approves the immutable adapter for exactly the
+  input and clears the approval after; independently verifies exact WETH spent, the observed stock delta,
+  report==observed, the caller minimum against the actual delta, **and no new net residual custody at
+  the adapter** (its WETH and selected-stock balances must equal their pre-call baselines — donation-
+  tolerant, so pre-existing balances are fine but retained input / skimmed output revert); applies the
+  frozen 80/20 split (`distribution = floor(actualStockOut*80/100)`, `reserve = actualStockOut −
+distribution`, remainder to reserve), delivers the reserve portion to the immutable reserve recipient
+  verifying **both** the vault's decrease and the recipient's increase, and retains distribution. Every
+  dishonest adapter (lie-over/under, under-min, partial/excess WETH spend, wrong-token, no-delivery,
+  retain-stock, **retained-WETH, skimmed-stock**, reentrancy, revert) and a fee-on-transfer stock token
+  reverts the whole acquisition atomically with no state change. `releaseToDistributionCoordinator` is
+  executor-only, `nonReentrant`, fixed-recipient (no recipient parameter), bounded by the unreleased
+  distribution allocation so donations can never be released, and verifies **both** the vault's decrease
+  and the coordinator's increase. Donation-safe accounting holds
+  (`balanceOf(vault) + released >= allocated`; equality only without donations), multi-token accounting
+  is isolated, and native ETH is rejected. Control surface (see §7): 2 state-mutating functions, 3 events,
+  17 custom errors, 7 storage slots; **no owner, no pause, no setter, no sweep/withdraw/rescue, no
+  arbitrary recipient, no arbitrary call, no basket add/remove, no proxy/upgrade**.
+- `BPSToken`, `DistributionClaimManager`, `BPSLockingVault`, and `BPSTradeRouter` are frozen and
+  unchanged for TASK 6B-1A (no git diff on any of them or their tests, and no interface change to
+  `IBPSSwapAdapter`/`IBPSBurnable`); their tests still pass within the 258-test suite.
 - Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; 68 TS tests,
-  202 Foundry tests) when `forge` is on PATH (see §11 PATH note).
-- Git repository: TASK 1–5 are committed at checkpoint `c443b925c0c59488bbe4a3404fe929dafd694b22`
-  ("checkpoint: complete BPS tasks 1-5"), which is HEAD. TASK 6A files are staged-work-tree only and
-  **not committed** (user instruction: do not commit without explicit request).
+  258 Foundry tests) when `forge` is on PATH (see §11 PATH note).
+- Git repository: TASK 1–5 are committed at `c443b925c0c59488bbe4a3404fe929dafd694b22`, and TASK 6A at
+  `33062815b1ad83c1f6b6ad43dc9957a77a5a6f35` ("checkpoint: complete BPS task 6A trade router") — the
+  latter is HEAD. TASK 6B-1A files are working-tree only and **not committed** (user instruction: do
+  not commit without explicit request).
 
 ## 4. In progress
 
-Nothing is mid-implementation. All TASK 1–5 and TASK 6A verification is complete. TASK 6B and any
-later task have not begun and must not be started without an explicit definition from the user.
+Nothing is mid-implementation. TASK 1–5, 6A, and 6B-1A verification is complete. TASK 6B-1B, 6B-2, and
+the `DistributionFundingCoordinator` have not begun and must not be started without an explicit
+definition from the user.
 
 ## 5. Not started
 
-- **TASK 6B and beyond (explicitly deferred):** the production Uniswap swap adapter implementing
-  `IBPSSwapAdapter` against real pools, the real `StockAcquisitionVault` (the production
-  `stockBudgetRecipient`), and the Rialto adapter. None exist; TASK 6A created only the router and
-  its interfaces plus test-only mock adapters. Do not create the production adapter, acquisition
-  vault, or Rialto adapter here.
+- **TASK 6B-1B — production conventional-DEX BPS/WETH swap adapter** implementing `IBPSSwapAdapter`
+  against the intended Robinhood Chain DEX. Deferred until the venue protocol/version and the exact
+  router/factory/quoter/WETH/pool addresses + swap ABI are independently verified. Rialto's RFQ model
+  is **not** suitable for the router's synchronous user-facing BPS/WETH legs (see §6 Rialto rules), so
+  6B-1B is a conventional AMM adapter.
+- **TASK 6B-2 — concrete Rialto stock-acquisition adapter + backend quote executor** implementing
+  `IStockAcquisitionAdapter`, resolving the taker-submitted RialtoRouter via the Router Registry
+  (feature ID 2), consuming an unmodified quote `tx.to`/`tx.data` blob passed as `executionData`, and
+  requesting **no** integrator fee (omit `swap_fee_bps` / zero). Deferred until WETH/stock-token
+  addresses, the live router, and the quote/calldata schema are verified and the backend/authorization
+  model is finalized. Do not create an API key or fetch quotes here.
+- **`DistributionFundingCoordinator`** — the concrete contract that receives released distribution
+  stock from the vault and funds `DistributionClaimManager` cycles (`publishCycle` pulls funds from the
+  caller). Required before the vault (which binds the coordinator address immutably) can be deployed.
 - On-chain / live components: liquidity provisioning, real Stock Token registry, the 15-minute epoch
   indexer (direct-wallet TWAB from BPSToken `Transfer` logs combined with lock-position state from
   `BPSLockingVault` events), RPC access / live event indexer, reorg persistence, PostgreSQL /
   migrations, transferable veBPS, eligibility smart contract / live screening, wallet connection,
   proof API, real claim/lock/trade transactions, website/dashboard pages, deployment scripts, and any
   Anvil / testnet / mainnet deployment. None exist; none should be added without an explicit task.
-  `DistributionClaimManager`, `BPSLockingVault`, and `BPSTradeRouter` are exercised only in the local
-  Foundry test VM — none is deployed and no real claim, lock, withdrawal, trade, swap, or burn has
-  executed.
+  `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter`, and `StockAcquisitionVault` are
+  exercised only in the local Foundry test VM — none is deployed and no real claim, lock, withdrawal,
+  trade, swap, acquisition, or burn has executed.
 
 ## 6. Canonical technical rules
 
@@ -466,6 +524,81 @@ minimumBurnBpsOutput, recipient, deadline)`): swap **all** `Q` BPS→WETH first,
   router is constructed; a new adapter or recipient requires a new router deployment. Only trades
   routed through this router fund stock acquisition and BPS burning — direct-pool trades bypass it
   entirely. (TASK 6A builds and tests the router locally only; nothing is deployed.)
+- **`StockAcquisitionVault` / frozen 80/20 split (TASK 6B-1A — must not be silently changed):**
+  - Frozen split constants (percent, denominator 100, `public constant`): `SPLIT_DENOMINATOR = 100`,
+    `DISTRIBUTION_PERCENT = 80`. Per successful acquisition:
+    `distributionAllocation = floor(actualStockOut * 80 / 100)` via `Math.mulDiv`;
+    `reserveAllocation = actualStockOut − distributionAllocation`. The entire rounding remainder goes
+    to the reserve. This 80/20 is the on-chain custody split of _acquired stock_ and is distinct from
+    the router's `BPS-ECON-2.0` 2%/1%/2% WETH allocation; do not conflate them.
+  - Immutable wiring (constructor, no setter): `weth`, `acquisitionAdapter` (`IStockAcquisitionAdapter`),
+    `acquisitionExecutor` (sole authority; there is NO owner and NO pause), `reserveRecipient`,
+    `distributionFundingCoordinator` (placeholder — deployment blocked), and the approved stock
+    **basket** (frozen at construction; `isApprovedStockToken` is write-once, with no add/remove
+    function in v1). Constructor rejects zero addresses, adapter aliasing WETH/vault, reserve or
+    coordinator aliasing vault/adapter/WETH, reserve==coordinator, and empty/zero/duplicate/aliasing
+    basket entries.
+  - `executeAcquisition(stockToken, wethAmountIn, minStockOut, deadline, executionData)`: executor-only,
+    `nonReentrant`; rejects unapproved stock, zero `wethAmountIn`, zero `minStockOut`, expired deadline
+    (inclusive), and `wethAmountIn` exceeding custody. Approves the immutable adapter for exactly
+    `wethAmountIn` and clears the approval to 0 after the call. Independently verifies: WETH spent ==
+    `wethAmountIn` (`WethSpendMismatch`); observed `stockToken` delta == adapter-reported
+    (`ReportedStockMismatch`); observed delta >= `minStockOut` (`MinimumStockOutNotMet`). Delivers the
+    reserve portion to `reserveRecipient` with a verified balance delta and retains the distribution
+    portion. Any lie/short/excess-spend/wrong-token/no-delivery/retention/reentrancy/failure reverts
+    atomically. `executionData` is an opaque per-call payload for a later concrete adapter; the generic
+    vault never inspects it and a concrete adapter must lock its own external target (it cannot be an
+    arbitrary target inside `executionData`).
+  - **No new net residual custody at the adapter (critical).** In addition to the vault-side checks
+    above, `executeAcquisition` records the adapter's own WETH and selected-stock balances immediately
+    before the call and, after it, requires each to equal its pre-call baseline
+    (`ResidualWethInAdapter` / `ResidualStockInAdapter`). This closes the gap where exact-spend,
+    report==observed, and minimum all pass yet the adapter (a) pulled the exact WETH input but retained
+    it instead of consuming it, or (b) delivered enough stock while skimming extra acquired stock into
+    itself. The comparison is to the pre-call balance, **not zero**, so pre-existing unsolicited
+    balances at the adapter are tolerated and never brick execution. A correct production adapter is a
+    pass-through that holds no inventory, so both baselines are naturally preserved. Reserve delivery
+    and `releaseToDistributionCoordinator` additionally verify **both** sides of the transfer (the
+    vault's exact decrease and the recipient's exact increase).
+  - `releaseToDistributionCoordinator(stockToken, amount)`: executor-only, `nonReentrant`, fixed
+    recipient (no recipient parameter), bounded by `distributionAllocated − distributionReleased`
+    (`ReleaseExceedsAllocation`), verified delivery delta. This is only the narrow custody→coordinator
+    boundary — it does NOT publish or fund `DistributionClaimManager` cycles, and a bare transfer to the
+    coordinator completes no distribution.
+  - Donation-safe accounting (never equality invariants a donation can break): the vault tracks
+    `totalWethSpent`, `totalStockAcquired[t]`, `distributionAllocated[t]`, `reserveAllocated[t]`,
+    `distributionReleased[t]`, and treats its raw WETH balance as unattributed custody. The required
+    stock relationship is `balanceOf(vault, t) + distributionReleased[t] >= distributionAllocated[t]`
+    (equality only without donations); the excess is unsolicited donated stock and can never be released.
+  - Authority limits: no owner, no pause, no fee, no economic setter, no basket mutation, no arbitrary
+    recipient, no owner/executor withdrawal of custody, no generic sweep/rescue, no stock recovery to a
+    discretionary address, no arbitrary call, and no proxy/upgrade. Native ETH is rejected (`receive()`
+    → `NativeTransferNotAllowed`). **Deployment is blocked** until the concrete
+    `DistributionFundingCoordinator` and the full ownership/authorization sequence are finalized.
+- **Verified Rialto facts (official documentation — record only; do NOT hardcode in generic contracts):**
+  - Robinhood Chain ID: **4663**. Taker-submitted **Router Registry**:
+    `0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E`. Registry **feature ID 2** identifies the current
+    taker-submitted RialtoRouter; the registry may also expose a previous router during a migration
+    dwell window. Smart-contract takers use **allowance settlement**. A quote returns dynamic `tx.to`
+    and `tx.data` that **must not be modified**; `min_buy_amount` is encoded inside `tx.data`.
+  - Partner eligibility (dashboard): Integrator ID **124**, display name **BPS**, approved max integrator
+    fee **30 bps** (OPTIONAL), quote/swap rate limits 6,000 req/min. An external protected Rialto API
+    credential exists but is **not stored or used by this repository** and must never be recorded here.
+  - **30 bps fee semantics:** the 30 bps is an **OPTIONAL integrator fee**. BPS v1 must request **no**
+    integrator fee — omit `swap_fee_bps` or set it to zero. Never describe the optional 30 bps as
+    unavoidable slippage or an ordinary venue fee. Separately, Rialto's standard venue fee and price
+    impact may reduce stock output and are absorbed by the acquisition minimum (`minStockOut`), never
+    added to or netted against the vault's 80/20 split.
+  - **Still unverified (must be verified before 6B-2 / any deployment):** the WETH (quote-asset) address,
+    the approved stock-token addresses, the current live RialtoRouter resolved from the registry, and the
+    precise quote-response/calldata schema. These belong to the later concrete Rialto adapter (6B-2), not
+    the generic 6B-1A vault/interface; the Router Registry address above must **not** be hardcoded into
+    `StockAcquisitionVault` or `IStockAcquisitionAdapter`.
+  - **Router-vs-Rialto boundary:** Rialto's RFQ model (off-chain quote → on-chain RialtoRouter
+    `tx.to`/`tx.data`) fits the vault's governed, keeper-driven `executeAcquisition` (which can carry a
+    quote in `executionData`). It is **not** suitable for `BPSTradeRouter`'s synchronous, user-facing
+    BPS/WETH legs, whose frozen `IBPSSwapAdapter.swapExactInput` carries no calldata and never forwards a
+    caller target — those require a conventional AMM adapter (6B-1B).
 - **Epoch-indexer rule (critical, for the future TASK-8 indexer):** the indexer must process
   BPSToken `Transfer` events and `BPSLockingVault` events in canonical block/transaction/log order.
   Direct-wallet TWAB and locked-vault weight must be **mutually exclusive for the same BPS unit**
@@ -597,12 +730,50 @@ minimumBurnBpsOutput, recipient, deadline)`): swap **all** `Q` BPS→WETH first,
   interfaces the router depends on: `swapExactInput(address tokenIn, address tokenOut, uint256
 amountIn, uint256 minimumAmountOut, address recipient, uint256 deadline) returns (uint256)` and
   `burn(uint256)`. No implementation of `IBPSSwapAdapter` is shipped in `src/` (production adapter is
-  deferred to TASK 6B); only test mocks implement it.
+  deferred to TASK 6B-1B); only test mocks implement it.
+- `StockAcquisitionVault.sol` (`packages/contracts/src`) — multi-asset WETH→stock custody + 80/20
+  split. Inherits OZ `ReentrancyGuard`; uses OZ `SafeERC20`, `Math` (mulDiv). Calls
+  `IStockAcquisitionAdapter` for acquisitions. Constructor `(address weth_, address acquisitionAdapter_,
+address acquisitionExecutor_, address reserveRecipient_, address distributionFundingCoordinator_,
+address[] approvedStockTokens_)`; `weth`/`acquisitionAdapter`/`acquisitionExecutor`/`reserveRecipient`/
+  `distributionFundingCoordinator` are all `immutable`. Control surface from `forge inspect ... methods`
+  — **22 externally callable functions**, of which only **2 are state-mutating**
+  (`executeAcquisition(address,uint256,uint256,uint256,bytes)`,
+  `releaseToDistributionCoordinator(address,uint256)`); the rest are 2 split constants
+  (`SPLIT_DENOMINATOR`/`DISTRIBUTION_PERCENT`), 5 immutable getters, the basket views
+  (`approvedStockTokens`/`approvedStockTokenCount`/`approvedStockTokenAt`/`isApprovedStockToken`), and
+  the accounting/derived views (`totalWethSpent`, `totalStockAcquired`, `distributionAllocated`,
+  `reserveAllocated`, `distributionReleased`, `distributionReleasable`, `availableWethCustody`,
+  `unsolicitedStockBalance`). ABI: 1 constructor (not counted), **3 events** (`StockAcquired`,
+  `ReserveAllocated`, `DistributionReleased`), **17 custom errors** (`ZeroAddress`,
+  `InvalidSystemAddress`, `DuplicateStockToken`, `EmptyBasket`, `NotAuthorizedExecutor`,
+  `StockTokenNotApproved`, `ZeroAmount`, `ZeroMinimumOutput`, `ExpiredDeadline`,
+  `InsufficientWethCustody`, `WethSpendMismatch`, `MinimumStockOutNotMet`, `ReportedStockMismatch`,
+  `ResidualWethInAdapter`, `ResidualStockInAdapter`, `ReserveDeliveryMismatch`,
+  `DistributionDeliveryMismatch`, `ReleaseExceedsAllocation`,
+  `NativeTransferNotAllowed`) plus OZ `ReentrancyGuardReentrantCall`, `SafeERC20FailedOperation`.
+  `storage-layout` reports **7 slots** (`isApprovedStockToken` s0, `_approvedStockTokens` s1,
+  `totalWethSpent` s2, then `totalStockAcquired`/`distributionAllocated`/`reserveAllocated`/
+  `distributionReleased` s3–s6); the 5 immutables live in bytecode, and the inherited standard OZ
+  `ReentrancyGuard` uses its fixed ERC-7201 namespaced slot (not shown; not transient). A
+  forbidden-surface scan confirmed **no** owner/`Ownable`, pause, setter, basket add/remove, sweep/
+  rescue/withdraw, arbitrary recipient, arbitrary call, or proxy/upgrade. **Not deployed**; deployment
+  is blocked until the concrete `DistributionFundingCoordinator` and the ownership/authorization
+  sequence are finalized. No production adapter, executor, reserve, coordinator, or basket has been
+  chosen — the tests use fictional local ones.
+- `IStockAcquisitionAdapter.sol` (`packages/contracts/src/interfaces`) — the WETH→stock acquisition
+  boundary the vault calls: `acquireStock(address stockToken, uint256 wethAmountIn, uint256 minStockOut,
+uint256 deadline, bytes executionData) returns (uint256 reportedStockOut)`. No implementation is
+  shipped in `src/` (the concrete Rialto adapter is deferred to TASK 6B-2); only test mocks implement
+  it. The NatSpec requires exact-input WETH acquisition, only the requested approved stock token,
+  delivery back to the vault, actual output >= `minStockOut`, report == vault-observed delta, no native
+  ETH, no residual custody, atomic failure, and that a concrete adapter lock its own external target
+  (never an arbitrary target inside `executionData`).
 - `BuildProbe.sol` (`packages/contracts/src`) — toolchain probe only, compiles (Solc 0.8.26)
   and its test passes under Forge 1.7.1. **Not deployed**, must never be deployed.
 - No deployments on any network. No addresses, transaction hashes, or roles exist. No deployment
-  scripts exist. The claim manager, locking vault, and trade router are exercised only in the local
-  Foundry test VM.
+  scripts exist. The claim manager, locking vault, trade router, and stock-acquisition vault are
+  exercised only in the local Foundry test VM.
 
 ## 8. Data and integrations
 
@@ -620,8 +791,25 @@ amountIn, uint256 minimumAmountOut, address recipient, uint256 deadline) returns
   entirely fictional. No RPC, no live event source, no chain connection.
 - PostgreSQL: **not configured**. No schema, no migrations, no client library installed.
   `@bps/db` is an empty placeholder.
-- Robinhood Chain RPC: **not configured**; no RPC client code exists.
-- Rialto: **not configured**; `@bps/rialto` is an empty placeholder.
+- Robinhood Chain RPC: **not configured**; no RPC client code exists. Officially documented facts to
+  use later (recorded only; not wired into any code and not hardcoded in any contract): **chain ID
+  4663**.
+- Rialto: **partner-eligible, not integrated**; `@bps/rialto` is an empty placeholder. Officially
+  documented / dashboard-verified facts (record only — no code, no adapter, no API key, and NOT
+  hardcoded into the generic 6B-1A contracts): taker-submitted **Router Registry**
+  `0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E` (feature **ID 2** = current taker-submitted
+  RialtoRouter; a previous router may appear during a migration dwell window); smart-contract takers
+  use **allowance settlement**; a quote returns dynamic `tx.to`/`tx.data` that must not be modified,
+  with `min_buy_amount` encoded in `tx.data`; Integrator ID **124**, display name **BPS**, approved
+  max integrator fee **30 bps (OPTIONAL — BPS v1 requests none: omit `swap_fee_bps` / zero)**,
+  quote/swap limits 6,000 req/min. An external protected Rialto API credential exists but is **not
+  stored or used by this repository** and is never recorded here; it must not be created, exposed, or
+  used from this repo. **Still requiring independent verification before 6B-2 / any deployment:** the
+  WETH (quote-asset) address, approved stock-token addresses, the current live RialtoRouter resolved
+  from the registry, and the exact quote-response/calldata schema. These
+  belong to the concrete Rialto adapter (6B-2). The 30 bps optional integrator fee is distinct from
+  Rialto's standard venue fee / price impact, which reduce stock output and are absorbed by the
+  acquisition minimum — see §6 Rialto rules.
 - Wallet authentication: **not implemented**.
 - `.env.example` lists expected variable names only (all placeholders, no real values):
   `APP_ENV`, `PORT`, `DATABASE_URL`, `DATABASE_MIGRATION_URL`, `ROBINHOOD_CHAIN_RPC_URL`,
@@ -653,9 +841,13 @@ All run from the repository root:
   `forge inspect src/BPSToken.sol:BPSToken methods`;
   `forge inspect src/DistributionClaimManager.sol:DistributionClaimManager methods`;
   `forge inspect src/BPSLockingVault.sol:BPSLockingVault methods`;
-  `forge inspect src/BPSTradeRouter.sol:BPSTradeRouter methods`.
+  `forge inspect src/BPSTradeRouter.sol:BPSTradeRouter methods`;
+  `forge inspect src/StockAcquisitionVault.sol:StockAcquisitionVault methods` (if `storage-layout`
+  reports a caching error, run `forge clean` first).
 - Run only the router/burn suites: `forge test --match-contract
 "RouterConstructor|RouterBuy|RouterSell|RouterSecurity|RouterFuzz|BurnProof"` (from
+  `packages/contracts`).
+- Run only the stock-vault suites: `forge test --match-contract "StockVault"` (from
   `packages/contracts`).
 
 Note: `typecheck`, `test`, `build`, and `proof:mock` first run `build:shared`
@@ -663,6 +855,61 @@ Note: `typecheck`, `test`, `build`, and `proof:mock` first run `build:shared`
 types/JS. This is required because `@bps/pilot` imports `@bps/shared`.
 
 ## 10. Latest verification
+
+TASK 6B-1A **security correction** (net-residual-custody) run 2026-07-22 with Forge 1.7.1 and Node
+24.18.0. HEAD unchanged at `33062815b1ad83c1f6b6ad43dc9957a77a5a6f35`. Gap found and closed: the
+original `executeAcquisition` verified only the vault's own balance deltas, so an adapter that pulled
+the exact WETH but retained it, or delivered ≥ min stock while skimming extra into itself, passed all
+checks. Fix: record the adapter's WETH and selected-stock balances before the call and require each to
+equal its pre-call baseline afterward (`ResidualWethInAdapter` / `ResidualStockInAdapter`), plus
+both-side (sender + recipient) delta checks on reserve delivery and distribution release. Commands run:
+
+- `forge fmt --check` — PASS. `forge build` — PASS, no warnings.
+- `forge test` — **262 tests pass, 0 failed** (was 258; +4 new `StockVaultResidualTest`:
+  retained-WETH revert, skimmed-stock revert, donation-tolerant honest success, donation-does-not-mask
+  retained-WETH — each with full atomic-rollback assertions over vault/adapter/reserve/sink balances,
+  accounting mappings, and the vault→adapter allowance). The mocks were reworked into true
+  pass-through adapters (route WETH to a sink, stock from a source, hold nothing) so honest behavior
+  satisfies the residual checks; two hostile modes added (`RETAIN_WETH`, `SKIM_STOCK`).
+- `forge inspect ... methods` — still **2 state-mutating functions** only; error count 15 → **17**
+  (added the two residual errors); 7 storage slots unchanged; no owner/pause/setter/sweep/withdraw/
+  rescue/arbitrary-recipient/arbitrary-call/upgrade surface.
+- `npm run check` — **PASS end-to-end** (exit 0): 68 TS tests + 262 Foundry tests.
+- `git diff --check` — clean (only benign LF→CRLF notices on docs). Frozen files (`BPSToken`,
+  `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter`, both router interfaces, and all
+  their tests) show **no diff**.
+
+TASK 6B-1A verification run 2026-07-22 with Forge 1.7.1 and Node 24.18.0. Baseline confirmed at commit
+`33062815b1ad83c1f6b6ad43dc9957a77a5a6f35` (HEAD, the TASK 6A checkpoint); working tree was clean
+before edits. Commands actually run:
+
+- `forge fmt --check` — PASS. `forge build` — PASS, **no warnings** (the mock-adapter
+  `erc20-unchecked-transfer` lint notes are suppressed with scoped `forge-lint` directives; the
+  production `StockAcquisitionVault.sol` uses OZ `SafeERC20`/`Math` throughout and is warning-clean).
+- `forge test` — **258 tests pass, 0 failed** across 26 suites: the 202 preserved TASK 1–6A tests plus
+  **56 new** — `StockVaultConstructorTest` 17, `StockVaultAcquisitionTest` 13, `StockVaultHostileTest`
+  12, `StockVaultReleaseTest` 8, `StockVaultAccountingTest` 5, `StockVaultFuzzTest` 1 (@ 256 runs).
+  Covers constructor/basket validation, executor-only authority, unapproved-stock/zero/deadline/
+  custody rejection, exact-WETH-spend and minimum enforcement, report-vs-observed equality, approval
+  clearing, atomic rollback under every hostile adapter mode (lie-over/under, under-min, partial/excess
+  spend, wrong-token, no-delivery, retain-stock, reentrancy, revert) and a fee-on-transfer stock token,
+  the 80/20 split with rounding remainder to reserve, multi-token accounting isolation, immutable-
+  recipient-only releases with over-release prevention, donation-safe accounting, and native-ETH reject.
+- `forge inspect src/StockAcquisitionVault.sol:StockAcquisitionVault methods / storage-layout` — 22
+  external functions (only 2 state-mutating), 7 storage slots (see §7); forbidden-surface scan clean
+  (no owner/pause/setter/sweep/withdraw/arbitrary-recipient/arbitrary-call/basket-mutation/upgrade).
+- `npm run check` — **PASS end-to-end** with `forge` on PATH: format:check, lint, typecheck, test
+  (68 TS tests), build, fmt:contracts, build:contracts, test:contracts (258 Foundry tests).
+- Repository search over the new TASK 6B-1A files (`StockAcquisitionVault.sol`,
+  `IStockAcquisitionAdapter.sol`, `StockVault*.t.sol`, `MockStockAcquisitionAdapter.sol`,
+  `HostileStockAcquisitionAdapter.sol`) for private keys/RPC URLs/real addresses, the Rialto Router
+  Registry / chain ID 4663, `.env`/`vm.env`/`ffi`, `delegatecall`/`selfdestruct`/`tx.origin`, and any
+  owner/pause/sweep/withdraw/upgrade surface — **no matches** (only the word "Insu**ffi**cient" and
+  NatSpec text documenting the absence of those surfaces). The verified Rialto facts live only in this
+  handover, never in a contract.
+- Frozen files confirmed unchanged: `git status` shows **no diff** for `BPSToken.sol`,
+  `DistributionClaimManager.sol`, `BPSLockingVault.sol`, `BPSTradeRouter.sol`, `IBPSSwapAdapter.sol`,
+  `IBPSBurnable.sol`, or any of their tests. All TASK 6B-1A files are new/untracked.
 
 TASK 6A verification run 2026-07-22 with Forge 1.7.1 and Node 24.18.0. Baseline confirmed at commit
 `c443b925c0c59488bbe4a3404fe929dafd694b22` (HEAD). Commands actually run:
@@ -837,7 +1084,15 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 ## 11. Known issues and blockers
 
-- **No functional blockers.** All TASK 1–5 and TASK 6A verification passes.
+- **No functional blockers.** All TASK 1–5, 6A, and 6B-1A verification passes.
+- **Deployment blocker (by design): `StockAcquisitionVault` is not deployable yet.** It binds the
+  `distributionFundingCoordinator` address immutably, but the concrete `DistributionFundingCoordinator`
+  is a later task, and the executor/reserve/coordinator authorization sequence is not finalized. The
+  vault only implements the narrow custody→coordinator release boundary; a bare transfer to the
+  coordinator does not publish or fund a `DistributionClaimManager` cycle. Resolution: build the
+  coordinator (and finalize governance addresses) before constructing the vault. Because the vault's
+  adapter, executor, reserve, coordinator, and basket are all immutable, changing any of them requires a
+  new vault (and, since the router binds the vault as `stockBudgetRecipient`, a new router).
 - Router ownership hardening (by design, not a risk): unlike the claim manager and locking vault,
   `BPSTradeRouter` **disables** `renounceOwnership` (reverts `RenounceDisabled`) so it can never be
   stranded ownerless or lose its emergency pause. Ownership moves only through the two-step
@@ -874,9 +1129,48 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
   for the session, e.g. PowerShell:
   `$env:Path = "C:\Users\Administrator\.foundry\bin;" + $env:Path` before running the contract
   scripts or `npm run check`.
-- Nothing is committed to git yet (user instruction: do not commit).
+- Commit state: TASK 1–5 and 6A are committed (HEAD `33062815…`); the TASK 6B-1A working-tree changes
+  are **not** committed (user instruction: do not commit yet).
 
 ## 12. Recent change log
+
+- **2026-07-22 (TASK 6B-1A — security correction)** — Closed a net-residual-custody gap in
+  `StockAcquisitionVault.executeAcquisition`: an adapter could pull the exact WETH but retain it, or
+  deliver ≥ min stock while skimming extra into itself, and still pass the vault's own-balance checks.
+  Added donation-tolerant post-call checks that the adapter's WETH and selected-stock balances equal
+  their pre-call baselines (`ResidualWethInAdapter` / `ResidualStockInAdapter`), and both-side (sender
+  - recipient) delta checks on reserve delivery and distribution release. Reworked the acquisition
+    mocks into true pass-through adapters (route WETH to a sink, stock from a source, hold no residual)
+    and added `RETAIN_WETH` / `SKIM_STOCK` hostile modes; new `test/StockVaultResidual.t.sol` (4 tests)
+    with full atomic-rollback assertions. Files changed: `src/StockAcquisitionVault.sol`,
+    `test/mocks/MockStockAcquisitionAdapter.sol`, `test/mocks/HostileStockAcquisitionAdapter.sol`,
+    `test/StockVaultBase.t.sol`, `test/StockVaultHostile.t.sol`, `test/StockVaultResidual.t.sol` (new),
+    `README.md`, `HANDOVER.md`. Also corrected the stale "0 API keys created" note (an external
+    protected Rialto credential exists but is not stored or used by this repository). Verification:
+    `forge fmt --check`, `forge build` (no warnings), `forge test` (262 pass = 202 preserved + 60 vault),
+    `forge inspect` (2 state-mutating fns, 17 errors, 7 slots, no forbidden surface), `npm run check`
+    (68 TS + 262 Foundry) — all PASS; `git diff --check` clean; frozen files unchanged. Status: fix
+    complete and verified; nothing committed; still not deployable.
+- **2026-07-22 (TASK 6B-1A)** — Implemented `StockAcquisitionVault` (production-shaped, multi-asset
+  WETH→stock custody with the frozen 80/20 split: 80% distribution retained, remainder to the reserve)
+  and the `IStockAcquisitionAdapter` boundary. New source: `src/StockAcquisitionVault.sol`,
+  `src/interfaces/IStockAcquisitionAdapter.sol`. New tests: `test/StockVaultBase.t.sol`,
+  `test/StockVaultConstructor.t.sol`, `test/StockVaultAcquisition.t.sol`, `test/StockVaultHostile.t.sol`,
+  `test/StockVaultRelease.t.sol`, `test/StockVaultAccounting.t.sol`, `test/StockVaultFuzz.t.sol`. New
+  test-only mocks: `test/mocks/MockStockAcquisitionAdapter.sol` (honest),
+  `test/mocks/HostileStockAcquisitionAdapter.sol` (11 misbehavior modes). Reuses existing
+  `MockWETH`/`MockERC20`/`MockFeeOnTransferERC20`. Uses existing OZ `@openzeppelin/contracts` 5.6.1
+  (`ReentrancyGuard`, `SafeERC20`, `Math`); no new dependency; no deps installed. Updated `README.md`
+  and this handover (incl. corrected optional-30-bps semantics and the verified chain ID 4663 / Router
+  Registry `0x71a120…687E` recorded in §§6/8 — NOT hardcoded in any contract). Verification:
+  `forge fmt --check`, `forge build` (no warnings), `forge test` (258 pass = 202 preserved + 56 new),
+  `forge inspect` (22 functions / 2 state-mutating / 3 events / 15 errors / 7 storage slots, no
+  forbidden surface), full `npm run check` (68 TS + 258 Foundry) — all PASS; new-file secret/registry/
+  dangerous-surface scan clean. `BPSToken.sol`, `DistributionClaimManager.sol`, `BPSLockingVault.sol`,
+  `BPSTradeRouter.sol`, `IBPSSwapAdapter.sol`, `IBPSBurnable.sol`, and all TASK 3 artifacts unchanged
+  (no git diff). Status: TASK 6B-1A complete and verified; nothing committed; not deployable (coordinator
+  - ownership sequence pending); no real acquisition/trade/swap/burn; no Rialto API credential created,
+    stored, exposed, or used by this repository.
 
 - **2026-07-22 (TASK 6A)** — Implemented `BPSTradeRouter` (the official BPS trade router under
   `BPS-ECON-2.0`: 3% buy / 4% sell allocation, 2% WETH stock-acquisition budget, and a **true** BPS
@@ -985,24 +1279,34 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 1. Read `CLAUDE.md` and this file first.
 2. Ensure Forge is on PATH (see §11 PATH note). Run `npm install` (if `node_modules` is missing),
-   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (68 TS tests, 202 Foundry
-   tests). A quick router re-check: `forge test --match-contract
-"RouterConstructor|RouterBuy|RouterSell|RouterSecurity|RouterFuzz|BurnProof"` from
-   `packages/contracts`. Optionally `npm run proof:mock -- --out <tmp>` (writes only to `<tmp>`).
-3. **Await an explicit TASK 6B (or later) definition before adding any new component.** Do not begin
-   it here. TASK 6A intentionally shipped only `BPSTradeRouter` + its two interfaces + test mocks; the
-   production `IBPSSwapAdapter` (real Uniswap adapter), the real `StockAcquisitionVault` (production
-   `stockBudgetRecipient`), and the Rialto adapter were **explicitly out of scope** and must not be
-   created without an explicit task. When TASK 6B is defined, honor the §6 **router rules**
-   (immutable wiring, adapter-boundary hardening, exact-delta verification), the **burn-truth rule**
-   (a real `totalSupply` reduction, never a dead-address transfer or accounting entry), and the
-   **router deployment-order rule** (a trusted adapter + acquisition vault must exist before the
-   router is constructed). Do not modify the frozen `BPSToken`, PoD, `DistributionClaimManager`,
-   `BPSLockingVault`/`vebps-1`, or `BPSTradeRouter`/`BPS-ECON-2.0` rules in §6, or the audited TASK 3
-   artifacts, without an explicit instruction, and introduce no economics other than `BPS-ECON-2.0`.
-   Relevant files: `packages/contracts/src/BPSTradeRouter.sol`,
-   `packages/contracts/src/interfaces/IBPSSwapAdapter.sol`,
-   `packages/contracts/src/interfaces/IBPSBurnable.sol`, `packages/contracts/test/Router*.t.sol`,
-   `packages/contracts/test/mocks/{MockWETH,MockSwapAdapter,HostileSwapAdapter}.sol`,
-   `packages/contracts/src/BPSLockingVault.sol`,
-   `packages/contracts/src/DistributionClaimManager.sol`.
+   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (68 TS tests, 258 Foundry
+   tests). Quick subsets from `packages/contracts`: `forge test --match-contract "StockVault"` and
+   `forge test --match-contract "RouterConstructor|RouterBuy|RouterSell|RouterSecurity|RouterFuzz|BurnProof"`.
+   Optionally `npm run proof:mock -- --out <tmp>` (writes only to `<tmp>`). Note: the current working
+   tree carries uncommitted TASK 6B-1A changes (do not commit without an explicit instruction).
+3. **Await an explicit TASK 6B-1B / 6B-2 / coordinator definition before adding any new component.** Do
+   not begin them here. TASK 6B-1A shipped only `StockAcquisitionVault` + `IStockAcquisitionAdapter` +
+   honest/hostile mocks. Still deferred and out of scope until authorized:
+   - **6B-1B** — the production conventional-DEX `IBPSSwapAdapter` (BPS/WETH) for the router. Requires
+     verified venue protocol/version and router/factory/quoter/WETH/pool addresses + swap ABI. Rialto's
+     RFQ model is NOT usable for the router's synchronous user legs (see §6 Rialto rules).
+   - **6B-2** — the concrete `IStockAcquisitionAdapter` Rialto executor + backend quote flow. Resolve the
+     RialtoRouter from the Router Registry (`0x71a120…687E`, feature ID 2) on chain **4663**, pass the
+     unmodified quote `tx.to`/`tx.data` as `executionData`, and request **no** integrator fee (omit
+     `swap_fee_bps` / zero). Requires verified WETH/stock-token addresses, live router, and calldata
+     schema. Do NOT create/use an API key or fetch quotes without explicit authorization.
+   - **`DistributionFundingCoordinator`** — receives released distribution stock from the vault and funds
+     `DistributionClaimManager` cycles; required before the vault can be deployed.
+     When these are defined, honor the §6 **StockAcquisitionVault 80/20 rules**, **router rules**,
+     **burn-truth rule**, both **deployment-order rules**, and the **verified/unverified Rialto facts**;
+     never hardcode the Router Registry into the generic vault/interface; introduce no economics other than
+     `BPS-ECON-2.0` (WETH allocation) and the frozen 80/20 (acquired-stock split). Do not modify the frozen
+     `BPSToken`, PoD, `DistributionClaimManager`, `BPSLockingVault`/`vebps-1`, `BPSTradeRouter`, or
+     `StockAcquisitionVault` without an explicit instruction. Relevant files:
+     `packages/contracts/src/StockAcquisitionVault.sol`,
+     `packages/contracts/src/interfaces/IStockAcquisitionAdapter.sol`,
+     `packages/contracts/test/StockVault*.t.sol`,
+     `packages/contracts/test/mocks/{MockStockAcquisitionAdapter,HostileStockAcquisitionAdapter}.sol`,
+     `packages/contracts/src/BPSTradeRouter.sol`,
+     `packages/contracts/src/interfaces/IBPSSwapAdapter.sol`,
+     `packages/contracts/src/DistributionClaimManager.sol`.

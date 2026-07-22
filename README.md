@@ -5,12 +5,15 @@ Engineering monorepo for the BPS protocol. Implemented so far: the fixed-supply
 (`@bps/shared`) with a local fixture runner (`@bps/pilot`); the funded, immutable
 `DistributionClaimManager` contract that verifies claims against the frozen
 Proof-of-Distribution Merkle standard; `BPSLockingVault`, the fixed-term BPS locking
-contract implementing the frozen `vebps-1` reward-weight policy; and `BPSTradeRouter`, the
+contract implementing the frozen `vebps-1` reward-weight policy; `BPSTradeRouter`, the
 official BPS trade router implementing `BPS-ECON-2.0` (3% buy / 4% sell allocation, a 2%
 WETH stock-acquisition budget, and a true BPS repurchase-and-burn that reduces total
-supply). All assets, addresses, adapters, budgets, burns, claims, and transactions are
+supply); and `StockAcquisitionVault`, the production-shaped multi-asset custody boundary
+that converts the WETH stock-acquisition budget into approved stock tokens through an
+immutable adapter and applies a frozen 80/20 split (distribution retained, remainder to the
+reserve). All assets, addresses, adapters, budgets, burns, claims, and transactions are
 fictional and local-only. Nothing is deployed to any network, mainnet or otherwise, and no
-on-chain claim, trade, swap, or burn is executed.
+on-chain claim, trade, swap, acquisition, or burn is executed.
 
 ## Prerequisites
 
@@ -21,16 +24,16 @@ on-chain claim, trade, swap, or burn is executed.
 
 ## Repository layout
 
-| Path                 | Package          | Purpose                                                                              |
-| -------------------- | ---------------- | ------------------------------------------------------------------------------------ |
-| `apps/web`           | `@bps/web`       | Next.js (App Router) web application                                                 |
-| `apps/indexer`       | `@bps/indexer`   | Chain indexer service (scaffold)                                                     |
-| `apps/worker`        | `@bps/worker`    | Background worker service (scaffold)                                                 |
-| `packages/contracts` | `@bps/contracts` | Foundry: `BPSToken`, `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter` |
-| `packages/shared`    | `@bps/shared`    | Proof-of-Distribution domain logic                                                   |
-| `packages/db`        | `@bps/db`        | Database access layer (scaffold)                                                     |
-| `packages/rialto`    | `@bps/rialto`    | Rialto integration (scaffold)                                                        |
-| `packages/pilot`     | `@bps/pilot`     | PoD local fixture runner + CLI                                                       |
+| Path                 | Package          | Purpose                                                                                                       |
+| -------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| `apps/web`           | `@bps/web`       | Next.js (App Router) web application                                                                          |
+| `apps/indexer`       | `@bps/indexer`   | Chain indexer service (scaffold)                                                                              |
+| `apps/worker`        | `@bps/worker`    | Background worker service (scaffold)                                                                          |
+| `packages/contracts` | `@bps/contracts` | Foundry: `BPSToken`, `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter`, `StockAcquisitionVault` |
+| `packages/shared`    | `@bps/shared`    | Proof-of-Distribution domain logic                                                                            |
+| `packages/db`        | `@bps/db`        | Database access layer (scaffold)                                                                              |
+| `packages/rialto`    | `@bps/rialto`    | Rialto integration (scaffold)                                                                                 |
+| `packages/pilot`     | `@bps/pilot`     | PoD local fixture runner + CLI                                                                                |
 
 ## Install
 
@@ -95,10 +98,20 @@ sell 4% = 2% stock + 2% burn, 96% to the user, computed from actual WETH proceed
 burn is a true `totalSupply` reduction via a market repurchase and the token's own
 self-burn; immutable BPS/WETH/adapter/stock-recipient wiring; owner power limited to
 pause/unpause and two-step ownership with renounce disabled; no fee/token/adapter/burn
-setter, no fund sweep/rescue/seize, no arbitrary call, no upgrade). Not implemented: the
-production swap adapter and stock-acquisition vault (the router's real dependencies),
-Rialto integration, eligibility contract, the 15-minute epoch indexer, database, and UI
-features. No contract is deployed. There is no mainnet deployment.
+setter, no fund sweep/rescue/seize, no arbitrary call, no upgrade); and
+`StockAcquisitionVault` (production-shaped multi-asset custody for the router's WETH
+stock-acquisition budget — an immutable executor converts exact WETH into an approved
+stock token through an immutable acquisition adapter, verifying exact WETH spend, the
+observed stock delta, and that the adapter keeps no new net residual custody of WETH or
+acquired stock, then applies a frozen 80/20 split with the rounding remainder to the
+reserve and the distribution portion releasable only to an immutable coordinator; no owner,
+no pause, no basket mutation, no sweep/withdrawal, no arbitrary recipient/call, no upgrade).
+Not implemented: the production conventional-DEX BPS/WETH swap adapter (6B-1B), the concrete
+Rialto stock-acquisition adapter + backend quote executor (6B-2), the
+`DistributionFundingCoordinator`, eligibility contract, the 15-minute epoch indexer,
+database, and UI features. No contract is deployed; `StockAcquisitionVault` is not
+deployable until the coordinator and governance sequence are finalized. There is no mainnet
+deployment.
 
 **Economics — `BPS-ECON-2.0` only:** buy 3% (2% stock acquisition + 1% burn); sell 4%
 (2% stock acquisition + 2% burn). There is no stewardship, treasury, creation, or
@@ -108,5 +121,9 @@ graduation fee, no transfer tax, and no rebase/reflection.
 ID must be known **before** production Merkle artifacts are generated — a root generated
 for a different manager address or chain cannot be used (leaves bind `block.chainid`
 and `address(this)`). (2) `BPSTradeRouter`'s swap adapter and stock-budget recipient are
-immutable, so a trusted production swap adapter and stock-acquisition vault must exist
-**before** the router is deployed; changing either requires a new router.
+immutable, so a trusted production swap adapter and `StockAcquisitionVault` must exist
+**before** the router is deployed; changing either requires a new router. (3)
+`StockAcquisitionVault`'s adapter, executor, reserve recipient, distribution coordinator,
+and approved basket are all immutable, so the concrete `DistributionFundingCoordinator` and
+the governance/authorization sequence must be finalized **before** the vault is deployed;
+changing any of them requires a new vault (and hence a new router).
