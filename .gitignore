@@ -20,10 +20,11 @@ packages/contracts/lib/
 coverage/
 lcov.info
 
-# Local environment files (keep .env.example)
+# Local environment files (keep .env.example templates)
 .env
 .env.*
 !.env.example
+!.env.canary.example
 
 # Private keys and deployment secrets
 *.pem

@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "1.0.0",
+  "canary": true,
+  "production": false,
+  "chainId": 4663,
+  "sourceCommit": "UNSET_UNTIL_TAGGED",
+  "broadcastReady": false,
+  "liveWritesApproved": false,
+  "isFixture": false,
+  "note": "BPSC-TEST — ROBINHOOD MAINNET CANARY — TEST ONLY. Non-production, no official value. Fail-closed template: every unresolved address, code-hash, and cap is null until a future preflight populates and a founder explicitly authorizes. Never used by the canonical BPS production deployment path.",
+  "token": {
+    "name": "BPS Canary — TEST ONLY",
+    "symbol": "BPSC-TEST",
+    "decimals": 18,
+    "totalSupply": "1000000000000000000000000000",
+    "postDeploymentMint": false
+  },
+  "explorer": {
+    "baseUrl": "https://robinhoodchain.blockscout.com"
+  },
+  "external": {
+    "weth": {
+      "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "runtimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
+      "status": "VERIFIED"
+    },
+    "rialtoRegistry": {
+      "address": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+      "runtimeCodeHash": "0xf8b9b92ca74f49f59f66ece51adb02dbefe254dcf967db586c4dda798268a01e",
+      "status": "VERIFIED"
+    },
+    "swapRouter02": {
+      "address": "0xCaf681a66D020601342297493863E78C959E5cb2",
+      "runtimeCodeHash": "0x6f36c378e272c6324c48f045182bcb54bd8ad654cf9ebd42e8893d52c4cb25dc",
+      "status": "VERIFIED"
+    },
+    "uniswapV3Factory": {
+      "address": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+      "runtimeCodeHash": "0xec72b1abd1f2faee020cfea9c646bd8994f9fb389054f6e574f103a895091739",
+      "status": "VERIFIED"
+    },
+    "quoterV2": {
+      "address": null,
+      "runtimeCodeHash": null,
+      "status": "UNVERIFIED_FAIL_CLOSED",
+      "note": "Document-only address exists on-chain but is NOT promoted into the trusted manifest until an authoritative source + expected code-hash + factory wiring are recorded."
+    },
+    "nonfungiblePositionManager": {
+      "address": null,
+      "runtimeCodeHash": null,
+      "status": "UNVERIFIED_FAIL_CLOSED",
+      "note": "Required for pool/LP minting; NOT promoted until verified."
+    },
+    "ethUsdOracleFeed": {
+      "address": null,
+      "runtimeCodeHash": null,
+      "status": "UNRESOLVED_FAIL_CLOSED"
+    },
+    "sequencerUptimeFeed": {
+      "address": null,
+      "runtimeCodeHash": null,
+      "status": "UNRESOLVED_FAIL_CLOSED"
+    }
+  },
+  "predicted": {
+    "canaryToken": null,
+    "lockingVault": null,
+    "claimManager": null,
+    "rialtoAdapter": null,
+    "coordinator": null,
+    "stockVault": null,
+    "uniswapAdapter": null,
+    "tradeRouter": null
+  },
+  "actual": {
+    "canaryToken": null,
+    "lockingVault": null,
+    "claimManager": null,
+    "rialtoAdapter": null,
+    "coordinator": null,
+    "stockVault": null,
+    "uniswapAdapter": null,
+    "tradeRouter": null
+  },
+  "pool": {
+    "bpscWethPool": null,
+    "feeTier": 10000,
+    "tickSpacing": 200,
+    "sqrtPriceX96": null,
+    "tickLower": null,
+    "tickUpper": null
+  },
+  "roles": {
+    "canaryDeployer": null,
+    "canaryOwner": null,
+    "reserveRecipient": null,
+    "acquisitionOperator": null,
+    "rootPublisher": null,
+    "claimRecoveryRecipient": null,
+    "controlledTester": null
+  },
+  "capitalCaps": {
+    "note": "WETH caps are execution-time amounts a future preflight MUST populate from the authoritative oracle. Null => fail closed (the relevant action is disabled). USD ceilings are OPERATIONAL controls, not contract-enforced.",
+    "lpWethMaxWei": null,
+    "lpWethMaxUsd": 100,
+    "individualTradeWethMaxWei": null,
+    "individualTradeMaxUsd": 2,
+    "controlledTradesMaxUsd": 20,
+    "gasMaxUsd": 10,
+    "aggregateMaxUsd": 130
+  },
+  "stockBasket": []
+}
