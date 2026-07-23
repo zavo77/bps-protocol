@@ -11,7 +11,13 @@ import {
 } from "wagmi";
 import { getConnectorClient, getPublicClient } from "wagmi/actions";
 import { type Config } from "wagmi";
-import { encodeFunctionData, recoverTypedDataAddress, walletActions, type Address } from "viem";
+import {
+  encodeFunctionData,
+  recoverTypedDataAddress,
+  walletActions,
+  type Address,
+  type Hex,
+} from "viem";
 import { ROBINHOOD_CHAIN_ID } from "../lib/chain";
 import { ECON_DISCLOSURE } from "../lib/economics";
 import { writesAllowed } from "../lib/manifest";
@@ -26,7 +32,13 @@ import { buildTradePreview } from "../lib/trade";
 import { verifyClaim, type Entitlement, type OnchainCycle } from "../lib/claim";
 import { type TransparencyReport } from "../lib/transparency";
 import { fetchTransparency } from "../lib/services/transparency-reads";
-import { readClaimRemaining, readErc20, readLockedPrincipal } from "../lib/services/reads";
+import {
+  readClaimRemaining,
+  readErc20,
+  readLockCount,
+  readLockedPrincipal,
+} from "../lib/services/reads";
+import { validateClaimReadiness } from "../lib/services/claim-validation";
 import { runActionLifecycle, type LifecycleStep } from "../lib/wallet/tx";
 import { bpsLockingVaultAbi, bpsTradeRouterAbi, distributionClaimManagerAbi } from "../lib/abis";
 import { FIXTURE_LABEL } from "../lib/fixtures";
@@ -379,6 +391,9 @@ function LockPanel(p: {
   const [steps, setSteps] = useState<LifecycleStep[]>([]);
   const [result, setResult] = useState<string>("");
   const [refresh, setRefresh] = useState(0);
+  const [withdrawId, setWithdrawId] = useState<bigint | null>(null);
+  const [wSteps, setWSteps] = useState<LifecycleStep[]>([]);
+  const [wResult, setWResult] = useState<string>("");
   const LOCK_AMOUNT = 1000n * WEI;
   const DURATION = 604_800;
 
@@ -413,6 +428,8 @@ function LockPanel(p: {
       if (!pub) return;
       const wallet = await connectorWallet(p.config);
       const before = await readLockedPrincipal(pub, DEMO.lockingVault, p.address as Address);
+      // The new position's lock id is the current lock count (positions are appended).
+      const newLockId = await readLockCount(pub, DEMO.lockingVault, p.address as Address);
       const data = encodeFunctionData({
         abi: bpsLockingVaultAbi,
         functionName: "createLock",
@@ -433,12 +450,54 @@ function LockPanel(p: {
         },
         (s) => setSteps((prev) => [...prev, s]),
       );
+      if (res.ok) setWithdrawId(newLockId);
       setResult(res.ok ? "lock confirmed & reconciled" : `failed at ${res.step}: ${res.reason}`);
       setRefresh((n) => n + 1);
     } catch (e) {
       setResult(`error: ${e instanceof Error ? e.message : String(e)}`);
     }
   }, [p.config, p.address]);
+
+  const runWithdraw = useCallback(async () => {
+    if (!p.address || withdrawId === null) return;
+    setWSteps([]);
+    setWResult("running…");
+    try {
+      const pub = getPublicClient(p.config);
+      if (!pub) return;
+      const wallet = await connectorWallet(p.config);
+      // Read the AUTHORITATIVE locked principal before the withdrawal; the position principal is the
+      // amount this withdrawal must remove. Partial: other positions (e.g. the pre-existing one) remain.
+      const before = await readLockedPrincipal(pub, DEMO.lockingVault, p.address as Address);
+      const data = encodeFunctionData({
+        abi: bpsLockingVaultAbi,
+        functionName: "withdraw",
+        args: [withdrawId],
+      });
+      const res = await runActionLifecycle(
+        { pub, wallet, account: wallet.account },
+        {
+          target: DEMO.lockingVault,
+          data,
+          confirmations: 1,
+          // Reconcile: success ONLY if the confirmed locked balance decreased by exactly the withdrawn
+          // position principal — never inferred from the tx hash alone.
+          reconcile: async () => {
+            const after = await readLockedPrincipal(pub, DEMO.lockingVault, p.address as Address);
+            return after === before - LOCK_AMOUNT;
+          },
+        },
+        (s) => setWSteps((prev) => [...prev, s]),
+      );
+      if (res.ok) setWithdrawId(null);
+      setWResult(
+        res.ok ? "withdrawal confirmed & reconciled" : `failed at ${res.step}: ${res.reason}`,
+      );
+      setRefresh((n) => n + 1);
+    } catch (e) {
+      setWResult(`error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [p.config, p.address, withdrawId]);
 
   return (
     <div className="card">
@@ -473,6 +532,20 @@ function LockPanel(p: {
       {result && (
         <p className="small" data-testid="lock-result">
           {result}
+        </p>
+      )}
+      <button
+        onClick={runWithdraw}
+        disabled={!p.eligible || !p.onCorrectChain || withdrawId === null}
+        data-testid="demo-withdraw"
+        style={{ marginTop: "0.75rem" }}
+      >
+        Withdraw local lock position (partial)
+      </button>
+      <StepList steps={wSteps} />
+      {wResult && (
+        <p className="small" data-testid="withdraw-result">
+          {wResult}
         </p>
       )}
     </div>
@@ -525,23 +598,23 @@ function ClaimPanel(p: {
       setVerified(false);
       return;
     }
-    // Read the on-chain root from the decoded AcquisitionFunded event and the remaining from the manager.
-    const report = await fetchTransparency(pub, {
-      addresses: [DEMO_COORDINATOR],
-      fromBlock: 0n,
-      headBlock: 100n,
-      confirmations: 1n,
-      chunkSize: 50n,
-      isFixture: true,
+    // AUTHORITATIVE claim-manager cycle state (cycles()/assetFunding()/claimed()/remaining()/balanceOf)
+    // — never an event-derived root. An old event cannot override changed current cycle state.
+    const readiness = await validateClaimReadiness(pub, {
+      manager: DEMO.claimManager,
+      cycleId: DEMO.cycleId,
+      asset: DEMO.stock,
+      claimant: p.address as Address,
+      amount: artifact.amount,
+      artifactRoot: artifact.root as Hex,
     });
-    const row = report.acquisitions.find((r) => r.cycleId.value === DEMO.cycleId);
-    const onchainRoot = row?.merkleRoot.value as `0x${string}` | undefined;
-    if (!onchainRoot || onchainRoot.toLowerCase() !== artifact.root.toLowerCase()) {
-      setStatus("rejected: root-mismatch");
+    if (!readiness.ok) {
+      setStatus(`rejected: ${readiness.reason}`);
       setVerified(false);
       return;
     }
-    const remaining = await readClaimRemaining(pub, DEMO.claimManager, DEMO.cycleId, DEMO.stock);
+    const remaining = readiness.remaining!;
+    const onchainRoot = readiness.onchainRoot!;
     const entitlement: Entitlement = {
       cycleId: artifact.cycleId,
       claimManager: artifact.claimManager,
@@ -678,10 +751,36 @@ function TransparencyPanel(p: { config: Config; onCorrectChain: boolean; refresh
               </span>
             </div>
             <div className="kv">
-              <span className="k">BPS burned</span>
+              <span className="k">Sell volume (WETH)</span>
+              <span className="v" data-testid="tx-sellvol">
+                {fmt(report.sellVolume.value)}{" "}
+                <span className="prov prov-fixture">{report.sellVolume.provenance}</span>
+              </span>
+            </div>
+            <div className="kv">
+              <span className="k">BPS burned (per-trade)</span>
               <span className="v">
                 {fmt(report.totalBpsBurned.value)}{" "}
                 <span className="prov prov-fixture">{report.totalBpsBurned.provenance}</span>
+              </span>
+            </div>
+            <div className="kv">
+              <span className="k">BPS repurchased &amp; burned</span>
+              <span className="v" data-testid="tx-repurchase-burn">
+                {fmt(report.repurchaseBpsBurned.value)}{" "}
+                <span className="prov prov-fixture">{report.repurchaseBpsBurned.provenance}</span>
+              </span>
+            </div>
+            <div className="kv">
+              <span className="k">Repurchase WETH spent</span>
+              <span className="v" data-testid="tx-repurchase-weth">
+                {fmt(report.repurchaseWethSpent.value)}
+              </span>
+            </div>
+            <div className="kv">
+              <span className="k">Stock budget delivered</span>
+              <span className="v" data-testid="tx-budget-delivered">
+                {fmt(report.stockBudgetDelivered.value)}
               </span>
             </div>
             <div className="kv">

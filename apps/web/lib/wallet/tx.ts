@@ -10,6 +10,7 @@ import {
   type Address,
   type Hex,
   type PublicClient,
+  type TransactionReceipt,
   type WalletClient,
 } from "viem";
 import { ROBINHOOD_CHAIN_ID } from "../chain";
@@ -48,6 +49,41 @@ export interface LifecycleResult {
   readonly step: LifecycleStep;
   readonly hash?: Hex;
   readonly reason?: string;
+}
+
+type ConfirmOutcome =
+  | { readonly kind: "receipt"; readonly receipt: TransactionReceipt }
+  | { readonly kind: "cancelled" }
+  | { readonly kind: "confirm-error"; readonly reason: string };
+
+/**
+ * Await a confirmed receipt at the required depth, correctly handling mempool replacement via viem's
+ * `onReplaced` callback:
+ *  - a CANCELLED replacement means the intended action did NOT execute → reported as cancelled;
+ *  - a repriced/replaced (still-mined) replacement resolves with the replacement's confirmed receipt,
+ *    which is then reconciled against authoritative state like any other receipt;
+ *  - any confirmation error (timeout, RPC failure) fails closed rather than throwing.
+ * Success is never assumed — the caller must still inspect receipt.status and reconcile.
+ */
+async function waitConfirmed(
+  pub: PublicClient,
+  hash: Hex,
+  confirmations: number,
+): Promise<ConfirmOutcome> {
+  let replacementReason: string | null = null;
+  try {
+    const receipt = await pub.waitForTransactionReceipt({
+      hash,
+      confirmations,
+      onReplaced: (r: { reason: string }) => {
+        replacementReason = r.reason;
+      },
+    });
+    if (replacementReason === "cancelled") return { kind: "cancelled" };
+    return { kind: "receipt", receipt };
+  } catch (e) {
+    return { kind: "confirm-error", reason: rejectionReason(e) };
+  }
 }
 
 async function currentAllowance(
@@ -107,11 +143,16 @@ export async function runActionLifecycle(
         return { ok: false, step: "approve", reason: rejectionReason(e) };
       }
       report("await-approval");
-      const receipt = await clients.pub.waitForTransactionReceipt({
-        hash: approveHash,
-        confirmations: req.confirmations,
-      });
-      if (receipt.status !== "success")
+      const approvalOutcome = await waitConfirmed(clients.pub, approveHash, req.confirmations);
+      if (approvalOutcome.kind === "cancelled")
+        return { ok: false, step: "await-approval", reason: "approval-cancelled-replacement" };
+      if (approvalOutcome.kind === "confirm-error")
+        return {
+          ok: false,
+          step: "await-approval",
+          reason: `confirm-error:${approvalOutcome.reason}`,
+        };
+      if (approvalOutcome.receipt.status !== "success")
         return { ok: false, step: "await-approval", reason: "approval-reverted" };
       report("reread-allowance");
       const now = await currentAllowance(
@@ -152,11 +193,12 @@ export async function runActionLifecycle(
   }
 
   report("await-receipt");
-  const receipt = await clients.pub.waitForTransactionReceipt({
-    hash,
-    confirmations: req.confirmations,
-  });
-  if (receipt.status !== "success")
+  const outcome = await waitConfirmed(clients.pub, hash, req.confirmations);
+  if (outcome.kind === "cancelled")
+    return { ok: false, step: "await-receipt", hash, reason: "cancelled-replacement" };
+  if (outcome.kind === "confirm-error")
+    return { ok: false, step: "await-receipt", hash, reason: `confirm-error:${outcome.reason}` };
+  if (outcome.receipt.status !== "success")
     return { ok: false, step: "await-receipt", hash, reason: "reverted" };
 
   report("reconcile");

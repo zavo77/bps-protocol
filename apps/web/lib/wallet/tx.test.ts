@@ -99,4 +99,109 @@ describe("transaction lifecycle (§E)", () => {
     expect(res.ok).toBe(true);
     expect(steps).not.toContain("approve");
   });
+
+  // ---- §C: transaction-failure coverage ----
+
+  it("surfaces a rejected APPROVAL at the approve step (no pre-approval)", async () => {
+    // sendRejects rejects the first send, which is the approval (allowance starts at 0).
+    const res = await runActionLifecycle(clients(makeDemoState({ sendRejects: true })), buyReq());
+    expect(res).toMatchObject({ ok: false, step: "approve", reason: "user-rejected" });
+  });
+
+  it("fails when the APPROVAL receipt reverts", async () => {
+    const res = await runActionLifecycle(
+      clients(makeDemoState({ receiptReverts: true })),
+      buyReq(),
+    );
+    // With no pre-approval, the first receipt awaited is the approval's.
+    expect(res).toMatchObject({ ok: false, step: "await-approval", reason: "approval-reverted" });
+  });
+
+  it("fails at reread-allowance when the approval did not raise the allowance", async () => {
+    // Approval send + receipt succeed, but the token does not record the allowance.
+    const res = await runActionLifecycle(
+      clients(makeDemoState({ suppressApprovalEffect: true })),
+      buyReq(),
+    );
+    expect(res).toMatchObject({
+      ok: false,
+      step: "reread-allowance",
+      reason: "allowance-insufficient",
+    });
+  });
+
+  it("honors a confirmation depth greater than 1 and still reconciles", async () => {
+    const state = makeDemoState();
+    const me = LOCAL_TEST_ADDRESS.toLowerCase();
+    state.erc20[DEMO_WETH.toLowerCase()]!.allowances[`${me}:${ROUTER.toLowerCase()}`] = 10n ** 18n;
+    const req = { ...buyReq(), confirmations: 5, reconcile: async () => true };
+    const res = await runActionLifecycle(clients(state), req);
+    expect(res.ok).toBe(true);
+  });
+
+  // Targeted stubs for mempool-replacement + confirmation-error paths (the deterministic mock chain
+  // cannot produce a genuine replacement/pending state). Only the confirmation surface is stubbed;
+  // everything else runs the real lifecycle against a pre-approved allowance.
+  function stubClients(
+    waitImpl: (args: {
+      hash: `0x${string}`;
+      confirmations?: number;
+      onReplaced?: (r: { reason: string }) => void;
+    }) => Promise<{ status: string }>,
+  ) {
+    return {
+      account: LOCAL_TEST_ADDRESS as Address,
+      pub: {
+        getChainId: async () => 4663,
+        readContract: async () => 10n ** 18n, // allowance already sufficient → skip approval
+        call: async () => ({ data: "0x" }),
+        waitForTransactionReceipt: waitImpl,
+      } as never,
+      wallet: {
+        chain: robinhoodChain,
+        sendTransaction: async () => `0x${"c".repeat(64)}` as `0x${string}`,
+      } as never,
+    };
+  }
+
+  it("follows a repriced replacement to its confirmed receipt and succeeds", async () => {
+    let reconciled = false;
+    const res = await runActionLifecycle(
+      stubClients(async ({ onReplaced }) => {
+        onReplaced?.({ reason: "repriced" });
+        return { status: "success" }; // replacement mined successfully
+      }),
+      { ...buyReq(), reconcile: async () => ((reconciled = true), true) },
+    );
+    expect(res.ok).toBe(true);
+    expect(reconciled).toBe(true); // reconciliation ran against the replacement's confirmed state
+  });
+
+  it("treats a CANCELLED replacement as a failed action (never success on a hash)", async () => {
+    const res = await runActionLifecycle(
+      stubClients(async ({ onReplaced }) => {
+        onReplaced?.({ reason: "cancelled" });
+        return { status: "success" }; // a receipt exists, but it is the cancel tx
+      }),
+      { ...buyReq(), reconcile: async () => true },
+    );
+    expect(res).toMatchObject({
+      ok: false,
+      step: "await-receipt",
+      reason: "cancelled-replacement",
+    });
+    expect(res.hash).toMatch(/^0x/);
+  });
+
+  it("fails closed on a confirmation error (e.g. wait timeout)", async () => {
+    const res = await runActionLifecycle(
+      stubClients(async () => {
+        throw new Error("Timed out while waiting for transaction to be confirmed.");
+      }),
+      { ...buyReq(), reconcile: async () => true },
+    );
+    expect(res.ok).toBe(false);
+    expect(res.step).toBe("await-receipt");
+    expect(res.reason).toContain("confirm-error");
+  });
 });

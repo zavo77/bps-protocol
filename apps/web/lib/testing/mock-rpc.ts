@@ -12,8 +12,15 @@ import {
   toFunctionSelector,
   type Transport,
 } from "viem";
-import { bpsTradeRouterAbi, bpsLockingVaultAbi, distributionClaimManagerAbi } from "../abis";
+import {
+  bpsTradeRouterAbi,
+  bpsLockingVaultAbi,
+  distributionClaimManagerAbi,
+  distributionFundingCoordinatorAbi,
+} from "../abis";
 import { ROBINHOOD_CHAIN_ID } from "../chain";
+
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as `0x${string}`;
 
 export interface MockErc20 {
   decimals: number;
@@ -29,17 +36,38 @@ export interface MockChainState {
   erc20: Record<string, MockErc20>; // lowercased token -> state
   routerPaused: boolean;
   claimRemaining: Record<string, bigint>; // `${cycleId}:${assetLower}`
-  claimed: Record<string, boolean>; // `${cycleId}:${claimantLower}:${assetLower}`
+  claimed: Record<string, boolean>; // `${cycleId}::${claimantLower}`
   lockedPrincipal: Record<string, bigint>; // `${accountLower}` -> locked BPS in the vault
+  locks: Record<string, bigint[]>; // `${accountLower}` -> per-lockId principal (0 = withdrawn)
+  // Authoritative claim-manager cycle state (read via cycles()/assetFunding()).
+  cycleRoot: Record<string, `0x${string}`>; // `${cycleId}` -> current on-chain merkle root
+  cyclePublished: Record<string, boolean>; // `${cycleId}` -> published
+  assetFunded: Record<string, bigint>; // `${cycleId}:${assetLower}` -> funded allocation
+  // Authoritative coordinator acquisition record (read via acquisitions()).
+  acquisition: {
+    status: number;
+    stockToken: string;
+    wethSpent: bigint;
+    acquiredStock: bigint;
+    distributionAmount: bigint;
+    reserveAmount: bigint;
+    cycleId: bigint;
+  } | null;
   logs: unknown[]; // pre-encoded event logs returned by eth_getLogs
   switchChainRejects: boolean;
   sendRejects: boolean;
   revertOnSimulate: boolean;
   receiptReverts: boolean;
+  // When true, an approve() send is accepted (hash + success receipt) but the allowance is NOT updated,
+  // so the post-approval re-read fails closed (models a non-conforming / griefing token).
+  suppressApprovalEffect?: boolean;
   txCount: number;
   // Optional hook: called after a state-mutating send is applied, so the harness can append a
   // corresponding confirmed event log (used to prove event-backed transparency updates live).
-  onApplied?: (kind: "approve" | "claim" | "lock", args: Record<string, unknown>) => void;
+  onApplied?: (
+    kind: "approve" | "claim" | "lock" | "withdraw",
+    args: Record<string, unknown>,
+  ) => void;
 }
 
 const AGG_LATEST = toFunctionSelector("latestRoundData()");
@@ -48,6 +76,7 @@ const ORACLE_PAUSED = toFunctionSelector("oraclePaused()");
 const APPROVE = toFunctionSelector("approve(address,uint256)");
 const CLAIM = toFunctionSelector("claim(uint256,address,uint256,bytes32[])");
 const CREATE_LOCK = toFunctionSelector("createLock(uint256,uint32)");
+const WITHDRAW = toFunctionSelector("withdraw(uint256)");
 
 function sel(data: string): string {
   return data.slice(0, 10).toLowerCase();
@@ -68,7 +97,9 @@ function applySend(state: MockChainState, to?: string, data?: string): void {
     const dec = decodeFunctionData({ abi: erc20Abi, data: data as `0x${string}` });
     if (dec.functionName === "approve") {
       const spender = String(dec.args[0]).toLowerCase();
-      state.erc20[target]!.allowances[`${from}:${spender}`] = dec.args[1] as bigint;
+      if (!state.suppressApprovalEffect) {
+        state.erc20[target]!.allowances[`${from}:${spender}`] = dec.args[1] as bigint;
+      }
       state.onApplied?.("approve", { token: target, spender, amount: dec.args[1] });
     }
   } else if (s === sel(CLAIM)) {
@@ -89,6 +120,7 @@ function applySend(state: MockChainState, to?: string, data?: string): void {
     const amount = dec.args[0] as bigint;
     const duration = dec.args[1] as number;
     state.lockedPrincipal[from] = (state.lockedPrincipal[from] ?? 0n) + amount;
+    state.locks[from] = [...(state.locks[from] ?? []), amount]; // new lock position
     // Reduce the vault's BPS-side allowance by the spent amount (SafeERC20 pull).
     const bpsEntry = Object.entries(state.erc20).find(
       ([, v]) => v.allowances[`${from}:${target}`] !== undefined,
@@ -100,6 +132,21 @@ function applySend(state: MockChainState, to?: string, data?: string): void {
       bpsEntry[1].balances[from] = (bpsEntry[1].balances[from] ?? 0n) - amount;
     }
     state.onApplied?.("lock", { account: from, vault: target, amount, duration });
+  } else if (s === sel(WITHDRAW)) {
+    const dec = decodeFunctionData({ abi: bpsLockingVaultAbi, data: data as `0x${string}` });
+    const lockId = Number(dec.args[0] as bigint);
+    const positions = state.locks[from] ?? [];
+    const principal = positions[lockId] ?? 0n;
+    if (principal > 0n) {
+      positions[lockId] = 0n; // mark withdrawn
+      state.lockedPrincipal[from] = (state.lockedPrincipal[from] ?? 0n) - principal;
+      // Return the withdrawn principal to the user's BPS balance (the vault releases it).
+      const bpsEntry = Object.entries(state.erc20).find(
+        ([, v]) => v.allowances[`${from}:${target}`] !== undefined,
+      );
+      if (bpsEntry) bpsEntry[1].balances[from] = (bpsEntry[1].balances[from] ?? 0n) + principal;
+      state.onApplied?.("withdraw", { account: from, vault: target, lockId, principal });
+    }
   }
 }
 
@@ -176,8 +223,24 @@ export function createRpcRequest(state: MockChainState) {
         const addr = String((params as string[])?.[0] ?? "").toLowerCase();
         return state.code[addr] ? "0x60006000f3" : "0x";
       }
-      case "eth_getLogs":
-        return state.logs;
+      case "eth_getLogs": {
+        // Respect the fromBlock/toBlock/address filter so confirmation-depth and range windowing are
+        // genuinely enforced end-to-end (the caller never receives logs outside the requested window).
+        const filter = (params as [Record<string, unknown> | undefined])?.[0] ?? {};
+        const parseBlock = (v: unknown): bigint | null =>
+          typeof v === "string" && v.startsWith("0x") ? BigInt(v) : null;
+        const from = parseBlock(filter.fromBlock);
+        const to = parseBlock(filter.toBlock);
+        const addr = typeof filter.address === "string" ? filter.address.toLowerCase() : undefined;
+        return (state.logs as { blockNumber?: string; address?: string }[]).filter((log) => {
+          const bn = parseBlock(log.blockNumber);
+          if (from !== null && bn !== null && bn < from) return false;
+          if (to !== null && bn !== null && bn > to) return false;
+          if (addr && typeof log.address === "string" && log.address.toLowerCase() !== addr)
+            return false;
+          return true;
+        });
+      }
       case "eth_call":
         return handleCall(state, params as [{ to: string; data: string }, ...unknown[]]);
       default:
@@ -359,6 +422,97 @@ function handleCall(
       throw new Error("execution reverted: already claimed or invalid");
     }
     return "0x";
+  }
+
+  // Locking vault: lockCount(address).
+  if (s === sel(toFunctionSelector("lockCount(address)"))) {
+    const dec = decodeFunctionData({ abi: bpsLockingVaultAbi, data: data as `0x${string}` });
+    const acct = String(dec.args[0]).toLowerCase();
+    return encodeFunctionResult({
+      abi: bpsLockingVaultAbi,
+      functionName: "lockCount",
+      result: BigInt((state.locks[acct] ?? []).length),
+    });
+  }
+
+  // Claim manager authoritative cycle state: cycles(), assetFunding(), claimed().
+  if (s === sel(toFunctionSelector("cycles(uint256)"))) {
+    const dec = decodeFunctionData({
+      abi: distributionClaimManagerAbi,
+      data: data as `0x${string}`,
+    });
+    const cyc = String(dec.args[0]);
+    const root = state.cycleRoot[cyc] ?? (`0x${"0".repeat(64)}` as `0x${string}`);
+    const published = state.cyclePublished[cyc] ?? false;
+    return encodeFunctionResult({
+      abi: distributionClaimManagerAbi,
+      functionName: "cycles",
+      result: [root, `0x${"0".repeat(64)}`, `0x${"0".repeat(64)}`, 0n, 4_000_000_000n, published],
+    });
+  }
+  if (s === sel(toFunctionSelector("assetFunding(uint256,address)"))) {
+    const dec = decodeFunctionData({
+      abi: distributionClaimManagerAbi,
+      data: data as `0x${string}`,
+    });
+    const cyc = String(dec.args[0]);
+    const asset = String(dec.args[1]).toLowerCase();
+    const funded = state.assetFunded[`${cyc}:${asset}`] ?? 0n;
+    const remaining = state.claimRemaining[`${cyc}:${asset}`] ?? funded;
+    const claimedAmt = funded > remaining ? funded - remaining : 0n;
+    return encodeFunctionResult({
+      abi: distributionClaimManagerAbi,
+      functionName: "assetFunding",
+      result: [funded > 0n, funded, claimedAmt, 0n, false],
+    });
+  }
+  if (s === sel(toFunctionSelector("claimed(uint256,address,address)"))) {
+    const dec = decodeFunctionData({
+      abi: distributionClaimManagerAbi,
+      data: data as `0x${string}`,
+    });
+    const cyc = String(dec.args[0]);
+    const claimant = String(dec.args[1]).toLowerCase();
+    return encodeFunctionResult({
+      abi: distributionClaimManagerAbi,
+      functionName: "claimed",
+      result: state.claimed[`${cyc}::${claimant}`] ?? false,
+    });
+  }
+
+  // Coordinator authoritative acquisition record: acquisitions(), cycleUsed(), cycleAcquisitionId().
+  if (s === sel(toFunctionSelector("acquisitions(uint256)"))) {
+    const a = state.acquisition;
+    return encodeFunctionResult({
+      abi: distributionFundingCoordinatorAbi,
+      functionName: "acquisitions",
+      result: a
+        ? [
+            a.status,
+            a.stockToken as `0x${string}`,
+            a.wethSpent,
+            a.acquiredStock,
+            a.distributionAmount,
+            a.reserveAmount,
+            a.cycleId,
+          ]
+        : [0, ZERO_ADDR, 0n, 0n, 0n, 0n, 0n],
+    });
+  }
+  if (s === sel(toFunctionSelector("cycleUsed(uint256)"))) {
+    const used = !!state.acquisition && state.acquisition.cycleId !== 0n;
+    return encodeFunctionResult({
+      abi: distributionFundingCoordinatorAbi,
+      functionName: "cycleUsed",
+      result: used,
+    });
+  }
+  if (s === sel(toFunctionSelector("cycleAcquisitionId(uint256)"))) {
+    return encodeFunctionResult({
+      abi: distributionFundingCoordinatorAbi,
+      functionName: "cycleAcquisitionId",
+      result: state.acquisition ? 1n : 0n,
+    });
   }
 
   // approve / createLock / withdraw simulate.

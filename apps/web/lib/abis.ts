@@ -87,6 +87,24 @@ export const bpsTradeRouterAbi = [
       { name: "stockBudgetRecipient", type: "address", indexed: false },
     ],
   },
+  {
+    type: "event",
+    name: "StockBudgetDelivered",
+    inputs: [
+      { name: "tradeId", type: "uint256", indexed: true },
+      { name: "recipient", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "BpsRepurchasedAndBurned",
+    inputs: [
+      { name: "tradeId", type: "uint256", indexed: true },
+      { name: "wethSpent", type: "uint256", indexed: false },
+      { name: "bpsBurned", type: "uint256", indexed: false },
+    ],
+  },
 ] as const;
 
 export const bpsLockingVaultAbi = [
@@ -187,6 +205,47 @@ export const distributionClaimManagerAbi = [
     outputs: [{ type: "uint256" }],
   },
   {
+    type: "function",
+    name: "cycles",
+    stateMutability: "view",
+    inputs: [{ name: "cycleId", type: "uint256" }],
+    outputs: [
+      { name: "merkleRoot", type: "bytes32" },
+      { name: "allocationsContentHash", type: "bytes32" },
+      { name: "manifestEnvelopeHash", type: "bytes32" },
+      { name: "claimStart", type: "uint64" },
+      { name: "claimDeadline", type: "uint64" },
+      { name: "published", type: "bool" },
+    ],
+  },
+  {
+    type: "function",
+    name: "assetFunding",
+    stateMutability: "view",
+    inputs: [
+      { name: "cycleId", type: "uint256" },
+      { name: "asset", type: "address" },
+    ],
+    outputs: [
+      { name: "registered", type: "bool" },
+      { name: "funded", type: "uint256" },
+      { name: "claimed", type: "uint256" },
+      { name: "recovered", type: "uint256" },
+      { name: "recoveryClosed", type: "bool" },
+    ],
+  },
+  {
+    type: "function",
+    name: "claimed",
+    stateMutability: "view",
+    inputs: [
+      { name: "cycleId", type: "uint256" },
+      { name: "claimant", type: "address" },
+      { name: "asset", type: "address" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+  {
     type: "event",
     name: "Claimed",
     inputs: [
@@ -199,6 +258,42 @@ export const distributionClaimManagerAbi = [
 ] as const;
 
 export const distributionFundingCoordinatorAbi = [
+  {
+    type: "function",
+    name: "acquisitions",
+    stateMutability: "view",
+    inputs: [{ name: "acquisitionId", type: "uint256" }],
+    outputs: [
+      { name: "status", type: "uint8" },
+      { name: "stockToken", type: "address" },
+      { name: "wethSpent", type: "uint256" },
+      { name: "acquiredStock", type: "uint256" },
+      { name: "distributionAmount", type: "uint256" },
+      { name: "reserveAmount", type: "uint256" },
+      { name: "cycleId", type: "uint256" },
+    ],
+  },
+  {
+    type: "function",
+    name: "acquisitionCount",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "cycleUsed",
+    stateMutability: "view",
+    inputs: [{ name: "cycleId", type: "uint256" }],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "cycleAcquisitionId",
+    stateMutability: "view",
+    inputs: [{ name: "cycleId", type: "uint256" }],
+    outputs: [{ type: "uint256" }],
+  },
   {
     type: "event",
     name: "AcquisitionRecorded",

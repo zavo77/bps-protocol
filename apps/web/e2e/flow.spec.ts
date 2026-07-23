@@ -4,10 +4,12 @@ import { test, expect } from "@playwright/test";
 // authoritative EIP-1193 mock provider + wagmi injected connector. It proves: provider-derived wrong
 // chain → real provider switch to 4663 → connector-driven typed-data signature (recovered to the
 // connected account) → separate local eligibility → official buy preview → exact approval + simulate +
-// submit + confirm THROUGH THE CONNECTOR → a real local lock with confirmed-state reconciliation → an
-// event-derived transparency view → proof-artifact validation → claim through the connector → the
-// transparency view updating from the new decoded Claimed event → duplicate claim disabled. No real
-// wallet, signature, or transaction is used.
+// submit + confirm THROUGH THE CONNECTOR → a real local lock with confirmed-state reconciliation → a
+// PARTIAL withdrawal reconciled against the authoritative locked balance → an event-derived transparency
+// view (buy + sell volume, repurchase-and-burn, delivered stock budget, acquisition linkage) →
+// proof-artifact validation against AUTHORITATIVE claim-manager cycle state → claim through the connector
+// → the transparency view updating from the new decoded Claimed event → duplicate claim disabled. No real
+// wallet, signature, or transaction is used, and no separate local wallet client is constructed.
 test("restricted-beta connector-driven workflow in a real browser", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByTestId("not-live-banner")).toContainText(/Protocol not live/i);
@@ -34,14 +36,25 @@ test("restricted-beta connector-driven workflow in a real browser", async ({ pag
   await expect(page.getByTestId("trade-result")).toContainText(/confirmed/i);
   await expect(page.getByTestId("steps")).toContainText("approve");
 
-  // Real local lock with reconciliation → locked balance updates.
+  // Real local lock with reconciliation → locked balance rises from the seeded 500 to 1500.
+  await expect(page.getByTestId("locked-balance")).toContainText("500.000");
   await page.getByTestId("demo-lock").click();
   await expect(page.getByTestId("lock-result")).toContainText(/reconciled/i);
-  await expect(page.getByTestId("locked-balance")).toContainText("1000.000");
+  await expect(page.getByTestId("locked-balance")).toContainText("1500.000");
 
-  // Event-derived transparency.
+  // Partial withdrawal through the connector: withdraw ONLY the new position; the seeded 500 remains.
+  // Reconciled against the authoritative locked balance — never inferred from the tx hash.
+  await page.getByTestId("demo-withdraw").click();
+  await expect(page.getByTestId("withdraw-result")).toContainText(/reconciled/i);
+  await expect(page.getByTestId("locked-balance")).toContainText("500.000");
+  await expect(page.getByTestId("demo-withdraw")).toBeDisabled();
+
+  // Event-derived transparency: buy AND sell volume, repurchase-and-burn, delivered budget, acquisition.
   await expect(page.getByTestId("acq-row")).toBeVisible();
   await expect(page.getByTestId("tx-buyvol")).toContainText("1000.000");
+  await expect(page.getByTestId("tx-sellvol")).toContainText("200.000");
+  await expect(page.getByTestId("tx-repurchase-burn")).toContainText("5.000");
+  await expect(page.getByTestId("tx-budget-delivered")).toContainText("20.000");
   await expect(page.getByTestId("acq-remaining")).toContainText("1600.000");
 
   // Proof validation + claim through the connector, then transparency updates and duplicate is disabled.

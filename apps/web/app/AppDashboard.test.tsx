@@ -69,14 +69,25 @@ describe("AppDashboard (provider-driven, §H)", () => {
     );
     expect(screen.getByTestId("steps")).toHaveTextContent("approve");
 
-    // Lock: confirmed + reconciled; locked balance updates to 1000.
+    // Lock: confirmed + reconciled. A pre-existing 500 position is seeded, so locked rises to 1500.
     await waitFor(() => expect(screen.getByTestId("bps-balance")).not.toHaveTextContent("—"));
+    await waitFor(() => expect(screen.getByTestId("locked-balance")).toHaveTextContent("500.000"));
     await user.click(screen.getByTestId("demo-lock"));
     await waitFor(
       () => expect(screen.getByTestId("lock-result")).toHaveTextContent(/reconciled/i),
       { timeout: 8000 },
     );
-    await waitFor(() => expect(screen.getByTestId("locked-balance")).toHaveTextContent("1000.000"));
+    await waitFor(() => expect(screen.getByTestId("locked-balance")).toHaveTextContent("1500.000"));
+
+    // Partial withdrawal: withdraw ONLY the newly-created position; the pre-existing 500 remains locked.
+    // Success is reconciled against the authoritative locked balance (never inferred from the tx hash).
+    await user.click(screen.getByTestId("demo-withdraw"));
+    await waitFor(
+      () => expect(screen.getByTestId("withdraw-result")).toHaveTextContent(/reconciled/i),
+      { timeout: 8000 },
+    );
+    await waitFor(() => expect(screen.getByTestId("locked-balance")).toHaveTextContent("500.000"));
+    expect(screen.getByTestId("demo-withdraw")).toBeDisabled(); // no further position to withdraw
 
     // Event-backed transparency renders decoded events.
     await waitFor(() => expect(screen.getByTestId("acq-row")).toBeInTheDocument());

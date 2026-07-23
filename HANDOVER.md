@@ -89,11 +89,16 @@ any deployment; do not begin frontend or deployment work (see §13).
   `lib/proof/provider.ts` (proof-artifact provider interface + deterministic local provider),
   `lib/config.ts` (versioned declaration config — production null/fail-closed + labeled local-test — and
   an eligibility-service interface + local mock), and `lib/testing/{mock-rpc,local-env,local-account}.ts`
-  (deterministic mock JSON-RPC transport + wagmi mock config, local/test only). `app/` is now a wagmi +
-  react-query client app: `providers.tsx`, `wagmi-local.ts`, `demo.ts`, `AppDashboard.tsx` (wallet /
-  eligibility / trade / lock / claim / transparency panels). Tests: `lib/**/*.test.ts` (node) +
-  `app/AppDashboard.test.tsx` (jsdom component/integration) + `e2e/flow.spec.ts` (Playwright, real
-  Chromium). The app resolves a fixture manifest → live writes disabled; the full flow runs against the
+  (deterministic mock JSON-RPC transport + wagmi mock config, local/test only). **TASK 8C/8D** added
+  `lib/testing/mock-eip1193.ts` (the authoritative EIP-1193 provider that signs internally + emits
+  chain/account/connect/disconnect events, with test-only `__setAccounts`/`__disconnect` controls),
+  `lib/services/transparency-reads.ts` (frozen-ABI log decode/aggregate), and `lib/services/claim-validation.ts`
+  (`validateClaimReadiness` — authoritative current-cycle claim gate). `app/` is a wagmi + react-query client
+  app: `providers.tsx`, `wagmi-local.ts`, `demo.ts`, `AppDashboard.tsx` (wallet / eligibility / trade /
+  lock+withdraw / claim / transparency panels). Tests: `lib/**/*.test.ts` (node, incl.
+  `services/{reads,oracle-reads,transparency-reads,claim-validation}.test.ts`, `wallet/tx.test.ts`,
+  `testing/mock-eip1193.test.ts`) + `app/AppDashboard.test.tsx` (jsdom component/integration) +
+  `e2e/flow.spec.ts` (Playwright, real Chromium). The app resolves a fixture manifest → live writes disabled; the full flow runs against the
   mock provider/transport; all fixtures labeled. **Deferred (documented blockers):** no accepted
   production EIP-712 declaration domain (local-test scaffold only), no production eligibility service
   (interface + local mock), no production proof-artifact service (local provider), and the wrong-network
@@ -422,26 +427,44 @@ cycleId)` is rootPublisher-only, `nonReentrant`: it requires status == RECORDED 
   record, vault budget intact); and a fee-on-transfer stock token is rejected through the complete
   adapter→vault path. Reconciles acquisition = distribution + reserve; all allowances/residues return to
   zero.
+- **Restricted-beta application (`@bps/web`, TASK 8/8B/8C/8D)** — a fail-closed dashboard driven entirely
+  through an authoritative deterministic EIP-1193 mock provider + the wagmi `injected` connector (the app
+  never imports the deterministic key or constructs a separate wallet client). Complete for the beta
+  surface: authoritative contract reads (router paused, ERC-20 balance/decimals/exact allowance, locked
+  principal + lock count, `cycles()`/`assetFunding()`/`claimed()`/`remaining()`, `acquisitions()`); a
+  connector-driven approve→simulate→submit→confirm→**reconcile** transaction lifecycle where success is
+  never inferred from a hash (with mempool-replacement handling via `onReplaced` — cancelled → failure,
+  repriced → follow the confirmed receipt — and fail-closed confirmation errors); a real **lock** and a
+  **partial `withdraw(lockId)`** each reconciled against the authoritative locked balance; **event-backed
+  transparency** decoding OfficialBuy/OfficialSell, BpsRepurchasedAndBurned, StockBudgetDelivered,
+  AcquisitionRecorded/Funded, Claimed (deduped by (block,tx,logIndex), confirmation-depth filtered,
+  malformed-log rejecting, provenance-tagged with tx-hash/block/emitter refs); and **authoritative claim
+  validation** (`lib/services/claim-validation.ts`) that compares the artifact root to the CURRENT on-chain
+  `cycles()` root (a stale event root can never authorize a claim) plus published allocation, claim-used,
+  manager balance, and remaining. `oracle-reads.ts` reads the Chainlink feed + sequencer + `oraclePaused()`
+  fail-closed. Live writes are disabled without a broadcast-ready manifest; the declaration domain,
+  eligibility service, and proof-artifact service remain labeled fail-closed blockers.
 - `BPSToken`, `DistributionClaimManager`, `BPSLockingVault`, `BPSTradeRouter`, `StockAcquisitionVault`,
   `UniswapV3BPSSwapAdapter`, and all frozen interfaces (`IBPSSwapAdapter`, `IBPSBurnable`,
   `IStockAcquisitionAdapter`, `ISwapRouter02`) are unchanged (no git diff on any of them or their
   tests); the `packages/shared/src` PoD engine is unchanged. Their tests still pass within the 398-test
   suite.
-- Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; **176 TS tests**
-  incl. 27 quote-client + 79 `@bps/web` tests (app-core + read/tx/oracle/transparency services + provider-
-  driven component/integration), **398 Foundry tests**) when `forge` is on PATH (see §11). Separately, the
-  **Playwright browser E2E** (`apps/web/e2e/flow.spec.ts`, run via `npm run test:e2e --workspace @bps/web`
-  against a production build) passes in real Chromium and drives the FULL connector-driven workflow. The
-  398 Foundry include the TASK 7 additions (2 coordinator funding-rollback, 13 deployment-config
-  validation, 1 fork-rehearsal that skips without `ROBINHOOD_FORK_RPC`).
+- Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; incl. 27
+  quote-client + **129 `@bps/web`** tests (app-core + read/tx/oracle/transparency/claim-validation services
+  - provider-state + provider-driven component/integration), **398 Foundry tests**) when `forge` is on PATH
+    (see §11). Separately, the **Playwright browser E2E** (`apps/web/e2e/flow.spec.ts`, run via
+    `npm run test:e2e --workspace @bps/web` against a production build) passes in real Chromium and drives the
+    FULL connector-driven workflow (incl. partial withdrawal + sell/burn/budget transparency + authoritative
+    claim). The 398 Foundry include the TASK 7 additions (2 coordinator funding-rollback, 13 deployment-config
+    validation, 1 fork-rehearsal that skips without `ROBINHOOD_FORK_RPC`).
 - Git repository: prior checkpoints `c443b925…` (1–5), `33062815…` (6A), `0f326913…` (6B-1A),
   `64825a3…` (6B-1B), `41d86cc…` (6B-2 + coordinator + e2e), `90e338a…` (acquisition-recording redesign),
   `cd98df3…` (TASK 7 deployment preparation), `d9b9fc0…` (TASK 8 partial-core interface),
-  `d212456328f3c63dfe05b07f5f344390bd970248` (TASK 8B interaction layer,
-  "feat(app): complete restricted beta interaction layer", HEAD). The TASK 8C correction (authoritative
-  EIP-1193 provider + connector-driven signing/transactions, real lock flow, event-backed transparency,
-  extra reads + tx failure paths) is working-tree only until the authorized
-  `fix(app): finish restricted beta interaction coverage` commit.
+  `d212456…` (TASK 8B interaction layer), `26b7feb` (TASK 8C
+  "fix(app): finish restricted beta interaction coverage", HEAD). The TASK 8D work (complete authoritative
+  reads, `withdraw` flow, full tx-failure coverage, complete event transparency incl. sell/burn/budget,
+  extracted `claim-validation` service, oracle-boundary + provider-state tests, extended E2E) is working-tree
+  only until the authorized `fix(app): close restricted beta acceptance gaps` commit.
 
 ## 4. In progress
 
@@ -1234,7 +1257,26 @@ types/JS. This is required because `@bps/pilot` imports `@bps/shared`.
 
 ## 10. Latest verification
 
-Acquisition-recording redesign verification run 2026-07-22 with Forge 1.7.1 and Node 24.18.0. Baseline
+TASK 8D verification run 2026-07-23 (Forge 1.7.1, Node 24.18.0), from HEAD `26b7feb` (TASK 8C). Commands
+actually run:
+
+- `npm run check` — **exit 0**: `prettier --check` PASS (after formatting the 8D files), `eslint` PASS,
+  `tsc --noEmit` PASS, web vitest **129 tests pass** across 17 files (adds
+  `lib/services/claim-validation.test.ts` 8, `lib/testing/mock-eip1193.test.ts` 9, and the extended
+  reads/oracle-reads/transparency-reads/tx/AppDashboard suites), web `next build` PASS, `forge fmt --check`
+  PASS, `forge build` PASS, `forge test` **398 tests pass, 0 failed** (all contract suites unchanged).
+- `npm run test:e2e` (Playwright, real Chromium against the production build on port 3100) — **1 browser
+  test passed**: connect → provider-derived wrong chain → real switch to 4663 → connector signature →
+  eligibility → official buy (approve→simulate→submit→confirm) → lock (reconciled 500→1500) → **partial
+  withdrawal (reconciled 1500→500, button then disabled)** → event-derived transparency (buy 1000, sell 200,
+  repurchase-burn 5, delivered budget 20, acquisition remaining 1600) → authoritative-cycle claim →
+  transparency updates (claimed 1600) → duplicate claim disabled.
+- Safety scan: no `localTestAccount`/`createDemoWalletClient` imported by `apps/web/app` or non-testing
+  `apps/web/lib` (only the public `LOCAL_TEST_ADDRESS` in demo config); the deterministic key stays confined
+  to `lib/testing/mock-eip1193.ts`. `git status` shows only `apps/web` files — no frozen Solidity/interface/
+  contract-test, `packages/shared/src`, or TASK 7 change; no `package.json`/lockfile change.
+
+Prior — Acquisition-recording redesign verification run 2026-07-22 with Forge 1.7.1 and Node 24.18.0. Baseline
 confirmed at `41d86ccaa9b53a3f7a837790d2bc9e2f03e65bf3` (HEAD, the TASK 6B-2 + funding-flow commit).
 Commands actually run:
 
@@ -1637,6 +1679,47 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 ## 12. Recent change log
 
+- **2026-07-23 (TASK 8D — close final restricted-beta acceptance gaps)** — Closed the remaining TASK 8
+  acceptance gaps without redesigning accepted 8B/8C work. **No live transaction, deployment, wallet
+  access, signature, broadcast, or protected Rialto request; `RIALTO_API_KEY` never read; no frozen
+  Solidity/interface/contract-test, `packages/shared/src`, or TASK 7 file modified; no dependency installed
+  or lockfile change.** (A) Added authoritative reads + tests: `readCycle` (cycles()), `readAssetFunding`
+  (assetFunding()), `readClaimUsed` (claimed()), `readAcquisition` (acquisitions()), `readLockCount`
+  (lockCount()); extended `abis.ts` with those frozen getters. (B) **Withdrawal**: real `withdraw(uint256
+lockId)` flow in `LockPanel` (`demo-withdraw`) — reads authoritative locked balance → validate → simulate
+  → submit through the connector → confirm → re-read locked balance → success ONLY on exact reconciliation
+  (locked drops by exactly the withdrawn position principal). A pre-existing 500-BPS position (id 0) is
+  seeded so the demo lock (id 1) then `withdraw(1)` is a genuine PARTIAL withdrawal leaving 500 locked.
+  (C) tx-lifecycle failure coverage: added `waitConfirmed` handling mempool replacement via viem's
+  `onReplaced` (cancelled replacement → failure; repriced/replaced → follow the confirmed receipt) and
+  confirmation errors (fail-closed), plus tests for approval rejection, approval-reverted receipt,
+  allowance-reconcile failure (`suppressApprovalEffect`), confirmation-depth >1, replacement-confirmed,
+  replacement-cancelled, and confirmation timeout. (D) **Complete event transparency**: decode OfficialSell,
+  BpsRepurchasedAndBurned (dedicated repurchase/burn figure, distinct from per-trade burn), and
+  StockBudgetDelivered; each decoded event carries a tx-hash/block/emitter `EventRef`; UI shows sell volume,
+  repurchase-and-burn, and delivered budget; tests for sell/burn/budget, overlapping-range dedup,
+  confirmation-depth exclusion end-to-end, missing-range and inconsistent-linkage. The mock `eth_getLogs`
+  now honors fromBlock/toBlock/address. (E) **Authoritative claim validation**: extracted
+  `lib/services/claim-validation.ts` (`validateClaimReadiness`) — reads current cycles()/assetFunding()/
+  claimed()/remaining()/manager-balance and compares the artifact root to the CURRENT on-chain root; the
+  ClaimPanel now uses it. Negative test per mismatch (not-published, root-mismatch, exceeds-allocation,
+  not-registered, already-claimed, manager-balance-insufficient) + a test proving an OLD event root cannot
+  override a CHANGED current cycle root. (F) **Oracle boundary**: extended `oracle-reads.test.ts` with a
+  tailored transport covering decimals, positive/zero answer, updatedAt/heartbeat staleness, oraclePaused,
+  sequencer up/down/grace, missing code, malformed response, and RPC failure (all fail-closed). (G)
+  **Provider-state coverage**: added test-only `__setAccounts`/`__disconnect` controls to the mock provider
+  and `mock-eip1193.test.ts` proving accountsChanged updates the exposed account, chainChanged updates the
+  chain, a signature recovering to a different account than the message wallet is rejected, disconnect
+  exposes no accounts, reconnect requires explicit `eth_requestAccounts` (no silent consent), a rejected
+  switch preserves the wrong chain, and the deterministic key is reachable only through the provider's
+  request surface. (H) Extended the **Playwright** Chromium E2E with the partial withdrawal (reconciled
+  locked balance 1500→500), event-derived buy/sell/repurchase-burn/budget transparency, and authoritative
+  cycle-backed claim — no separate local wallet client constructed. Verification: full `npm run check`
+  (format + lint + typecheck + **129** web vitest tests + web `next build` + `forge fmt/build/test` **398**,
+  exit 0) and `npm run test:e2e` (1 browser test passed). Live writes remain disabled without a
+  broadcast-ready manifest; production declaration/eligibility/proof-artifact configs remain fail-closed
+  blockers; the system is not public, decentralized, or legally approved.
+
 - **2026-07-22 (TASK 8C — finish restricted-beta interaction coverage)** — Closed the TASK 8B interaction
   gaps. **No live transaction, deployment, wallet access, signature, broadcast, or protected Rialto
   request; no frozen contract/interface/test or `packages/shared/src` or TASK 7 file modified; no new
@@ -1975,11 +2058,12 @@ IRialtoRouterRegistry,IDistributionClaimManagerFunding}.sol`, six `test/*.t.sol`
 
 1. Read `CLAUDE.md` and this file first.
 2. Ensure Forge is on PATH (see §11 PATH note). Run `npm install` (if `node_modules` is missing),
-   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (176 TS tests, 398 Foundry
-   tests). The **Playwright browser E2E** is separate: `npm run test:e2e --workspace @bps/web` (real
-   Chromium; run `npx playwright install chromium` first if needed). The mainnet-fork deploy rehearsal is
-   opt-in: `ROBINHOOD_FORK_RPC=<read-only rpc> forge test --match-contract ForkDeployRehearsal`. TS
-   subsets: `npm run test --workspace @bps/web` (69 tests). Contract subsets: `forge test --match-contract
+   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (**129** web vitest tests +
+   the other TS workspaces, 398 Foundry tests). The **Playwright browser E2E** is separate:
+   `npm run test:e2e --workspace @bps/web` (real Chromium; run `npx playwright install chromium` first if
+   needed). The mainnet-fork deploy rehearsal is opt-in:
+   `ROBINHOOD_FORK_RPC=<read-only rpc> forge test --match-contract ForkDeployRehearsal`. TS subsets:
+   `npm run test --workspace @bps/web` (**129 tests**). Contract subsets: `forge test --match-contract
 "RialtoAdapter|CoordinatorFunding|RialtoEndToEnd"`, `... "DeployConfigValidation"`, `... "StockVault"`.
    The working tree carries the TASK 8 restricted-beta application (`apps/web`) unless it has been
    checkpointed as `feat(app): integrate restricted beta protocol flows`.

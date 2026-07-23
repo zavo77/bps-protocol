@@ -1,7 +1,7 @@
 // Contract-read service (Task 8B §D). Thin, testable wrappers over a viem PublicClient (transport is
 // injected by the caller: an http transport for live, or a mock transport in tests/local). Every entry
 // fails closed on wrong chain / missing code / RPC failure. It never writes, signs, or broadcasts.
-import { erc20Abi, type Address, type PublicClient } from "viem";
+import { erc20Abi, type Address, type Hex, type PublicClient } from "viem";
 import {
   bpsLockingVaultAbi,
   bpsTradeRouterAbi,
@@ -128,6 +128,132 @@ export async function readClaimRemaining(
     });
   } catch (e) {
     throw new ReadFailedError("manager.remaining", e);
+  }
+}
+
+export async function readLockCount(
+  client: PublicClient,
+  vault: Address,
+  account: Address,
+): Promise<bigint> {
+  try {
+    return await client.readContract({
+      address: vault,
+      abi: bpsLockingVaultAbi,
+      functionName: "lockCount",
+      args: [account],
+    });
+  } catch (e) {
+    throw new ReadFailedError("vault.lockCount", e);
+  }
+}
+
+export interface CycleState {
+  readonly merkleRoot: Hex;
+  readonly claimStart: bigint;
+  readonly claimDeadline: bigint;
+  readonly published: boolean;
+}
+
+/** Authoritative current cycle state from the claim manager (cycles()) — NOT an event-derived root. */
+export async function readCycle(
+  client: PublicClient,
+  manager: Address,
+  cycleId: bigint,
+): Promise<CycleState> {
+  try {
+    const r = await client.readContract({
+      address: manager,
+      abi: distributionClaimManagerAbi,
+      functionName: "cycles",
+      args: [cycleId],
+    });
+    return { merkleRoot: r[0], claimStart: r[3], claimDeadline: r[4], published: r[5] };
+  } catch (e) {
+    throw new ReadFailedError("manager.cycles", e);
+  }
+}
+
+export interface AssetFundingState {
+  readonly registered: boolean;
+  readonly funded: bigint;
+  readonly claimed: bigint;
+}
+
+/** Authoritative per-cycle/asset funding from the claim manager (assetFunding()). */
+export async function readAssetFunding(
+  client: PublicClient,
+  manager: Address,
+  cycleId: bigint,
+  asset: Address,
+): Promise<AssetFundingState> {
+  try {
+    const r = await client.readContract({
+      address: manager,
+      abi: distributionClaimManagerAbi,
+      functionName: "assetFunding",
+      args: [cycleId, asset],
+    });
+    return { registered: r[0], funded: r[1], claimed: r[2] };
+  } catch (e) {
+    throw new ReadFailedError("manager.assetFunding", e);
+  }
+}
+
+/** Authoritative per-(cycle,claimant,asset) claim-used flag from the claim manager (claimed()). */
+export async function readClaimUsed(
+  client: PublicClient,
+  manager: Address,
+  cycleId: bigint,
+  claimant: Address,
+  asset: Address,
+): Promise<boolean> {
+  try {
+    return await client.readContract({
+      address: manager,
+      abi: distributionClaimManagerAbi,
+      functionName: "claimed",
+      args: [cycleId, claimant, asset],
+    });
+  } catch (e) {
+    throw new ReadFailedError("manager.claimed", e);
+  }
+}
+
+export interface AcquisitionRecord {
+  readonly status: number;
+  readonly stockToken: Address;
+  readonly wethSpent: bigint;
+  readonly acquiredStock: bigint;
+  readonly distributionAmount: bigint;
+  readonly reserveAmount: bigint;
+  readonly cycleId: bigint;
+}
+
+/** Authoritative acquisition record from the coordinator (acquisitions()). */
+export async function readAcquisition(
+  client: PublicClient,
+  coordinator: Address,
+  acquisitionId: bigint,
+): Promise<AcquisitionRecord> {
+  try {
+    const r = await client.readContract({
+      address: coordinator,
+      abi: distributionFundingCoordinatorAbi,
+      functionName: "acquisitions",
+      args: [acquisitionId],
+    });
+    return {
+      status: Number(r[0]),
+      stockToken: r[1],
+      wethSpent: r[2],
+      acquiredStock: r[3],
+      distributionAmount: r[4],
+      reserveAmount: r[5],
+      cycleId: r[6],
+    };
+  } catch (e) {
+    throw new ReadFailedError("coordinator.acquisitions", e);
   }
 }
 

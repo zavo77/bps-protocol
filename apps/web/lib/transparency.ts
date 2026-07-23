@@ -13,11 +13,19 @@ export interface Tagged<T> {
   readonly provenance: Provenance;
 }
 
+/** Provenance reference for an emitted event: which transaction/block, and the emitting contract. */
+export interface EventRef {
+  readonly txHash: string;
+  readonly blockNumber: bigint;
+  readonly emitter: string;
+}
+
 export interface OfficialTradeEvent {
   readonly kind: "buy" | "sell";
   readonly stockBudget: bigint;
   readonly bpsBurned: bigint;
   readonly gross: bigint; // grossWethInput (buy) or grossWethOutput (sell)
+  readonly ref?: EventRef;
 }
 
 export interface AcquisitionRecordedEvent {
@@ -27,6 +35,7 @@ export interface AcquisitionRecordedEvent {
   readonly acquiredStock: bigint;
   readonly distributionAmount: bigint;
   readonly reserveAmount: bigint;
+  readonly ref?: EventRef;
 }
 
 export interface AcquisitionFundedEvent {
@@ -35,6 +44,23 @@ export interface AcquisitionFundedEvent {
   readonly stockToken: string;
   readonly amount: bigint;
   readonly merkleRoot: string;
+  readonly ref?: EventRef;
+}
+
+/** BpsRepurchasedAndBurned: protocol-executed buyback and burn (distinct from per-trade bpsBurned). */
+export interface RepurchaseBurnEvent {
+  readonly tradeId: bigint;
+  readonly wethSpent: bigint;
+  readonly bpsBurned: bigint;
+  readonly ref?: EventRef;
+}
+
+/** StockBudgetDelivered: stock-budget amount actually delivered to a recipient for a trade. */
+export interface BudgetDeliveryEvent {
+  readonly tradeId: bigint;
+  readonly recipient: string;
+  readonly amount: bigint;
+  readonly ref?: EventRef;
 }
 
 export interface CycleReads {
@@ -57,6 +83,7 @@ export interface AcquisitionRow {
   readonly claimed: Tagged<bigint | null>;
   readonly remaining: Tagged<bigint | null>;
   readonly merkleRoot: Tagged<string | null>;
+  readonly ref: EventRef | null; // tx hash / block / emitting contract of the AcquisitionRecorded event
 }
 
 export interface TransparencyReport {
@@ -66,6 +93,11 @@ export interface TransparencyReport {
   readonly stockAcquisitionBudgetAccrued: Tagged<bigint>;
   readonly stockAcquisitionBudgetSpent: Tagged<bigint>;
   readonly pendingBudgetNotYetAcquired: Tagged<bigint>;
+  // Dedicated protocol repurchase/burn events (BpsRepurchasedAndBurned), distinct from per-trade burns.
+  readonly repurchaseWethSpent: Tagged<bigint>;
+  readonly repurchaseBpsBurned: Tagged<bigint>;
+  // Stock budget actually delivered to recipients (StockBudgetDelivered).
+  readonly stockBudgetDelivered: Tagged<bigint>;
   readonly acquisitions: readonly AcquisitionRow[];
   readonly acquisitionDisclaimer: string;
   readonly rialtoNote: string;
@@ -76,6 +108,8 @@ export interface TransparencyInputs {
   readonly recorded: readonly AcquisitionRecordedEvent[];
   readonly funded: readonly AcquisitionFundedEvent[];
   readonly cycleReads: readonly CycleReads[];
+  readonly repurchases?: readonly RepurchaseBurnEvent[];
+  readonly budgetDeliveries?: readonly BudgetDeliveryEvent[];
   readonly isFixture: boolean;
 }
 
@@ -95,6 +129,11 @@ export function buildTransparencyReport(input: TransparencyInputs): Transparency
   const budgetAccrued = input.trades.reduce((a, t) => a + t.stockBudget, 0n);
   const budgetSpent = input.recorded.reduce((a, r) => a + r.wethSpent, 0n);
   const pending = budgetAccrued > budgetSpent ? budgetAccrued - budgetSpent : 0n;
+  const repurchases = input.repurchases ?? [];
+  const budgetDeliveries = input.budgetDeliveries ?? [];
+  const repurchaseWethSpent = repurchases.reduce((a, r) => a + r.wethSpent, 0n);
+  const repurchaseBpsBurned = repurchases.reduce((a, r) => a + r.bpsBurned, 0n);
+  const stockBudgetDelivered = budgetDeliveries.reduce((a, d) => a + d.amount, 0n);
 
   const fundedById = new Map(input.funded.map((x) => [x.acquisitionId.toString(), x]));
   const cycleById = new Map(input.cycleReads.map((c) => [c.cycleId.toString(), c]));
@@ -121,6 +160,7 @@ export function buildTransparencyReport(input: TransparencyInputs): Transparency
       claimed: tag(claimed, f, claimed === null ? "unavailable" : "derived"),
       remaining: tag(cyc ? cyc.remaining : null, f, cyc ? "onchain-verified" : "unavailable"),
       merkleRoot: tag(fund ? fund.merkleRoot : null, f, fund ? "offchain-artifact" : "unavailable"),
+      ref: r.ref ?? null,
     };
   });
 
@@ -131,6 +171,9 @@ export function buildTransparencyReport(input: TransparencyInputs): Transparency
     stockAcquisitionBudgetAccrued: tag(budgetAccrued, f, "derived"),
     stockAcquisitionBudgetSpent: tag(budgetSpent, f, "derived"),
     pendingBudgetNotYetAcquired: tag(pending, f, "derived"),
+    repurchaseWethSpent: tag(repurchaseWethSpent, f, "onchain-verified"),
+    repurchaseBpsBurned: tag(repurchaseBpsBurned, f, "onchain-verified"),
+    stockBudgetDelivered: tag(stockBudgetDelivered, f, "onchain-verified"),
     acquisitions,
     acquisitionDisclaimer:
       "A stock-acquisition budget accruing from official trades does NOT mean an acquisition occurred. " +

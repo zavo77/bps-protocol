@@ -14,6 +14,10 @@ export interface Eip1193Provider {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
   on(event: string, handler: Handler): void;
   removeListener(event: string, handler: Handler): void;
+  // Test-only controls (NOT part of the injected-wallet contract): simulate the wallet-side events a real
+  // injected provider would emit. They mutate the mock state and emit the corresponding EIP-1193 event.
+  __setAccounts(accounts: readonly string[]): void;
+  __disconnect(): void;
 }
 
 function stripDomain(types: Record<string, unknown>): Record<string, unknown> {
@@ -46,6 +50,9 @@ function coerceTypedData(json: {
 export function createMockEip1193Provider(state: MockChainState): Eip1193Provider {
   const rpc = createRpcRequest(state);
   const listeners: Record<string, Set<Handler>> = {};
+  // Accounts the wallet has authorized. `state.accounts` is what is currently EXPOSED (empty while
+  // disconnected). Only an explicit eth_requestAccounts re-exposes them — never a passive read.
+  let authorized = [...state.accounts];
   const emit = (event: string, ...args: unknown[]) =>
     listeners[event]?.forEach((fn) => {
       fn(...args);
@@ -73,6 +80,8 @@ export function createMockEip1193Provider(state: MockChainState): Eip1193Provide
       return res;
     }
     if (method === "eth_requestAccounts") {
+      // Explicit user consent re-exposes the authorized accounts (models the wallet approval prompt).
+      if (state.accounts.length === 0) state.accounts = [...authorized];
       const accts = await rpc({ method, params: p });
       emit("connect", { chainId: `0x${state.chainId.toString(16)}` });
       return accts;
@@ -87,6 +96,18 @@ export function createMockEip1193Provider(state: MockChainState): Eip1193Provide
     },
     removeListener(event, handler) {
       listeners[event]?.delete(handler);
+    },
+    __setAccounts(accounts) {
+      authorized = [...accounts];
+      state.accounts = [...accounts];
+      emit("accountsChanged", [...accounts]);
+    },
+    __disconnect() {
+      // A disconnected wallet exposes NO accounts; eth_accounts must not silently re-expose them. Only an
+      // explicit eth_requestAccounts (user consent) re-establishes the session.
+      state.accounts = [];
+      emit("accountsChanged", []);
+      emit("disconnect", { code: 4900, message: "disconnected" });
     },
   };
 }

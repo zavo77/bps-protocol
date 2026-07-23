@@ -23,45 +23,7 @@ export const DEMO_BPS = LOCAL_DEMO_MANIFEST.actual.bpsToken as Address;
 export const DEMO_STOCK = "0x00000000000000000000000000000000000aaaa1" as Address; // fixture stock (AAPL)
 export const DEMO_CYCLE_ID = 42n;
 export const DEMO_DISTRIBUTION = 1600n * 10n ** 18n;
-
-export function makeDemoState(overrides: Partial<MockChainState> = {}): MockChainState {
-  const me = LOCAL_TEST_ADDRESS.toLowerCase();
-  const router = LOCAL_DEMO_MANIFEST.actual.tradeRouter!.toLowerCase();
-  const vault = LOCAL_DEMO_MANIFEST.actual.lockingVault!.toLowerCase();
-  const code: Record<string, boolean> = {};
-  for (const v of Object.values(LOCAL_DEMO_MANIFEST.actual)) if (v) code[v.toLowerCase()] = true;
-  code[DEMO_WETH.toLowerCase()] = true;
-  code[DEMO_STOCK.toLowerCase()] = true;
-  return {
-    chainId: ROBINHOOD_CHAIN_ID,
-    blockNumber: 100n,
-    accounts: [LOCAL_TEST_ADDRESS],
-    code,
-    erc20: {
-      [DEMO_WETH.toLowerCase()]: {
-        decimals: 18,
-        balances: { [me]: 5n * 10n ** 18n },
-        allowances: { [`${me}:${router}`]: 0n },
-      },
-      [DEMO_BPS.toLowerCase()]: {
-        decimals: 18,
-        balances: { [me]: 100_000n * 10n ** 18n },
-        allowances: { [`${me}:${router}`]: 0n, [`${me}:${vault}`]: 0n },
-      },
-    },
-    routerPaused: false,
-    claimRemaining: { [`${DEMO_CYCLE_ID}:${DEMO_STOCK.toLowerCase()}`]: DEMO_DISTRIBUTION },
-    claimed: {},
-    lockedPrincipal: {},
-    logs: [],
-    switchChainRejects: false,
-    sendRejects: false,
-    revertOnSimulate: false,
-    receiptReverts: false,
-    txCount: 0,
-    ...overrides,
-  };
-}
+export const DEMO_PRELOCKED = 500n * 10n ** 18n; // a pre-existing lock position (id 0)
 
 const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 export const DEMO_ROUTER = LOCAL_DEMO_MANIFEST.actual.tradeRouter as Address;
@@ -71,7 +33,7 @@ export const DEMO_SIBLING = "0x000000000000000000000000000000000000b0b0" as Addr
 export const DEMO_SIBLING_AMOUNT = 1n;
 
 // The demo distribution Merkle root — computed identically to the local proof provider so the on-chain
-// (event-derived) root and the artifact root agree.
+// (cycles()) root and the artifact root agree.
 function pair(a: Hex, b: Hex): Hex {
   return BigInt(a) < BigInt(b) ? keccak256(concatHex([a, b])) : keccak256(concatHex([b, a]));
 }
@@ -93,6 +55,67 @@ export const DEMO_ROOT: Hex = pair(
     amount: DEMO_SIBLING_AMOUNT,
   }),
 );
+
+export function makeDemoState(overrides: Partial<MockChainState> = {}): MockChainState {
+  const me = LOCAL_TEST_ADDRESS.toLowerCase();
+  const router = DEMO_ROUTER.toLowerCase();
+  const vault = LOCAL_DEMO_MANIFEST.actual.lockingVault!.toLowerCase();
+  const stock = DEMO_STOCK.toLowerCase();
+  const manager = DEMO_MANAGER.toLowerCase();
+  const code: Record<string, boolean> = {};
+  for (const v of Object.values(LOCAL_DEMO_MANIFEST.actual)) if (v) code[v.toLowerCase()] = true;
+  code[DEMO_WETH.toLowerCase()] = true;
+  code[stock] = true;
+  const cyc = DEMO_CYCLE_ID.toString();
+  return {
+    chainId: ROBINHOOD_CHAIN_ID,
+    blockNumber: 100n,
+    accounts: [LOCAL_TEST_ADDRESS],
+    code,
+    erc20: {
+      [DEMO_WETH.toLowerCase()]: {
+        decimals: 18,
+        balances: { [me]: 5n * 10n ** 18n },
+        allowances: { [`${me}:${router}`]: 0n },
+      },
+      [DEMO_BPS.toLowerCase()]: {
+        decimals: 18,
+        balances: { [me]: 100_000n * 10n ** 18n },
+        allowances: { [`${me}:${router}`]: 0n, [`${me}:${vault}`]: 0n },
+      },
+      [stock]: {
+        decimals: 18,
+        // The claim manager holds the funded distribution stock (balanceOf(manager)).
+        balances: { [manager]: DEMO_DISTRIBUTION },
+        allowances: {},
+      },
+    },
+    routerPaused: false,
+    claimRemaining: { [`${cyc}:${stock}`]: DEMO_DISTRIBUTION },
+    claimed: {},
+    lockedPrincipal: { [me]: DEMO_PRELOCKED },
+    locks: { [me]: [DEMO_PRELOCKED] }, // pre-existing position id 0
+    cycleRoot: { [cyc]: DEMO_ROOT },
+    cyclePublished: { [cyc]: true },
+    assetFunded: { [`${cyc}:${stock}`]: DEMO_DISTRIBUTION },
+    acquisition: {
+      status: 2, // FUNDED
+      stockToken: DEMO_STOCK,
+      wethSpent: 20n * 10n ** 18n,
+      acquiredStock: 2000n * 10n ** 18n,
+      distributionAmount: DEMO_DISTRIBUTION,
+      reserveAmount: 400n * 10n ** 18n,
+      cycleId: DEMO_CYCLE_ID,
+    },
+    logs: [],
+    switchChainRejects: false,
+    sendRejects: false,
+    revertOnSimulate: false,
+    receiptReverts: false,
+    txCount: 0,
+    ...overrides,
+  };
+}
 
 /** Seed the state's logs with real ABI-encoded protocol events and append a Claimed event when a claim
  *  is applied — so the event-backed transparency view updates after a confirmed local action. */
@@ -117,6 +140,36 @@ export function installDemoTransparency(state: MockChainState): void {
         stockBudgetRecipient: DEMO_STOCK,
       },
       { address: DEMO_ROUTER, blockNumber: 10n, transactionHash: tx(0xa1), logIndex: 0 },
+    ),
+    encodeEventLog(
+      bpsTradeRouterAbi as never,
+      "OfficialSell",
+      {
+        tradeId: 2n,
+        trader: me,
+        recipient: me,
+        grossBpsInput: 300n * 10n ** 18n,
+        grossWethOutput: 200n * 10n ** 18n,
+        stockBudget: 4n * 10n ** 18n,
+        burnBudget: 2n * 10n ** 18n,
+        userWethOutput: 194n * 10n ** 18n,
+        bpsBurned: 4n * 10n ** 18n,
+        adapter: ZERO,
+        stockBudgetRecipient: DEMO_STOCK,
+      },
+      { address: DEMO_ROUTER, blockNumber: 10n, transactionHash: tx(0xa4), logIndex: 1 },
+    ),
+    encodeEventLog(
+      bpsTradeRouterAbi as never,
+      "BpsRepurchasedAndBurned",
+      { tradeId: 2n, wethSpent: 2n * 10n ** 18n, bpsBurned: 5n * 10n ** 18n },
+      { address: DEMO_ROUTER, blockNumber: 10n, transactionHash: tx(0xa4), logIndex: 2 },
+    ),
+    encodeEventLog(
+      bpsTradeRouterAbi as never,
+      "StockBudgetDelivered",
+      { tradeId: 1n, recipient: DEMO_STOCK, amount: 20n * 10n ** 18n },
+      { address: DEMO_ROUTER, blockNumber: 10n, transactionHash: tx(0xa1), logIndex: 3 },
     ),
     encodeEventLog(
       distributionFundingCoordinatorAbi as never,

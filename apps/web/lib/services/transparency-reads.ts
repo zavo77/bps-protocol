@@ -20,8 +20,11 @@ import {
   buildTransparencyReport,
   type AcquisitionFundedEvent,
   type AcquisitionRecordedEvent,
+  type BudgetDeliveryEvent,
   type CycleReads,
+  type EventRef,
   type OfficialTradeEvent,
+  type RepurchaseBurnEvent,
   type TransparencyReport,
 } from "../transparency";
 import { getLogsChunked, type RawLog } from "./reads";
@@ -128,10 +131,14 @@ export function decodeLogs(logs: readonly RawLog[]): DecodedEvent[] {
         topics: l.topics as [`0x${string}`, ...`0x${string}`[]],
         data: l.data,
       });
+      // Normalize blockNumber to bigint: viem's getLogs formatter yields bigint, but a raw RPC-wire log
+      // (hex string) may reach here in tests — both must produce the same provenance value.
+      const rawBn = l.blockNumber as unknown;
+      const bn = typeof rawBn === "string" ? BigInt(rawBn) : ((rawBn as bigint | null) ?? 0n);
       out.push({
         eventName: String(dec.eventName),
         args: dec.args as unknown as Record<string, unknown>,
-        blockNumber: l.blockNumber ?? 0n,
+        blockNumber: bn,
         transactionHash: l.transactionHash,
         logIndex: l.logIndex,
         address: l.address,
@@ -151,8 +158,16 @@ export function aggregate(
   const trades: OfficialTradeEvent[] = [];
   const recorded: AcquisitionRecordedEvent[] = [];
   const funded: AcquisitionFundedEvent[] = [];
+  const repurchases: RepurchaseBurnEvent[] = [];
+  const budgetDeliveries: BudgetDeliveryEvent[] = [];
   const cycleReads: CycleReads[] = [];
   const claimedByCycleAsset = new Map<string, bigint>();
+
+  const refOf = (d: DecodedEvent): EventRef => ({
+    txHash: d.transactionHash,
+    blockNumber: d.blockNumber,
+    emitter: d.address,
+  });
 
   for (const d of decoded) {
     const a = d.args;
@@ -162,6 +177,7 @@ export function aggregate(
         stockBudget: a.stockBudget as bigint,
         bpsBurned: a.bpsBurned as bigint,
         gross: a.grossWethInput as bigint,
+        ref: refOf(d),
       });
     } else if (d.eventName === "OfficialSell") {
       trades.push({
@@ -169,6 +185,21 @@ export function aggregate(
         stockBudget: a.stockBudget as bigint,
         bpsBurned: a.bpsBurned as bigint,
         gross: a.grossWethOutput as bigint,
+        ref: refOf(d),
+      });
+    } else if (d.eventName === "BpsRepurchasedAndBurned") {
+      repurchases.push({
+        tradeId: a.tradeId as bigint,
+        wethSpent: a.wethSpent as bigint,
+        bpsBurned: a.bpsBurned as bigint,
+        ref: refOf(d),
+      });
+    } else if (d.eventName === "StockBudgetDelivered") {
+      budgetDeliveries.push({
+        tradeId: a.tradeId as bigint,
+        recipient: String(a.recipient),
+        amount: a.amount as bigint,
+        ref: refOf(d),
       });
     } else if (d.eventName === "AcquisitionRecorded") {
       recorded.push({
@@ -178,6 +209,7 @@ export function aggregate(
         acquiredStock: a.acquiredStock as bigint,
         distributionAmount: a.distributionAmount as bigint,
         reserveAmount: a.reserveAmount as bigint,
+        ref: refOf(d),
       });
     } else if (d.eventName === "AcquisitionFunded") {
       funded.push({
@@ -186,6 +218,7 @@ export function aggregate(
         stockToken: String(a.stockToken),
         amount: a.amount as bigint,
         merkleRoot: String(a.merkleRoot),
+        ref: refOf(d),
       });
     } else if (d.eventName === "Claimed") {
       const key = `${a.cycleId}:${String(a.asset).toLowerCase()}`;
@@ -205,7 +238,15 @@ export function aggregate(
     });
   }
 
-  return buildTransparencyReport({ trades, recorded, funded, cycleReads, isFixture });
+  return buildTransparencyReport({
+    trades,
+    recorded,
+    funded,
+    repurchases,
+    budgetDeliveries,
+    cycleReads,
+    isFixture,
+  });
 }
 
 /** Full event-backed transparency fetch: chunked logs from the deployment block → decode → aggregate. */
