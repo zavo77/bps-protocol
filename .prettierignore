@@ -10,3 +10,7 @@ packages/contracts/cache/
 packages/contracts/lib/
 packages/contracts/broadcast/
 *.sol
+
+# Playwright outputs
+apps/web/test-results/
+apps/web/playwright-report/

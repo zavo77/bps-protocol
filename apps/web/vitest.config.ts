@@ -1,11 +1,27 @@
 import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
 
-// Pure-TS application-core tests (no DOM). React component / browser tests are intentionally out of
-// scope here — they would require @testing-library / a DOM env / a Vite React plugin that are not
-// installed (a documented Task 8 blocker).
+// Two projects: pure application-core + service tests under lib/ (node env), and React component tests
+// (*.test.tsx under app/) in jsdom. Browser-level end-to-end is Playwright (playwright.config.ts).
 export default defineConfig({
+  plugins: [react()],
   test: {
-    environment: "node",
-    include: ["lib/**/*.test.ts"],
+    projects: [
+      {
+        extends: true,
+        test: { name: "node", environment: "node", include: ["lib/**/*.test.ts"] },
+      },
+      {
+        extends: true,
+        test: {
+          name: "dom",
+          globals: true,
+          environment: "jsdom",
+          include: ["app/**/*.test.tsx"],
+          setupFiles: ["./vitest.setup.ts"],
+          testTimeout: 15000,
+        },
+      },
+    ],
   },
 });

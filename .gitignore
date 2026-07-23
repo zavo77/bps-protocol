@@ -51,3 +51,7 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Playwright test artifacts
+apps/web/test-results/
+apps/web/playwright-report/

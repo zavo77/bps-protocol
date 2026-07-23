@@ -82,11 +82,22 @@ any deployment; do not begin frontend or deployment work (see §13).
   `trade.ts` (official-router-only trade model), `locking.ts`, `claim.ts` (Merkle claim verification),
   `transparency.ts` (provenance-tagged read model), `oracle.ts` (Chainlink read model + minStockOut
   policy), `abis.ts` (hand-written ABIs from the frozen surfaces), `fixtures.ts` (labeled demo data), plus
-  `*.test.ts` (55 vitest tests incl. `e2e.test.ts` and `rialto-boundary.test.ts`). `vitest.config.ts` +
-  a `test` script wire it into the suite. The page resolves the dry-run manifest → "Protocol not live",
-  disables every write, labels all fixtures, and states the system is not decentralized. Uses viem/zod/
-  vitest via workspace hoisting — **no dependency installed**; a real wallet-connect + EIP-712-signing UI
-  and React/browser tests are deferred (need wagmi/@testing-library/jsdom — a documented blocker).
+  `*.test.ts` (application-core vitest tests). **TASK 8B added the real interaction layer on top:**
+  `lib/chain.ts` (Robinhood chain + demo chain), `lib/services/{reads,oracle-reads}.ts` (viem
+  contract-read + Chainlink read services, transport-injected, fail-closed, chunked/deduped logs),
+  `lib/wallet/tx.ts` (approve→simulate→submit→confirm→reconcile lifecycle, exact allowance only),
+  `lib/proof/provider.ts` (proof-artifact provider interface + deterministic local provider),
+  `lib/config.ts` (versioned declaration config — production null/fail-closed + labeled local-test — and
+  an eligibility-service interface + local mock), and `lib/testing/{mock-rpc,local-env,local-account}.ts`
+  (deterministic mock JSON-RPC transport + wagmi mock config, local/test only). `app/` is now a wagmi +
+  react-query client app: `providers.tsx`, `wagmi-local.ts`, `demo.ts`, `AppDashboard.tsx` (wallet /
+  eligibility / trade / lock / claim / transparency panels). Tests: `lib/**/*.test.ts` (node) +
+  `app/AppDashboard.test.tsx` (jsdom component/integration) + `e2e/flow.spec.ts` (Playwright, real
+  Chromium). The app resolves a fixture manifest → live writes disabled; the full flow runs against the
+  mock provider/transport; all fixtures labeled. **Deferred (documented blockers):** no accepted
+  production EIP-712 declaration domain (local-test scaffold only), no production eligibility service
+  (interface + local mock), no production proof-artifact service (local provider), and the wrong-network
+  demo is UI-simulated (the wagmi mock connector does not surface a real cross-chain switch).
 - `apps/indexer` — `@bps/indexer`. TypeScript service stub. `src/index.ts` prints health JSON and
   exits (no long-running behavior). `src/health.ts` exports `getHealthStatus()`;
   `src/health.test.ts` covers it.
@@ -416,22 +427,20 @@ cycleId)` is rootPublisher-only, `nonReentrant`: it requires status == RECORDED 
   `IStockAcquisitionAdapter`, `ISwapRouter02`) are unchanged (no git diff on any of them or their
   tests); the `packages/shared/src` PoD engine is unchanged. Their tests still pass within the 398-test
   suite.
-- Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; **152 TS tests**
-  incl. 27 quote-client + 55 TASK 8 `@bps/web` app-core tests, **398 Foundry tests**) when `forge` is on
-  PATH (see §11). The 398 include the TASK 7 additions (2 coordinator funding-rollback tests, 13
-  deployment-config validation/prediction tests, 1 mainnet-fork deploy-rehearsal test that skips when
-  `ROBINHOOD_FORK_RPC` is unset). The 55 new TS tests cover the TASK 8 manifest boundary, eligibility
-  state machine, official-trade/lock/claim models, transparency read model, oracle read model, the local
-  end-to-end flow, and the server-only Rialto import boundary.
+- Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; **166 TS tests**
+  incl. 27 quote-client + 69 `@bps/web` tests (55 app-core + 6 read-service + 5 tx-lifecycle + 3
+  component/integration), **398 Foundry tests**) when `forge` is on PATH (see §11). Separately, the
+  **Playwright browser E2E** (`apps/web/e2e/flow.spec.ts`, run via `npm run test:e2e --workspace @bps/web`)
+  passes in real Chromium — it is NOT part of `npm run check`. The 398 Foundry include the TASK 7
+  additions (2 coordinator funding-rollback, 13 deployment-config validation, 1 fork-rehearsal that skips
+  without `ROBINHOOD_FORK_RPC`).
 - Git repository: prior checkpoints `c443b925…` (1–5), `33062815…` (6A), `0f326913…` (6B-1A),
   `64825a3…` (6B-1B), `41d86cc…` (6B-2 + coordinator + e2e), `90e338a…` (acquisition-recording redesign),
-  `cd98df35fcb917c328c3dfec769c200e017e2690` (TASK 7 deployment preparation,
-  "feat(deploy): prepare restricted beta release", HEAD). The TASK 8 restricted-beta application
-  (`apps/web` app-core + fail-closed UI) is working-tree only until the authorized
-  `feat(app): integrate restricted beta protocol flows` commit. The TASK 7 deployment package
-  (rollback tests, verified externals, deterministic deploy plan + fork rehearsal, manifest/runbook)
-  remains as committed at `cd98df3`. (Historical note:) it was working-tree only until the authorized
-  `feat(deploy): prepare restricted beta release` commit.
+  `cd98df3…` (TASK 7 deployment preparation), `d9b9fc086f0f8b16496f5de58268768fbe1bb7ee` (TASK 8
+  partial-core interface, "feat(app): integrate restricted beta protocol flows", HEAD). The TASK 8B
+  interaction layer (`apps/web` wagmi/react-query app: real contract-read + tx-lifecycle + oracle
+  services, wallet/eligibility/proof flows, component + Playwright browser tests) is working-tree only
+  until the authorized `feat(app): complete restricted beta interaction layer` commit.
 
 ## 4. In progress
 
@@ -1627,6 +1636,36 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 ## 12. Recent change log
 
+- **2026-07-22 (TASK 8B — complete restricted-beta interaction layer)** — Built the real wallet / RPC /
+  transaction interaction layer on top of the accepted TASK 8 core. **No live transaction, deployment,
+  wallet access, signature, or protected Rialto request; no frozen contract/interface/test or
+  `packages/shared/src` modified; no Task 7 file changed.** Installed authorized deps into `@bps/web`:
+  `wagmi` 3.7.4, `@tanstack/react-query` 5.101.4, `viem` 2.55.8 + `zod` 4.4.3 (declared; also bumped
+  `@bps/shared` viem 2.55.5→2.55.8 so the tree dedupes to a single viem — required by wagmi), and dev
+  deps `@testing-library/react` 16.3.2, `@testing-library/user-event` 14.6.1, `@testing-library/jest-dom`
+  6.9.1, `jsdom` 29.1.1, `@vitejs/plugin-react` 6.0.4, `@playwright/test` 1.61.1. Added: viem contract-
+  read + Chainlink-read services (transport-injected, fail-closed on wrong chain / missing code / RPC
+  error; chunked+deduped logs), a transaction-lifecycle service (exact approval → simulate → submit →
+  confirm → reconcile, never unlimited approval, never SwapRouter02), a proof-artifact provider (local
+  deterministic; production service is a blocker), a versioned declaration config (production null →
+  fail-closed; labeled local-test config) + eligibility-service interface + local mock (no public endpoint
+  that can mark users eligible), a deterministic mock JSON-RPC transport + wagmi mock config (local/test
+  only), and a wagmi + react-query client app (`AppDashboard` with wallet/eligibility/trade/lock/claim/
+  transparency panels). Tests: 6 read-service + 5 tx-lifecycle + 3 component/integration (jsdom) tests,
+  and a **Playwright browser E2E** in real Chromium driving connect → wrong-network → switch(4663) → sign
+  local declaration → separate local eligibility → preview buy → exact approval → simulation → mocked
+  confirmation → verify proof → claim → duplicate-disabled. Verification: `forge fmt/build/test` (398),
+  full `npm run check` (166 TS + 398 Foundry, exit 0), web `next build` static, `npm run test:e2e` (1
+  browser test passed), responsive inspection at 1280px + 375px in a real browser (no horizontal
+  overflow; accessible roles/labels; disabled live controls; fixture labels), browser-bundle scan clean
+  of `RIALTO_API_KEY`/`fetchRialtoAllowanceQuote`, `git diff --check` clean. **Deferred/blocked (not
+  faked):** no accepted production EIP-712 declaration domain (local-test scaffold; USER/LEGAL INPUT
+  REQUIRED), no production eligibility service (interface + local mock; EXTERNAL REVIEW REQUIRED), no
+  production proof-artifact service (local provider); the wrong-network→switch demo is UI-simulated
+  because the wagmi mock connector does not surface a real cross-chain switch (documented). Live writes
+  remain disabled without a broadcast-ready manifest; the system is not public, decentralized, or legally
+  approved.
+
 - **2026-07-22 (TASK 8 — restricted-beta application integration + on-chain transparency)** — Built a
   production-shaped restricted-beta interface on `apps/web` from the previously placeholder page. **No
   contract deploy, live transaction, signature, broadcast, pool, or liquidity action; no wallet/key/
@@ -1906,11 +1945,11 @@ IRialtoRouterRegistry,IDistributionClaimManagerFunding}.sol`, six `test/*.t.sol`
 
 1. Read `CLAUDE.md` and this file first.
 2. Ensure Forge is on PATH (see §11 PATH note). Run `npm install` (if `node_modules` is missing),
-   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (152 TS tests, 398 Foundry
-   tests). The mainnet-fork deploy rehearsal is opt-in: `ROBINHOOD_FORK_RPC=<read-only rpc> forge test
---match-contract ForkDeployRehearsal` (it skips, counting as pass, when the env var is unset). TS
-   subsets: `npm run test --workspace @bps/web` (55 TASK 8 app-core tests), `npm run test --workspace
-@bps/rialto`. Contract subsets: `forge test --match-contract
+   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (166 TS tests, 398 Foundry
+   tests). The **Playwright browser E2E** is separate: `npm run test:e2e --workspace @bps/web` (real
+   Chromium; run `npx playwright install chromium` first if needed). The mainnet-fork deploy rehearsal is
+   opt-in: `ROBINHOOD_FORK_RPC=<read-only rpc> forge test --match-contract ForkDeployRehearsal`. TS
+   subsets: `npm run test --workspace @bps/web` (69 tests). Contract subsets: `forge test --match-contract
 "RialtoAdapter|CoordinatorFunding|RialtoEndToEnd"`, `... "DeployConfigValidation"`, `... "StockVault"`.
    The working tree carries the TASK 8 restricted-beta application (`apps/web`) unless it has been
    checkpointed as `feat(app): integrate restricted beta protocol flows`.

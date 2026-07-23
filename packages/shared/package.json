@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@openzeppelin/merkle-tree": "1.0.8",
-    "viem": "2.55.5",
+    "viem": "2.55.8",
     "zod": "4.4.3"
   }
 }

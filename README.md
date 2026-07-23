@@ -202,9 +202,16 @@ manifest with runtime code), a wallet/declaration/eligibility state machine (EIP
 where signing is never sufficient for eligibility), an official-router-only trade model (exact
 allowances, never SwapRouter02 direct), locking and Merkle-verified claim flows, a provenance-tagged
 transparency read model, and a read-only Chainlink oracle model with a `minStockOut` operator policy.
-The dashboard resolves the dry-run manifest to **"Protocol not live"**, disables every write, labels
-all fixtures as demonstration data, and states the system is **not fully decentralized**. Covered by
-55 vitest tests including a full local end-to-end flow and a server-only Rialto import boundary. A
-real wallet-connect + EIP-712-signing UI and browser tests are deferred (they require dependencies
-not installed in this task); the EIP-712 declaration domain is a labeled beta scaffold pending
-governance/legal finalization. `RIALTO_API_KEY` and the quote client remain server-only.
+The dashboard resolves a fixture manifest, disables every live write, labels all fixtures as
+demonstration data, and states the system is **not fully decentralized**. On top of that core, the app
+adds a real interaction layer (wagmi + react-query): viem contract-read and Chainlink-read services
+(transport-injected, fail-closed), a transaction lifecycle (exact approval → simulate → submit → confirm
+→ reconcile — never unlimited approval, never SwapRouter02), a deterministic proof-artifact provider, a
+versioned declaration config (production absent → fail-closed; labeled local-test only) with a separate
+eligibility-service interface + local mock, and a deterministic mock JSON-RPC transport for local mode.
+It is covered by 69 vitest tests plus a **Playwright browser E2E** (real Chromium) exercising connect →
+switch-to-4663 → sign → separate eligibility → buy preview → exact approval → simulation → mocked
+confirmation → proof verify → claim → duplicate-disabled — all against the mock, with no real wallet,
+signature, or transaction. Deferred/blocked: no accepted production EIP-712 declaration domain (local-test
+scaffold), no production eligibility or proof-artifact service (interfaces + local mocks).
+`RIALTO_API_KEY` and the quote client remain server-only and never enter the browser bundle.
