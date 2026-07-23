@@ -41,36 +41,41 @@
     },
     "quoterV2": {
       "address": null,
-      "runtimeCodeHash": null,
-      "status": "UNVERIFIED_FAIL_CLOSED",
-      "note": "Document-only address exists on-chain but is NOT promoted into the trusted manifest until an authoritative source + expected code-hash + factory wiring are recorded."
+      "runtimeCodeHash": "0x3db0868d945e9304c9bc6a8b2181948109ea617647142f3c4083e14393496a28",
+      "status": "VERIFIED",
+      "note": "Task 10B-3: on-chain runtime-code hash recorded; independently proven via factory()==uniswapV3Factory and WETH9()==WETH."
     },
     "nonfungiblePositionManager": {
-      "address": null,
-      "runtimeCodeHash": null,
-      "status": "UNVERIFIED_FAIL_CLOSED",
-      "note": "Required for pool/LP minting; NOT promoted until verified."
+      "address": "0x73991a25c818bf1f1128deaab1492d45638de0d3",
+      "runtimeCodeHash": "0x0a493d1af3d0f25fed8efa205244ebee14114267a08647fc38c515c7cd6ead4f",
+      "status": "VERIFIED",
+      "note": "Task 10B-3: on-chain runtime-code hash recorded; independently proven via factory()==uniswapV3Factory and WETH9()==WETH. Required for pool/LP minting."
     },
     "ethUsdOracleFeed": {
       "address": null,
       "runtimeCodeHash": null,
-      "status": "UNRESOLVED_FAIL_CLOSED"
+      "status": "NOT_REQUIRED_ONCHAIN",
+      "note": "No frozen contract reads an ETH/USD Chainlink feed on-chain (deploy/pool/buy/sell/lock/withdraw/burn need none). No authoritative Chainlink feed registry for Robinhood Chain was resolvable; left null and NOT invented. Only the untested external Stock-Token acquisition + app oracle display would use it."
     },
     "sequencerUptimeFeed": {
       "address": null,
       "runtimeCodeHash": null,
-      "status": "UNRESOLVED_FAIL_CLOSED"
-    }
+      "status": "NOT_REQUIRED_ONCHAIN",
+      "note": "Not read by any frozen contract; not resolvable to an authoritative address; left null and NOT invented."
+    },
+    "quoterV2Note": "Uniswap QuoterV2 verified; NPM verified; both proven against the verified factory + WETH at runtime."
   },
+  "deployer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+  "startNonce": 0,
   "predicted": {
-    "canaryToken": null,
-    "lockingVault": null,
-    "claimManager": null,
-    "rialtoAdapter": null,
-    "coordinator": null,
-    "stockVault": null,
-    "uniswapAdapter": null,
-    "tradeRouter": null
+    "canaryToken": "0xcfF00E71dDd633789f18E98F1e94398d066e6932",
+    "lockingVault": "0xB11fE8a2cC558b1861283495c25dda41D6ed7cc4",
+    "claimManager": "0x38F5e3966D38FBcB02280d6D8383dE9426da166a",
+    "rialtoAdapter": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+    "coordinator": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
+    "stockVault": "0x5EcbADf1cF050F1B86D44B979416A8e859Fb2574",
+    "uniswapAdapter": "0xbe2C8c6CB7CeeED24708419F5aaEEF8d949866AE",
+    "tradeRouter": "0xE3Bd9e1D58d16A31912f804f931Cc6bfcD702205"
   },
   "actual": {
     "canaryToken": null,
@@ -91,13 +96,14 @@
     "tickUpper": null
   },
   "roles": {
-    "canaryDeployer": null,
-    "canaryOwner": null,
-    "reserveRecipient": null,
-    "acquisitionOperator": null,
-    "rootPublisher": null,
-    "claimRecoveryRecipient": null,
-    "controlledTester": null
+    "canaryDeployer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "canaryOwner": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "canaryRecipient": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "reserveRecipient": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "acquisitionOperator": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "rootPublisher": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "claimRecoveryRecipient": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "controlledTester": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024"
   },
   "capitalCaps": {
     "note": "WETH caps are execution-time amounts a future preflight MUST populate from the authoritative oracle. Null => fail closed (the relevant action is disabled). USD ceilings are OPERATIONAL controls, not contract-enforced.",
@@ -109,5 +115,17 @@
     "gasMaxUsd": 10,
     "aggregateMaxUsd": 130
   },
-  "stockBasket": []
+  "stockBasket": [
+    {
+      "symbol": "NVDA",
+      "name": "NVIDIA • Robinhood Token",
+      "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "decimals": 18,
+      "runtimeCodeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630",
+      "oraclePaused": false,
+      "uiMultiplier": "1000000000000000000",
+      "status": "VERIFIED",
+      "source": "Rialto public token whitelist (chain_id=4663, category=stock, source=whitelist) — the same authoritative list the manifest used for WETH; corroborated on-chain (symbol/name/decimals, oraclePaused()=false, uiMultiplier()=1e18) and by BPS_LAUNCH_DECISIONS.md. Verified via CanaryForkRehearsal against real mainnet state (removes EmptyBasket)."
+    }
+  ]
 }
