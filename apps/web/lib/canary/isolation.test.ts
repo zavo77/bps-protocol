@@ -16,7 +16,9 @@ const CANARY_FILES = [
   "./manifest.ts",
   "./manifest.data.ts",
   "./profile.ts",
+  "./operations.ts",
   "../../app/CanaryBanner.tsx",
+  "../../app/CanaryApp.tsx",
 ];
 
 const FORBIDDEN = [
@@ -38,6 +40,34 @@ describe("canary source isolation (§7)", () => {
       for (const term of FORBIDDEN) {
         expect(code, `${rel} must not reference "${term}"`).not.toContain(term);
       }
+    }
+  });
+
+  it("the canary view never imports demonstration fixtures or canonical demo addresses", () => {
+    const code = readCode("../../app/CanaryApp.tsx");
+    // Import-path / symbol checks (UI copy may mention "fixtures" in prose; we forbid the actual modules).
+    for (const term of [
+      "demo-fixture",
+      "lib/fixtures",
+      './demo"',
+      "demoDeployment",
+      "DEMO_",
+      "AppDashboard",
+    ]) {
+      expect(code, `CanaryApp must not reference "${term}"`).not.toContain(term);
+    }
+  });
+
+  it("the production dashboard never imports the canary profile/operations (bidirectional separation)", () => {
+    const code = readCode("../../app/AppDashboard.tsx");
+    for (const term of [
+      "lib/canary",
+      "canary/manifest",
+      "canary/operations",
+      "canary/profile",
+      "CanaryApp",
+    ]) {
+      expect(code, `AppDashboard must not reference "${term}"`).not.toContain(term);
     }
   });
 });
