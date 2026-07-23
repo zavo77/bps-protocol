@@ -122,6 +122,20 @@ export const bpsLockingVaultAbi = [
     outputs: [{ type: "uint256" }],
   },
   {
+    type: "function",
+    name: "lockedPrincipal",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "lockCount",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
     type: "event",
     name: "LockCreated",
     inputs: [

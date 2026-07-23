@@ -3,11 +3,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppDashboard } from "./AppDashboard";
 import { Providers } from "./providers";
-import { createLocalWagmiConfig } from "../lib/testing/local-env";
-import { makeDemoState } from "../lib/testing/local-env";
+import { createLocalWagmiConfig, makeDemoState } from "../lib/testing/local-env";
+import type { MockChainState } from "../lib/testing/mock-rpc";
 
-function renderApp() {
-  const config = createLocalWagmiConfig(makeDemoState());
+function renderApp(overrides: Partial<MockChainState> = {}) {
+  // Start on the authoritative WRONG chain (id 1) so the provider-derived switch flow is exercised.
+  const config = createLocalWagmiConfig(makeDemoState({ chainId: 1, ...overrides }));
   return render(
     <Providers config={config}>
       <AppDashboard />
@@ -15,73 +16,85 @@ function renderApp() {
   );
 }
 
-describe("AppDashboard (component / integration, §L)", () => {
-  it("shows Protocol-not-live, disabled live writes, and a fixture label before connecting", () => {
+async function connectAndSwitch(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByTestId("connect"));
+  await waitFor(() => expect(screen.getByTestId("account")).toBeInTheDocument());
+  // Provider-derived wrong chain.
+  expect(screen.getByTestId("network")).toHaveTextContent(/wrong network \(1\)/i);
+  await user.click(screen.getByTestId("switch"));
+  await waitFor(() =>
+    expect(screen.getByTestId("network")).toHaveTextContent("Robinhood Chain (4663)"),
+  );
+}
+
+describe("AppDashboard (provider-driven, §H)", () => {
+  it("before connect: protocol-not-live, disabled live writes, fixture label", () => {
     renderApp();
     expect(screen.getByTestId("not-live-banner")).toHaveTextContent(/Protocol not live/i);
     expect(screen.getByTestId("live-trade")).toBeDisabled();
     expect(screen.getAllByText(/demonstration data/i).length).toBeGreaterThan(0);
-    expect(screen.getByTestId("connect")).toBeInTheDocument();
   });
 
-  it("connect → wrong-network → switch → sign → eligible → demo trade → claim → duplicate disabled", async () => {
+  it("rejected network switch preserves the wrong-chain state", async () => {
     const user = userEvent.setup();
-    renderApp();
-
+    renderApp({ switchChainRejects: true });
     await user.click(screen.getByTestId("connect"));
     await waitFor(() => expect(screen.getByTestId("account")).toBeInTheDocument());
-
-    // Starts in the (simulated) wrong-network state; switching moves to 4663.
-    expect(screen.getByTestId("network")).toHaveTextContent(/wrong network/i);
     await user.click(screen.getByTestId("switch"));
-    await waitFor(() =>
-      expect(screen.getByTestId("network")).toHaveTextContent("Robinhood Chain (4663)"),
-    );
+    await waitFor(() => expect(screen.getByTestId("switch-error")).toBeInTheDocument());
+    expect(screen.getByTestId("network")).toHaveTextContent(/wrong network \(1\)/i);
+  });
 
-    // Signing alone is not eligibility; the separate service returns eligible for this account.
+  it("full flow: switch → connector signature → eligible → approval+trade → lock → claim → transparency", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await connectAndSwitch(user);
+
+    // Before signing: not eligible; write actions gated.
+    expect(screen.getByTestId("eligible")).toHaveTextContent("no");
+    expect(screen.getByTestId("demo-trade")).toBeDisabled();
+
+    // Sign through the connector; eligibility is a SEPARATE result.
     await user.click(screen.getByTestId("sign"));
     await waitFor(() => expect(screen.getByTestId("eligible")).toHaveTextContent("yes"));
     expect(screen.getByTestId("elig-state")).toHaveTextContent("eligible");
 
-    // Live trade stays disabled; the local demo lifecycle runs against the mock.
+    // Official buy: exact allowance, live write disabled, connector-driven lifecycle confirms.
+    expect(screen.getByTestId("allowance")).toHaveTextContent("1.000");
     expect(screen.getByTestId("live-trade")).toBeDisabled();
-    expect(screen.getByTestId("allowance")).toHaveTextContent("1.000"); // exact input allowance
     await user.click(screen.getByTestId("demo-trade"));
     await waitFor(
       () => expect(screen.getByTestId("trade-result")).toHaveTextContent(/confirmed/i),
-      {
-        timeout: 5000,
-      },
+      { timeout: 8000 },
     );
     expect(screen.getByTestId("steps")).toHaveTextContent("approve");
 
-    // Claim: verify the proof against the on-chain cycle, then run the local claim; duplicate disabled.
+    // Lock: confirmed + reconciled; locked balance updates to 1000.
+    await waitFor(() => expect(screen.getByTestId("bps-balance")).not.toHaveTextContent("—"));
+    await user.click(screen.getByTestId("demo-lock"));
+    await waitFor(
+      () => expect(screen.getByTestId("lock-result")).toHaveTextContent(/reconciled/i),
+      { timeout: 8000 },
+    );
+    await waitFor(() => expect(screen.getByTestId("locked-balance")).toHaveTextContent("1000.000"));
+
+    // Event-backed transparency renders decoded events.
+    await waitFor(() => expect(screen.getByTestId("acq-row")).toBeInTheDocument());
+    expect(screen.getByTestId("tx-buyvol")).toHaveTextContent("1000.000");
+    expect(screen.getByTestId("acq-remaining")).toHaveTextContent("1600.000");
+
+    // Claim: verify all fields, claim + reconcile, then transparency updates and duplicate is disabled.
     await user.click(screen.getByTestId("verify-proof"));
     await waitFor(() => expect(screen.getByTestId("claim-status")).toHaveTextContent(/verified/i));
     await user.click(screen.getByTestId("demo-claim"));
     await waitFor(
-      () => expect(screen.getByTestId("claim-status")).toHaveTextContent(/confirmed/i),
-      {
-        timeout: 5000,
-      },
+      () => expect(screen.getByTestId("claim-status")).toHaveTextContent(/reconciled/i),
+      { timeout: 8000 },
     );
     await waitFor(() => expect(screen.getByTestId("demo-claim")).toBeDisabled());
-  });
-
-  it("terms signed but ineligible account never becomes eligible", async () => {
-    // The mock eligibility service only allow-lists the demo account; this test asserts the gate logic
-    // via the eligibility state directly is covered in lib/eligibility.test.ts. Here we assert the UI
-    // keeps writes gated until eligible.
-    const user = userEvent.setup();
-    renderApp();
-    await user.click(screen.getByTestId("connect"));
-    await waitFor(() => expect(screen.getByTestId("account")).toBeInTheDocument());
-    await user.click(screen.getByTestId("switch"));
-    await waitFor(() =>
-      expect(screen.getByTestId("network")).toHaveTextContent("Robinhood Chain (4663)"),
-    );
-    // After switching but before signing: not eligible, demo trade disabled.
-    expect(screen.getByTestId("eligible")).toHaveTextContent("no");
-    expect(screen.getByTestId("demo-trade")).toBeDisabled();
+    // Transparency reflects the new Claimed event (remaining drops to 0).
+    await waitFor(() => expect(screen.getByTestId("acq-claimed")).toHaveTextContent("1600.000"), {
+      timeout: 8000,
+    });
   });
 });

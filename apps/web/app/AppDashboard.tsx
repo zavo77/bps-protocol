@@ -6,11 +6,12 @@ import {
   useConfig,
   useConnect,
   useDisconnect,
+  useSignTypedData,
   useSwitchChain,
 } from "wagmi";
-import { getPublicClient } from "wagmi/actions";
+import { getConnectorClient, getPublicClient } from "wagmi/actions";
 import { type Config } from "wagmi";
-import { type Address } from "viem";
+import { encodeFunctionData, recoverTypedDataAddress, walletActions, type Address } from "viem";
 import { ROBINHOOD_CHAIN_ID } from "../lib/chain";
 import { ECON_DISCLOSURE } from "../lib/economics";
 import { writesAllowed } from "../lib/manifest";
@@ -23,12 +24,13 @@ import {
 } from "../lib/eligibility";
 import { buildTradePreview } from "../lib/trade";
 import { verifyClaim, type Entitlement, type OnchainCycle } from "../lib/claim";
-import { buildTransparencyReport } from "../lib/transparency";
-import { readClaimRemaining, readErc20 } from "../lib/services/reads";
+import { type TransparencyReport } from "../lib/transparency";
+import { fetchTransparency } from "../lib/services/transparency-reads";
+import { readClaimRemaining, readErc20, readLockedPrincipal } from "../lib/services/reads";
 import { runActionLifecycle, type LifecycleStep } from "../lib/wallet/tx";
-import { localTestAccount } from "../lib/testing/local-account";
-import { createDemoWalletClient } from "../lib/testing/local-env";
-import { SAMPLE_TRANSPARENCY, FIXTURE_LABEL } from "../lib/fixtures";
+import { bpsLockingVaultAbi, bpsTradeRouterAbi, distributionClaimManagerAbi } from "../lib/abis";
+import { FIXTURE_LABEL } from "../lib/fixtures";
+import { DEMO_COORDINATOR, DEMO_MANAGER, DEMO_ROUTER } from "../lib/testing/local-env";
 import {
   DEMO,
   demoDeclarationConfig,
@@ -36,8 +38,6 @@ import {
   demoEligibilityService,
   demoProofProvider,
 } from "./demo";
-import { encodeFunctionData } from "viem";
-import { bpsTradeRouterAbi, distributionClaimManagerAbi } from "../lib/abis";
 
 const WEI = 10n ** 18n;
 const fmt = (x: bigint | null) =>
@@ -45,21 +45,25 @@ const fmt = (x: bigint | null) =>
     ? "—"
     : `${(x / WEI).toString()}.${(((x % WEI) * 1000n) / WEI).toString().padStart(3, "0")}`;
 
+/** Wallet client obtained from the CONNECTOR (never a separately constructed local wallet client). */
+async function connectorWallet(config: Config) {
+  return (await getConnectorClient(config)).extend(walletActions);
+}
+
 export function AppDashboard() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { connect, connectors, isPending: connecting, error: connectError } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain, error: switchError } = useSwitchChain();
+  const { signTypedDataAsync } = useSignTypedData();
   const config = useConfig();
 
   const [verdict, setVerdict] = useState<DeclarationVerdict | null>(null);
   const [eligibility, setEligibility] = useState<EligibilityResult>("unknown");
-  // The mock connector reports chain 4663 immediately; to exercise the wrong-network → switch flow in
-  // the demo, we start in a simulated wrong-network state that a real switchChain() call clears.
-  const [simulatedWrongNetwork, setSimulatedWrongNetwork] = useState(true);
+  const [txNonce, setTxNonce] = useState(0);
 
-  const onCorrectChain = chainId === ROBINHOOD_CHAIN_ID && !simulatedWrongNetwork;
+  const onCorrectChain = isConnected && chainId === ROBINHOOD_CHAIN_ID;
   const wallet = {
     address: (address ?? null) as Address | null,
     chainId: isConnected ? chainId : null,
@@ -77,13 +81,25 @@ export function AppDashboard() {
       nonce: 1n,
       expiry: 4_000_000_000n,
     };
-    // LOCAL-TEST signing: the connected demo account is the local-test account; sign directly with it.
-    const signature = await localTestAccount.signTypedData({
+    // Sign THROUGH THE CONNECTOR (eth_signTypedData_v4). No key is imported by the app.
+    const signature = await signTypedDataAsync({
       domain: demoDeclarationConfig.domain,
       types: demoDeclarationConfig.types,
       primaryType: "Declaration",
       message,
     });
+    // Verify the recovered signer is the connected account.
+    const recovered = await recoverTypedDataAddress({
+      domain: demoDeclarationConfig.domain,
+      types: demoDeclarationConfig.types,
+      primaryType: "Declaration",
+      message,
+      signature,
+    });
+    if (recovered.toLowerCase() !== address.toLowerCase()) {
+      setVerdict({ ok: false, reason: "wrong-signer" });
+      return;
+    }
     const v = await verifyDeclaration(
       { message, signature, chainId: ROBINHOOD_CHAIN_ID },
       {
@@ -96,7 +112,7 @@ export function AppDashboard() {
     setVerdict(v);
     // Eligibility is a SEPARATE result from the configured (local mock) service.
     setEligibility(await demoEligibilityService.check(address));
-  }, [address]);
+  }, [address, signTypedDataAsync]);
 
   return (
     <main data-testid="app">
@@ -118,10 +134,7 @@ export function AppDashboard() {
           address={address}
           onCorrectChain={onCorrectChain}
           chainId={chainId}
-          onSwitch={() => {
-            switchChain({ chainId: ROBINHOOD_CHAIN_ID });
-            setSimulatedWrongNetwork(false);
-          }}
+          onSwitch={() => switchChain({ chainId: ROBINHOOD_CHAIN_ID })}
           onSign={signDeclaration}
           eligStateKind={eligState.kind}
           eligible={eligible}
@@ -134,16 +147,26 @@ export function AppDashboard() {
           config={config}
           address={address}
         />
-        <LockPanel onCorrectChain={onCorrectChain} config={config} address={address} />
-        <ClaimPanel
+        <LockPanel
           eligible={eligible}
           onCorrectChain={onCorrectChain}
           config={config}
           address={address}
         />
+        <ClaimPanel
+          eligible={eligible}
+          onCorrectChain={onCorrectChain}
+          config={config}
+          address={address}
+          onTx={() => setTxNonce((n) => n + 1)}
+        />
       </div>
 
-      <TransparencyPanel />
+      <TransparencyPanel
+        config={config}
+        onCorrectChain={onCorrectChain}
+        refreshKey={`${eligState.kind}:${txNonce}`}
+      />
     </main>
   );
 }
@@ -177,7 +200,7 @@ function WalletPanel(p: {
       <h2>Wallet &amp; eligibility</h2>
       {!p.isConnected ? (
         <button onClick={p.onConnect} disabled={p.connecting} data-testid="connect">
-          {p.connecting ? "Connecting…" : "Connect wallet (local mock)"}
+          {p.connecting ? "Connecting…" : "Connect wallet"}
         </button>
       ) : (
         <>
@@ -190,7 +213,7 @@ function WalletPanel(p: {
           <div className="kv">
             <span className="k">Network</span>
             <span className="v" data-testid="network">
-              {p.onCorrectChain ? "Robinhood Chain (4663)" : "Wrong network — switch to continue"}
+              {p.onCorrectChain ? "Robinhood Chain (4663)" : `Wrong network (${p.chainId})`}
             </span>
           </div>
           {!p.onCorrectChain ? (
@@ -199,7 +222,7 @@ function WalletPanel(p: {
             </button>
           ) : (
             <button onClick={p.onSign} data-testid="sign">
-              Sign restricted-beta declaration (local-test)
+              Sign restricted-beta declaration
             </button>
           )}
           <div className="kv" style={{ marginTop: "0.5rem" }}>
@@ -209,9 +232,8 @@ function WalletPanel(p: {
             </span>
           </div>
           <p className="small muted">
-            Signing never establishes eligibility; a separate local mock eligibility service
-            decides. Write actions unlock only when eligible:{" "}
-            <strong data-testid="eligible">{p.eligible ? "yes" : "no"}</strong>.
+            Signing never establishes eligibility; a separate service decides. Writes unlock only
+            when eligible: <strong data-testid="eligible">{p.eligible ? "yes" : "no"}</strong>.
           </p>
           <button onClick={p.onDisconnect} className="small">
             Disconnect
@@ -264,14 +286,14 @@ function TradePanel(p: {
     try {
       const pub = getPublicClient(p.config);
       if (!pub) return;
-      const wallet = createDemoWalletClient(pub);
+      const wallet = await connectorWallet(p.config);
       const data = encodeFunctionData({
         abi: bpsTradeRouterAbi,
         functionName: "buyExactWethForBps",
         args: [preview.amountIn, preview.minUserOut, 0n, p.address as Address, preview.deadline],
       });
       const res = await runActionLifecycle(
-        { pub, wallet, account: localTestAccount },
+        { pub, wallet, account: wallet.account },
         {
           target: preview.target,
           data,
@@ -300,10 +322,6 @@ function TradePanel(p: {
             <span className="v">buy</span>
           </div>
           <div className="kv">
-            <span className="k">Input</span>
-            <span className="v">{fmt(preview.amountIn)} WETH</span>
-          </div>
-          <div className="kv">
             <span className="k">Min output</span>
             <span className="v" data-testid="minout">
               {fmt(preview.minUserOut)} BPS
@@ -327,10 +345,6 @@ function TradePanel(p: {
             <span className="k">Target</span>
             <span className="v">{preview.target}</span>
           </div>
-          <div className="kv">
-            <span className="k">Chain</span>
-            <span className="v">{preview.chainId}</span>
-          </div>
         </>
       )}
       <button className="btn-disabled" disabled aria-disabled="true" data-testid="live-trade">
@@ -342,7 +356,7 @@ function TradePanel(p: {
         data-testid="demo-trade"
         style={{ marginTop: "0.5rem" }}
       >
-        Run local demonstration (mock)
+        Run local demonstration
       </button>
       <StepList steps={steps} />
       {result && (
@@ -354,25 +368,78 @@ function TradePanel(p: {
   );
 }
 
-function LockPanel(p: { onCorrectChain: boolean; config: Config; address: string | undefined }) {
+function LockPanel(p: {
+  eligible: boolean;
+  onCorrectChain: boolean;
+  config: Config;
+  address: string | undefined;
+}) {
   const [bal, setBal] = useState<bigint | null>(null);
+  const [locked, setLocked] = useState<bigint | null>(null);
+  const [steps, setSteps] = useState<LifecycleStep[]>([]);
+  const [result, setResult] = useState<string>("");
+  const [refresh, setRefresh] = useState(0);
+  const LOCK_AMOUNT = 1000n * WEI;
+  const DURATION = 604_800;
+
   useEffect(() => {
     let live = true;
     (async () => {
       if (!p.address || !p.onCorrectChain) return;
+      const pub = getPublicClient(p.config);
+      if (!pub) return;
       try {
-        const lp = getPublicClient(p.config);
-        if (!lp) return;
-        const snap = await readErc20(lp, DEMO.bps, p.address as Address, DEMO.lockingVault);
-        if (live) setBal(snap.balance);
+        const snap = await readErc20(pub, DEMO.bps, p.address as Address, DEMO.lockingVault);
+        const lp = await readLockedPrincipal(pub, DEMO.lockingVault, p.address as Address);
+        if (live) {
+          setBal(snap.balance);
+          setLocked(lp);
+        }
       } catch {
-        if (live) setBal(null);
+        /* fail closed */
       }
     })();
     return () => {
       live = false;
     };
-  }, [p.config, p.address, p.onCorrectChain]);
+  }, [p.config, p.address, p.onCorrectChain, refresh]);
+
+  const runLock = useCallback(async () => {
+    if (!p.address) return;
+    setSteps([]);
+    setResult("running…");
+    try {
+      const pub = getPublicClient(p.config);
+      if (!pub) return;
+      const wallet = await connectorWallet(p.config);
+      const before = await readLockedPrincipal(pub, DEMO.lockingVault, p.address as Address);
+      const data = encodeFunctionData({
+        abi: bpsLockingVaultAbi,
+        functionName: "createLock",
+        args: [LOCK_AMOUNT, DURATION],
+      });
+      const res = await runActionLifecycle(
+        { pub, wallet, account: wallet.account },
+        {
+          target: DEMO.lockingVault,
+          data,
+          confirmations: 1,
+          approval: { token: DEMO.bps, spender: DEMO.lockingVault, amount: LOCK_AMOUNT },
+          // Reconcile: success ONLY if the confirmed locked balance increased by exactly the amount.
+          reconcile: async () => {
+            const after = await readLockedPrincipal(pub, DEMO.lockingVault, p.address as Address);
+            return after === before + LOCK_AMOUNT;
+          },
+        },
+        (s) => setSteps((prev) => [...prev, s]),
+      );
+      setResult(res.ok ? "lock confirmed & reconciled" : `failed at ${res.step}: ${res.reason}`);
+      setRefresh((n) => n + 1);
+    } catch (e) {
+      setResult(`error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [p.config, p.address]);
+
   return (
     <div className="card">
       <h2>Locking (BPSLockingVault)</h2>
@@ -385,9 +452,29 @@ function LockPanel(p: { onCorrectChain: boolean; config: Config; address: string
           {fmt(bal)}
         </span>
       </div>
+      <div className="kv">
+        <span className="k">Locked principal</span>
+        <span className="v" data-testid="locked-balance">
+          {fmt(locked)}
+        </span>
+      </div>
       <button className="btn-disabled" disabled aria-disabled="true">
         Create lock (disabled — protocol not live)
       </button>
+      <button
+        onClick={runLock}
+        disabled={!p.eligible || !p.onCorrectChain}
+        data-testid="demo-lock"
+        style={{ marginTop: "0.5rem" }}
+      >
+        Run local lock (1000 BPS, 7d)
+      </button>
+      <StepList steps={steps} />
+      {result && (
+        <p className="small" data-testid="lock-result">
+          {result}
+        </p>
+      )}
     </div>
   );
 }
@@ -397,6 +484,7 @@ function ClaimPanel(p: {
   onCorrectChain: boolean;
   config: Config;
   address: string | undefined;
+  onTx: () => void;
 }) {
   const [status, setStatus] = useState<string>("");
   const [verified, setVerified] = useState<boolean>(false);
@@ -405,18 +493,55 @@ function ClaimPanel(p: {
 
   const verify = useCallback(async () => {
     if (!p.address) return;
+    const pub = getPublicClient(p.config);
+    if (!pub) {
+      setStatus("rpc unavailable");
+      return;
+    }
     const artifact = await demoProofProvider.getArtifact(DEMO.cycleId, p.address as Address);
     if (!artifact) {
       setStatus("no entitlement for this account");
       setVerified(false);
       return;
     }
-    const cp = getPublicClient(p.config);
-    if (!cp) {
-      setStatus("rpc unavailable");
+    // Full field validation before enabling a claim (§F).
+    if (artifact.artifactVersion !== "bps.pod.artifact/1") {
+      setStatus("rejected: artifact-version");
+      setVerified(false);
       return;
     }
-    const remaining = await readClaimRemaining(cp, DEMO.claimManager, DEMO.cycleId, DEMO.stock);
+    if (artifact.chainId !== ROBINHOOD_CHAIN_ID) {
+      setStatus("rejected: chain");
+      setVerified(false);
+      return;
+    }
+    if (artifact.claimManager.toLowerCase() !== DEMO.claimManager.toLowerCase()) {
+      setStatus("rejected: manager");
+      setVerified(false);
+      return;
+    }
+    if (artifact.account.toLowerCase() !== (p.address as string).toLowerCase()) {
+      setStatus("rejected: account");
+      setVerified(false);
+      return;
+    }
+    // Read the on-chain root from the decoded AcquisitionFunded event and the remaining from the manager.
+    const report = await fetchTransparency(pub, {
+      addresses: [DEMO_COORDINATOR],
+      fromBlock: 0n,
+      headBlock: 100n,
+      confirmations: 1n,
+      chunkSize: 50n,
+      isFixture: true,
+    });
+    const row = report.acquisitions.find((r) => r.cycleId.value === DEMO.cycleId);
+    const onchainRoot = row?.merkleRoot.value as `0x${string}` | undefined;
+    if (!onchainRoot || onchainRoot.toLowerCase() !== artifact.root.toLowerCase()) {
+      setStatus("rejected: root-mismatch");
+      setVerified(false);
+      return;
+    }
+    const remaining = await readClaimRemaining(pub, DEMO.claimManager, DEMO.cycleId, DEMO.stock);
     const entitlement: Entitlement = {
       cycleId: artifact.cycleId,
       claimManager: artifact.claimManager,
@@ -429,7 +554,7 @@ function ClaimPanel(p: {
     };
     const cycle: OnchainCycle = {
       cycleId: artifact.cycleId,
-      root: artifact.root,
+      root: onchainRoot,
       asset: artifact.stockToken,
       remaining,
       claimStartSec: 0n,
@@ -449,7 +574,7 @@ function ClaimPanel(p: {
     try {
       const pub = getPublicClient(p.config);
       if (!pub) return;
-      const wallet = createDemoWalletClient(pub);
+      const wallet = await connectorWallet(p.config);
       const artifact = await demoProofProvider.getArtifact(DEMO.cycleId, p.address as Address);
       const data = encodeFunctionData({
         abi: distributionClaimManagerAbi,
@@ -457,13 +582,23 @@ function ClaimPanel(p: {
         args: [DEMO.cycleId, DEMO.stock, DEMO.distribution, artifact!.proof.map((x) => x)],
       });
       const res = await runActionLifecycle(
-        { pub, wallet, account: localTestAccount },
-        { target: DEMO.claimManager, data, confirmations: 1 },
+        { pub, wallet, account: wallet.account },
+        {
+          target: DEMO.claimManager,
+          data,
+          confirmations: 1,
+          reconcile: async () => {
+            // Success only if the confirmed remaining decreased by the claimed amount.
+            const rem = await readClaimRemaining(pub, DEMO.claimManager, DEMO.cycleId, DEMO.stock);
+            return rem < DEMO.distribution;
+          },
+        },
         (s) => setSteps((prev) => [...prev, s]),
       );
       if (res.ok) {
         setClaimed(true);
-        setStatus("claim confirmed");
+        setStatus("claim confirmed & reconciled");
+        p.onTx();
       } else setStatus(`claim failed: ${res.reason}`);
     } catch (e) {
       setStatus(`claim error: ${e instanceof Error ? e.message : String(e)}`);
@@ -495,46 +630,108 @@ function ClaimPanel(p: {
         data-testid="demo-claim"
         style={{ marginTop: "0.5rem" }}
       >
-        {claimed ? "Claimed (duplicate disabled)" : "Run local claim (mock)"}
+        {claimed ? "Claimed (duplicate disabled)" : "Run local claim"}
       </button>
       <StepList steps={steps} />
     </div>
   );
 }
 
-function TransparencyPanel() {
-  const report = buildTransparencyReport(SAMPLE_TRANSPARENCY);
+function TransparencyPanel(p: { config: Config; onCorrectChain: boolean; refreshKey: string }) {
+  const [report, setReport] = useState<TransparencyReport | null>(null);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const pub = getPublicClient(p.config);
+      if (!pub) return;
+      try {
+        const r = await fetchTransparency(pub, {
+          addresses: [DEMO_ROUTER, DEMO_COORDINATOR, DEMO_MANAGER],
+          fromBlock: 0n,
+          headBlock: 100n,
+          confirmations: 1n,
+          chunkSize: 50n,
+          isFixture: true,
+        });
+        if (live) setReport(r);
+      } catch {
+        /* fail closed */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [p.config, p.refreshKey, p.onCorrectChain]);
+
   return (
     <div className="card" style={{ marginTop: "1rem" }}>
-      <h2>On-chain transparency</h2>
+      <h2>On-chain transparency (event-derived)</h2>
       <div className="fixture-note">{FIXTURE_LABEL}</div>
-      <div className="grid">
-        <div className="kv">
-          <span className="k">Buy volume (WETH)</span>
-          <span className="v">
-            {fmt(report.buyVolume.value)}{" "}
-            <span className="prov prov-fixture">{report.buyVolume.provenance}</span>
-          </span>
-        </div>
-        <div className="kv">
-          <span className="k">BPS burned</span>
-          <span className="v">
-            {fmt(report.totalBpsBurned.value)}{" "}
-            <span className="prov prov-fixture">{report.totalBpsBurned.provenance}</span>
-          </span>
-        </div>
-        <div className="kv">
-          <span className="k">Budget spent on acquisitions</span>
-          <span className="v">{fmt(report.stockAcquisitionBudgetSpent.value)}</span>
-        </div>
-        <div className="kv">
-          <span className="k">Pending budget (not acquired)</span>
-          <span className="v">{fmt(report.pendingBudgetNotYetAcquired.value)}</span>
-        </div>
-      </div>
-      <p className="small muted">
-        {report.acquisitionDisclaimer} {report.rialtoNote}
-      </p>
+      {report ? (
+        <>
+          <div className="grid">
+            <div className="kv">
+              <span className="k">Buy volume (WETH)</span>
+              <span className="v" data-testid="tx-buyvol">
+                {fmt(report.buyVolume.value)}{" "}
+                <span className="prov prov-fixture">{report.buyVolume.provenance}</span>
+              </span>
+            </div>
+            <div className="kv">
+              <span className="k">BPS burned</span>
+              <span className="v">
+                {fmt(report.totalBpsBurned.value)}{" "}
+                <span className="prov prov-fixture">{report.totalBpsBurned.provenance}</span>
+              </span>
+            </div>
+            <div className="kv">
+              <span className="k">Budget spent on acquisitions</span>
+              <span className="v">{fmt(report.stockAcquisitionBudgetSpent.value)}</span>
+            </div>
+            <div className="kv">
+              <span className="k">Pending budget (not acquired)</span>
+              <span className="v">{fmt(report.pendingBudgetNotYetAcquired.value)}</span>
+            </div>
+          </div>
+          <div className="scroll-x">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Acq</th>
+                  <th>Stock</th>
+                  <th>WETH spent</th>
+                  <th>80% dist</th>
+                  <th>20% reserve</th>
+                  <th>Cycle</th>
+                  <th>Remaining</th>
+                  <th>Claimed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.acquisitions.map((a) => (
+                  <tr key={a.acquisitionId.toString()} data-testid="acq-row">
+                    <td>{a.acquisitionId.toString()}</td>
+                    <td>{a.stockToken}</td>
+                    <td>{fmt(a.wethSpent.value)}</td>
+                    <td>{fmt(a.distribution80.value)}</td>
+                    <td>{fmt(a.reserve20.value)}</td>
+                    <td>{a.cycleId.value === null ? "—" : a.cycleId.value.toString()}</td>
+                    <td data-testid="acq-remaining">{fmt(a.remaining.value)}</td>
+                    <td data-testid="acq-claimed">{fmt(a.claimed.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="small muted">
+            {report.acquisitionDisclaimer} {report.rialtoNote}
+          </p>
+        </>
+      ) : (
+        <p className="small muted" data-testid="tx-loading">
+          Loading event-derived transparency…
+        </p>
+      )}
     </div>
   );
 }

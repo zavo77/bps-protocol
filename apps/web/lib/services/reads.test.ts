@@ -17,6 +17,7 @@ import {
   assertReadable,
   dedupeLogs,
   readClaimRemaining,
+  readLockedPrincipal,
   readErc20,
   readRouterPaused,
 } from "./reads";
@@ -60,6 +61,14 @@ describe("contract-read service (§D)", () => {
         DEMO_STOCK,
       ),
     ).toBe(DEMO_DISTRIBUTION);
+  });
+
+  it("reads locked principal from the vault", async () => {
+    const state = makeDemoState();
+    state.lockedPrincipal[LOCAL_TEST_ADDRESS.toLowerCase()] = 500n * 10n ** 18n;
+    const c = createPublicClient({ chain: robinhoodChain, transport: mockTransport(state) });
+    const vault = LOCAL_DEMO_MANIFEST.actual.lockingVault as Address;
+    expect(await readLockedPrincipal(c, vault, LOCAL_TEST_ADDRESS)).toBe(500n * 10n ** 18n);
   });
 
   it("dedupes logs by (txHash, logIndex)", () => {

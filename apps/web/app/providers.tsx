@@ -11,7 +11,7 @@ export function Providers({ children, config }: { children: ReactNode; config?: 
     () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
   );
   return (
-    <WagmiProvider config={config ?? localWagmiConfig}>
+    <WagmiProvider config={config ?? localWagmiConfig} reconnectOnMount={false}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WagmiProvider>
   );

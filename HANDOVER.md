@@ -427,20 +427,21 @@ cycleId)` is rootPublisher-only, `nonReentrant`: it requires status == RECORDED 
   `IStockAcquisitionAdapter`, `ISwapRouter02`) are unchanged (no git diff on any of them or their
   tests); the `packages/shared/src` PoD engine is unchanged. Their tests still pass within the 398-test
   suite.
-- Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; **166 TS tests**
-  incl. 27 quote-client + 69 `@bps/web` tests (55 app-core + 6 read-service + 5 tx-lifecycle + 3
-  component/integration), **398 Foundry tests**) when `forge` is on PATH (see §11). Separately, the
-  **Playwright browser E2E** (`apps/web/e2e/flow.spec.ts`, run via `npm run test:e2e --workspace @bps/web`)
-  passes in real Chromium — it is NOT part of `npm run check`. The 398 Foundry include the TASK 7
-  additions (2 coordinator funding-rollback, 13 deployment-config validation, 1 fork-rehearsal that skips
-  without `ROBINHOOD_FORK_RPC`).
+- Full `npm run check` passes end-to-end (all TS stages plus all three Foundry stages; **176 TS tests**
+  incl. 27 quote-client + 79 `@bps/web` tests (app-core + read/tx/oracle/transparency services + provider-
+  driven component/integration), **398 Foundry tests**) when `forge` is on PATH (see §11). Separately, the
+  **Playwright browser E2E** (`apps/web/e2e/flow.spec.ts`, run via `npm run test:e2e --workspace @bps/web`
+  against a production build) passes in real Chromium and drives the FULL connector-driven workflow. The
+  398 Foundry include the TASK 7 additions (2 coordinator funding-rollback, 13 deployment-config
+  validation, 1 fork-rehearsal that skips without `ROBINHOOD_FORK_RPC`).
 - Git repository: prior checkpoints `c443b925…` (1–5), `33062815…` (6A), `0f326913…` (6B-1A),
   `64825a3…` (6B-1B), `41d86cc…` (6B-2 + coordinator + e2e), `90e338a…` (acquisition-recording redesign),
-  `cd98df3…` (TASK 7 deployment preparation), `d9b9fc086f0f8b16496f5de58268768fbe1bb7ee` (TASK 8
-  partial-core interface, "feat(app): integrate restricted beta protocol flows", HEAD). The TASK 8B
-  interaction layer (`apps/web` wagmi/react-query app: real contract-read + tx-lifecycle + oracle
-  services, wallet/eligibility/proof flows, component + Playwright browser tests) is working-tree only
-  until the authorized `feat(app): complete restricted beta interaction layer` commit.
+  `cd98df3…` (TASK 7 deployment preparation), `d9b9fc0…` (TASK 8 partial-core interface),
+  `d212456328f3c63dfe05b07f5f344390bd970248` (TASK 8B interaction layer,
+  "feat(app): complete restricted beta interaction layer", HEAD). The TASK 8C correction (authoritative
+  EIP-1193 provider + connector-driven signing/transactions, real lock flow, event-backed transparency,
+  extra reads + tx failure paths) is working-tree only until the authorized
+  `fix(app): finish restricted beta interaction coverage` commit.
 
 ## 4. In progress
 
@@ -1636,6 +1637,35 @@ TASK 3 verification run 2026-07-22 (console local time ~00:33–00:50) with Node
 
 ## 12. Recent change log
 
+- **2026-07-22 (TASK 8C — finish restricted-beta interaction coverage)** — Closed the TASK 8B interaction
+  gaps. **No live transaction, deployment, wallet access, signature, broadcast, or protected Rialto
+  request; no frozen contract/interface/test or `packages/shared/src` or TASK 7 file modified; no new
+  dependency installed.** (A) Replaced the UI-level network simulation + the direct local wallet client
+  with an AUTHORITATIVE deterministic EIP-1193 provider (`lib/testing/mock-eip1193.ts`) driven by the
+  wagmi `injected` connector: `eth_requestAccounts`, `eth_chainId` (initial wrong chain), real
+  `wallet_switchEthereumChain` that mutates state + emits `chainChanged`, `eth_signTypedData_v4` (signs
+  internally with the local-test key), `eth_sendTransaction`, receipts + `chainChanged`/`connect` events.
+  The app now signs and sends ONLY through the connector — no panel imports `localTestAccount` and
+  `createDemoWalletClient` was removed. Declaration signing goes through `useSignTypedData` and the
+  recovered signer is checked against the connected account. (C) Real lock flow (read balance/locked/
+  allowance → exact approval → simulate → submit → confirm → **reconcile** the confirmed locked balance).
+  (D) tx lifecycle gained a post-confirmation `reconcile` step (success is never reported on a returned
+  hash alone) + tests for reconcile-fail and reverted-receipt. (E) Event-backed transparency
+  (`lib/services/transparency-reads.ts`): encode/decode real frozen-ABI logs (OfficialBuy,
+  AcquisitionRecorded/Funded, Claimed), dedupe by (block,tx,logIndex), reject malformed, aggregate to the
+  provenance-tagged model; the UI consumes the decoded result and updates after a confirmed claim. (B)
+  Added `readLockedPrincipal`; (G) `readFeed` tested against the mock. (F) Full claim field validation
+  (artifact version/chain/manager/account + on-chain root from the decoded funded event + proof/remaining
+  - simulation). New component tests (provider-derived wrong chain, rejected switch, connector signature,
+    full flow) and an extended **Playwright browser E2E** in real Chromium proving connector-driven switch,
+    signature, trade, lock+reconcile, transparency update, and claim+duplicate-disabled. Verification:
+    `forge fmt/build/test` (398), full `npm run check` (176 TS + 398 Foundry, exit 0), web `next build`
+    static, `npm run test:e2e` (1 browser test passed), no `localTestAccount`/`createDemoWalletClient` in
+    app code, browser-bundle scan clean of `RIALTO_API_KEY`/`fetchRialtoAllowanceQuote`, `git diff --check`
+    clean. Live writes remain disabled without a broadcast-ready manifest; production declaration/eligibility/
+    proof-artifact configs remain fail-closed blockers; the system is not public, decentralized, or legally
+    approved.
+
 - **2026-07-22 (TASK 8B — complete restricted-beta interaction layer)** — Built the real wallet / RPC /
   transaction interaction layer on top of the accepted TASK 8 core. **No live transaction, deployment,
   wallet access, signature, or protected Rialto request; no frozen contract/interface/test or
@@ -1945,7 +1975,7 @@ IRialtoRouterRegistry,IDistributionClaimManagerFunding}.sol`, six `test/*.t.sol`
 
 1. Read `CLAUDE.md` and this file first.
 2. Ensure Forge is on PATH (see §11 PATH note). Run `npm install` (if `node_modules` is missing),
-   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (166 TS tests, 398 Foundry
+   then `npm run check` with Forge on PATH — expect a full end-to-end PASS (176 TS tests, 398 Foundry
    tests). The **Playwright browser E2E** is separate: `npm run test:e2e --workspace @bps/web` (real
    Chromium; run `npx playwright install chromium` first if needed). The mainnet-fork deploy rehearsal is
    opt-in: `ROBINHOOD_FORK_RPC=<read-only rpc> forge test --match-contract ForkDeployRehearsal`. TS

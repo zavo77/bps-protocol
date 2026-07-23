@@ -38,6 +38,9 @@ export interface ActionRequest {
   readonly value?: bigint;
   readonly approval?: ApprovalRequirement;
   readonly confirmations: number;
+  // Post-confirmation authoritative-state check: returns true only when the confirmed on-chain state
+  // matches the intended action. Success is NEVER reported on a returned hash alone.
+  readonly reconcile?: () => Promise<boolean>;
 }
 
 export interface LifecycleResult {
@@ -157,6 +160,15 @@ export async function runActionLifecycle(
     return { ok: false, step: "await-receipt", hash, reason: "reverted" };
 
   report("reconcile");
+  if (req.reconcile) {
+    let reconciled: boolean;
+    try {
+      reconciled = await req.reconcile();
+    } catch {
+      reconciled = false;
+    }
+    if (!reconciled) return { ok: false, step: "reconcile", hash, reason: "reconciliation-failed" };
+  }
   report("done");
   return { ok: true, step: "done", hash };
 }

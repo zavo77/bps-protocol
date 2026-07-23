@@ -11,10 +11,11 @@ export default defineConfig({
   reporter: [["list"]],
   use: { baseURL: "http://localhost:3100", trace: "off", headless: true },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Run against a PRODUCTION build (stable; no dev-mode HMR/hydration churn).
   webServer: {
-    command: "npm run dev -- --port 3100",
+    command: "npm run build && npx next start --port 3100",
     url: "http://localhost:3100",
     reuseExistingServer: true,
-    timeout: 120_000,
+    timeout: 240_000,
   },
 });

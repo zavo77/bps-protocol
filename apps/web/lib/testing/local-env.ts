@@ -3,19 +3,20 @@
 // public client wired to the mock transport. This is the SINGLE source of local-mode wiring used by the
 // app, component tests, and the browser E2E. It is never mixed with a live RPC/http transport.
 import { createConfig, type Config } from "wagmi";
-import { mock } from "wagmi/connectors";
-import {
-  createWalletClient,
-  custom,
-  type Address,
-  type PublicClient,
-  type WalletClient,
-} from "viem";
-import { localTestAccount } from "./local-account";
+import { injected } from "wagmi/connectors";
+import { concatHex, keccak256, type Address, type Hex } from "viem";
+import { computeLeaf } from "../claim";
 import { demoOtherChain, robinhoodChain, ROBINHOOD_CHAIN_ID } from "../chain";
 import { LOCAL_DEMO_MANIFEST } from "../fixtures";
 import { LOCAL_TEST_ADDRESS } from "./local-account";
 import { mockTransport, type MockChainState } from "./mock-rpc";
+import { createMockEip1193Provider } from "./mock-eip1193";
+import { encodeEventLog } from "../services/transparency-reads";
+import {
+  bpsTradeRouterAbi,
+  distributionClaimManagerAbi,
+  distributionFundingCoordinatorAbi,
+} from "../abis";
 
 export const DEMO_WETH = LOCAL_DEMO_MANIFEST.external.weth.address as Address;
 export const DEMO_BPS = LOCAL_DEMO_MANIFEST.actual.bpsToken as Address;
@@ -51,34 +52,137 @@ export function makeDemoState(overrides: Partial<MockChainState> = {}): MockChai
     routerPaused: false,
     claimRemaining: { [`${DEMO_CYCLE_ID}:${DEMO_STOCK.toLowerCase()}`]: DEMO_DISTRIBUTION },
     claimed: {},
+    lockedPrincipal: {},
     logs: [],
     switchChainRejects: false,
     sendRejects: false,
     revertOnSimulate: false,
+    receiptReverts: false,
+    txCount: 0,
     ...overrides,
   };
 }
 
-/**
- * LOCAL-mode wallet client: the connected demo account IS the local-test account, so in local/demo mode
- * we sign+send via a viem wallet client over the SAME mock transport as `pub` (the wagmi mock connector
- * deliberately does not forward eth_sendTransaction). Live mode uses the user's injected wallet instead.
- */
-export function createDemoWalletClient(pub: PublicClient): WalletClient {
-  return createWalletClient({
-    account: localTestAccount,
-    chain: robinhoodChain,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    transport: custom({ request: (pub.transport as any).request }),
-  });
+const ZERO = "0x0000000000000000000000000000000000000000" as Address;
+export const DEMO_ROUTER = LOCAL_DEMO_MANIFEST.actual.tradeRouter as Address;
+export const DEMO_COORDINATOR = LOCAL_DEMO_MANIFEST.actual.coordinator as Address;
+export const DEMO_MANAGER = LOCAL_DEMO_MANIFEST.actual.claimManager as Address;
+export const DEMO_SIBLING = "0x000000000000000000000000000000000000b0b0" as Address;
+export const DEMO_SIBLING_AMOUNT = 1n;
+
+// The demo distribution Merkle root — computed identically to the local proof provider so the on-chain
+// (event-derived) root and the artifact root agree.
+function pair(a: Hex, b: Hex): Hex {
+  return BigInt(a) < BigInt(b) ? keccak256(concatHex([a, b])) : keccak256(concatHex([b, a]));
+}
+export const DEMO_ROOT: Hex = pair(
+  computeLeaf({
+    chainId: ROBINHOOD_CHAIN_ID,
+    claimManager: DEMO_MANAGER,
+    cycleId: DEMO_CYCLE_ID,
+    claimant: LOCAL_TEST_ADDRESS,
+    asset: DEMO_STOCK,
+    amount: DEMO_DISTRIBUTION,
+  }),
+  computeLeaf({
+    chainId: ROBINHOOD_CHAIN_ID,
+    claimManager: DEMO_MANAGER,
+    cycleId: DEMO_CYCLE_ID,
+    claimant: DEMO_SIBLING,
+    asset: DEMO_STOCK,
+    amount: DEMO_SIBLING_AMOUNT,
+  }),
+);
+
+/** Seed the state's logs with real ABI-encoded protocol events and append a Claimed event when a claim
+ *  is applied — so the event-backed transparency view updates after a confirmed local action. */
+export function installDemoTransparency(state: MockChainState): void {
+  const me = LOCAL_TEST_ADDRESS as Address;
+  const tx = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as `0x${string}`;
+  state.logs = [
+    encodeEventLog(
+      bpsTradeRouterAbi as never,
+      "OfficialBuy",
+      {
+        tradeId: 1n,
+        trader: me,
+        recipient: me,
+        grossWethInput: 1000n * 10n ** 18n,
+        stockBudget: 20n * 10n ** 18n,
+        burnBudget: 10n * 10n ** 18n,
+        userWethBudget: 970n * 10n ** 18n,
+        userBpsOutput: 500n * 10n ** 18n,
+        bpsBurned: 10_000n * 10n ** 18n,
+        adapter: ZERO,
+        stockBudgetRecipient: DEMO_STOCK,
+      },
+      { address: DEMO_ROUTER, blockNumber: 10n, transactionHash: tx(0xa1), logIndex: 0 },
+    ),
+    encodeEventLog(
+      distributionFundingCoordinatorAbi as never,
+      "AcquisitionRecorded",
+      {
+        acquisitionId: 1n,
+        stockToken: DEMO_STOCK,
+        operator: me,
+        wethSpent: 20n * 10n ** 18n,
+        acquiredStock: 2000n * 10n ** 18n,
+        distributionAmount: 1600n * 10n ** 18n,
+        reserveAmount: 400n * 10n ** 18n,
+      },
+      { address: DEMO_COORDINATOR, blockNumber: 11n, transactionHash: tx(0xa2), logIndex: 0 },
+    ),
+    encodeEventLog(
+      distributionFundingCoordinatorAbi as never,
+      "AcquisitionFunded",
+      {
+        acquisitionId: 1n,
+        cycleId: DEMO_CYCLE_ID,
+        stockToken: DEMO_STOCK,
+        amount: DEMO_DISTRIBUTION,
+        merkleRoot: DEMO_ROOT,
+        claimStart: 0n,
+        claimDeadline: 4_000_000_000n,
+      },
+      { address: DEMO_COORDINATOR, blockNumber: 12n, transactionHash: tx(0xa3), logIndex: 0 },
+    ),
+  ];
+  state.onApplied = (kind, args) => {
+    if (kind === "claim") {
+      state.logs.push(
+        encodeEventLog(
+          distributionClaimManagerAbi as never,
+          "Claimed",
+          {
+            cycleId: args.cycleId as bigint,
+            claimant: LOCAL_TEST_ADDRESS as Address,
+            asset: DEMO_STOCK,
+            amount: args.amount as bigint,
+          },
+          { address: DEMO_MANAGER, blockNumber: 20n, transactionHash: tx(0xb1), logIndex: 0 },
+        ),
+      );
+    }
+  };
 }
 
-/** wagmi config using the mock connector + mock transport, for component tests. */
+/** wagmi config using an AUTHORITATIVE EIP-1193 mock provider (via the injected connector) + a mock read
+ *  transport, for component tests and the app. All signing/sends go through the connector/provider — the
+ *  provider holds the deterministic key internally; the app never imports it. */
 export function createLocalWagmiConfig(state: MockChainState): Config {
+  installDemoTransparency(state);
   const transport = mockTransport(state);
+  // The connector target's provider type is the wagmi injected-provider shape; our EIP-1193 provider
+  // implements the subset the connector uses. Cast once to satisfy the connector's broad type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const provider = createMockEip1193Provider(state) as any;
   return createConfig({
     chains: [robinhoodChain, demoOtherChain],
-    connectors: [mock({ accounts: [LOCAL_TEST_ADDRESS], features: {} })],
+    connectors: [
+      injected({
+        target: () => ({ id: "mockEip1193", name: "Mock EIP-1193 (local)", provider }),
+      }),
+    ],
     transports: { [ROBINHOOD_CHAIN_ID]: transport, [demoOtherChain.id]: transport },
     multiInjectedProviderDiscovery: false,
     ssr: false,

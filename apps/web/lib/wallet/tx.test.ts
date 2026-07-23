@@ -69,6 +69,27 @@ describe("transaction lifecycle (§E)", () => {
     expect(res).toMatchObject({ ok: false, step: "submit", reason: "user-rejected" });
   });
 
+  it("fails at reconcile when the confirmed state does not match (never success on hash alone)", async () => {
+    const req = { ...buyReq(), reconcile: async () => false };
+    const res = await runActionLifecycle(clients(), req);
+    expect(res).toMatchObject({ ok: false, step: "reconcile", reason: "reconciliation-failed" });
+    expect(res.hash).toMatch(/^0x/); // a hash existed, but success was NOT reported
+  });
+
+  it("succeeds when reconciliation passes", async () => {
+    const req = { ...buyReq(), reconcile: async () => true };
+    expect((await runActionLifecycle(clients(), req)).ok).toBe(true);
+  });
+
+  it("fails on a reverted receipt", async () => {
+    const res = await runActionLifecycle(
+      clients(makeDemoState({ receiptReverts: true })),
+      buyReq(),
+    );
+    expect(res.ok).toBe(false);
+    expect(["await-approval", "await-receipt"]).toContain(res.step);
+  });
+
   it("skips approval when allowance already sufficient", async () => {
     const state = makeDemoState();
     const me = LOCAL_TEST_ADDRESS.toLowerCase();

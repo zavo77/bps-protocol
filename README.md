@@ -208,10 +208,15 @@ adds a real interaction layer (wagmi + react-query): viem contract-read and Chai
 (transport-injected, fail-closed), a transaction lifecycle (exact approval → simulate → submit → confirm
 → reconcile — never unlimited approval, never SwapRouter02), a deterministic proof-artifact provider, a
 versioned declaration config (production absent → fail-closed; labeled local-test only) with a separate
-eligibility-service interface + local mock, and a deterministic mock JSON-RPC transport for local mode.
-It is covered by 69 vitest tests plus a **Playwright browser E2E** (real Chromium) exercising connect →
-switch-to-4663 → sign → separate eligibility → buy preview → exact approval → simulation → mocked
-confirmation → proof verify → claim → duplicate-disabled — all against the mock, with no real wallet,
+eligibility-service interface + local mock. Wallet operations flow through an **authoritative
+deterministic EIP-1193 provider** (via the wagmi injected connector): the app signs and sends only
+through the connector (no panel constructs a wallet client or imports a key), the wrong-network → switch
+transition is a real provider state change, and success is reported only after confirmed on-chain state
+reconciliation (never on a returned hash alone). Event-backed transparency decodes real frozen-ABI logs
+and updates after a confirmed claim. It is covered by 79 vitest tests plus a **Playwright browser E2E**
+(real Chromium) exercising connect → provider switch-to-4663 → connector signature → separate eligibility
+→ buy preview → exact approval → simulation → confirmation → real lock+reconcile → event-derived
+transparency → proof verify → claim → duplicate-disabled — all against the mock, with no real wallet,
 signature, or transaction. Deferred/blocked: no accepted production EIP-712 declaration domain (local-test
 scaffold), no production eligibility or proof-artifact service (interfaces + local mocks).
 `RIALTO_API_KEY` and the quote client remain server-only and never enter the browser bundle.

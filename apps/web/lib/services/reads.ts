@@ -3,6 +3,7 @@
 // fails closed on wrong chain / missing code / RPC failure. It never writes, signs, or broadcasts.
 import { erc20Abi, type Address, type PublicClient } from "viem";
 import {
+  bpsLockingVaultAbi,
   bpsTradeRouterAbi,
   distributionClaimManagerAbi,
   distributionFundingCoordinatorAbi,
@@ -95,6 +96,23 @@ export async function readRouterPaused(client: PublicClient, router: Address): P
   }
 }
 
+export async function readLockedPrincipal(
+  client: PublicClient,
+  vault: Address,
+  account: Address,
+): Promise<bigint> {
+  try {
+    return await client.readContract({
+      address: vault,
+      abi: bpsLockingVaultAbi,
+      functionName: "lockedPrincipal",
+      args: [account],
+    });
+  } catch (e) {
+    throw new ReadFailedError("vault.lockedPrincipal", e);
+  }
+}
+
 export async function readClaimRemaining(
   client: PublicClient,
   manager: Address,
@@ -169,7 +187,7 @@ export async function getLogsChunked(
   client: PublicClient,
   params: {
     readonly address: Address;
-    readonly events: readonly unknown[];
+    readonly events?: readonly unknown[];
     readonly fromBlock: bigint;
     readonly headBlock: bigint;
     readonly confirmations: bigint;
@@ -183,10 +201,10 @@ export async function getLogsChunked(
     const end = start + params.chunkSize - 1n > safeHead ? safeHead : start + params.chunkSize - 1n;
     let logs: unknown[];
     try {
-      // viem getLogs accepts an `events` array; we pass through the caller's event ABIs.
+      // Fetch RAW logs (no `events`) so the caller's decoder controls ABI matching; viem still formats
+      // wire fields (hex → bigint block number, etc.).
       logs = (await client.getLogs({
         address: params.address,
-        events: params.events as never,
         fromBlock: start,
         toBlock: end,
       })) as unknown[];
