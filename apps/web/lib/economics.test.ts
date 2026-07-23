@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acquiredStockSplit, buyAllocation, sellAllocation } from "./economics";
+import { ECON_DISCLOSURE, acquiredStockSplit, buyAllocation, sellAllocation } from "./economics";
 
 describe("economics (BPS-ECON-2.0)", () => {
   it("buy: 2% stock + 1% burn + remainder to user, conserving the whole", () => {
@@ -35,5 +35,15 @@ describe("economics (BPS-ECON-2.0)", () => {
   it("rejects negative inputs", () => {
     expect(() => buyAllocation(-1n)).toThrow();
     expect(() => acquiredStockSplit(-1n)).toThrow();
+  });
+
+  it("disclosure copy states repurchase-and-burn for both legs (not a 'direct' burn)", () => {
+    // The sell burn uses the same WETH-funded repurchase-and-burn mechanism as the buy leg, so the
+    // disclosure must say "repurchase-and-burn" — never "direct BPS burn" (Task 10 reconciliation).
+    expect(ECON_DISCLOSURE.buy.burn).toBe("1% BPS repurchase and burn");
+    expect(ECON_DISCLOSURE.sell.burn).toBe("2% BPS repurchase-and-burn");
+    expect(ECON_DISCLOSURE.sell.burn).not.toMatch(/direct/i);
+    expect(ECON_DISCLOSURE.buy.total).toBe("3% total BPS protocol allocation");
+    expect(ECON_DISCLOSURE.sell.total).toBe("4% total BPS protocol allocation");
   });
 });

@@ -78,7 +78,7 @@ export const ECON_DISCLOSURE = {
   },
   sell: {
     stockAcquisition: "2% Stock Token acquisition funding",
-    burn: "2% direct BPS burn",
+    burn: "2% BPS repurchase-and-burn",
     total: "4% total BPS protocol allocation",
   },
   split: "Acquired stock: 80% distribution, remainder (>=20%) strategic reserve",
