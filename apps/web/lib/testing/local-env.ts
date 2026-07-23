@@ -4,8 +4,7 @@
 // app, component tests, and the browser E2E. It is never mixed with a live RPC/http transport.
 import { createConfig, type Config } from "wagmi";
 import { injected } from "wagmi/connectors";
-import { concatHex, keccak256, type Address, type Hex } from "viem";
-import { computeLeaf } from "../claim";
+import { type Address } from "viem";
 import { demoOtherChain, robinhoodChain, ROBINHOOD_CHAIN_ID } from "../chain";
 import { LOCAL_DEMO_MANIFEST } from "../fixtures";
 import { LOCAL_TEST_ADDRESS } from "./local-account";
@@ -18,43 +17,38 @@ import {
   distributionFundingCoordinatorAbi,
 } from "../abis";
 
-export const DEMO_WETH = LOCAL_DEMO_MANIFEST.external.weth.address as Address;
-export const DEMO_BPS = LOCAL_DEMO_MANIFEST.actual.bpsToken as Address;
-export const DEMO_STOCK = "0x00000000000000000000000000000000000aaaa1" as Address; // fixture stock (AAPL)
-export const DEMO_CYCLE_ID = 42n;
-export const DEMO_DISTRIBUTION = 1600n * 10n ** 18n;
-export const DEMO_PRELOCKED = 500n * 10n ** 18n; // a pre-existing lock position (id 0)
+// The demo fixture constants are defined in the KEY-FREE `lib/demo-fixture.ts` (safe for production) and
+// re-exported here so existing test imports (`from "../testing/local-env"`) keep working unchanged.
+export {
+  DEMO_WETH,
+  DEMO_BPS,
+  DEMO_STOCK,
+  DEMO_CYCLE_ID,
+  DEMO_DISTRIBUTION,
+  DEMO_PRELOCKED,
+  DEMO_ROUTER,
+  DEMO_COORDINATOR,
+  DEMO_MANAGER,
+  DEMO_SIBLING,
+  DEMO_SIBLING_AMOUNT,
+  DEMO_ROOT,
+  DEMO_ACCOUNT_ADDRESS,
+} from "../demo-fixture";
+
+import {
+  DEMO_WETH,
+  DEMO_BPS,
+  DEMO_STOCK,
+  DEMO_CYCLE_ID,
+  DEMO_DISTRIBUTION,
+  DEMO_PRELOCKED,
+  DEMO_ROUTER,
+  DEMO_COORDINATOR,
+  DEMO_MANAGER,
+  DEMO_ROOT,
+} from "../demo-fixture";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as Address;
-export const DEMO_ROUTER = LOCAL_DEMO_MANIFEST.actual.tradeRouter as Address;
-export const DEMO_COORDINATOR = LOCAL_DEMO_MANIFEST.actual.coordinator as Address;
-export const DEMO_MANAGER = LOCAL_DEMO_MANIFEST.actual.claimManager as Address;
-export const DEMO_SIBLING = "0x000000000000000000000000000000000000b0b0" as Address;
-export const DEMO_SIBLING_AMOUNT = 1n;
-
-// The demo distribution Merkle root — computed identically to the local proof provider so the on-chain
-// (cycles()) root and the artifact root agree.
-function pair(a: Hex, b: Hex): Hex {
-  return BigInt(a) < BigInt(b) ? keccak256(concatHex([a, b])) : keccak256(concatHex([b, a]));
-}
-export const DEMO_ROOT: Hex = pair(
-  computeLeaf({
-    chainId: ROBINHOOD_CHAIN_ID,
-    claimManager: DEMO_MANAGER,
-    cycleId: DEMO_CYCLE_ID,
-    claimant: LOCAL_TEST_ADDRESS,
-    asset: DEMO_STOCK,
-    amount: DEMO_DISTRIBUTION,
-  }),
-  computeLeaf({
-    chainId: ROBINHOOD_CHAIN_ID,
-    claimManager: DEMO_MANAGER,
-    cycleId: DEMO_CYCLE_ID,
-    claimant: DEMO_SIBLING,
-    asset: DEMO_STOCK,
-    amount: DEMO_SIBLING_AMOUNT,
-  }),
-);
 
 export function makeDemoState(overrides: Partial<MockChainState> = {}): MockChainState {
   const me = LOCAL_TEST_ADDRESS.toLowerCase();

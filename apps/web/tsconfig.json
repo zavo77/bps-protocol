@@ -8,6 +8,10 @@
     "noEmit": true,
     "allowJs": true,
     "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "bps-wagmi-active": ["./app/wagmi-active.ts"]
+    },
     "plugins": [{ "name": "next" }]
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

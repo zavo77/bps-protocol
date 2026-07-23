@@ -57,6 +57,14 @@ test("restricted-beta connector-driven workflow in a real browser", async ({ pag
   await expect(page.getByTestId("tx-budget-delivered")).toContainText("20.000");
   await expect(page.getByTestId("acq-remaining")).toContainText("1600.000");
 
+  // AUTHORITATIVE acquisition↔cycle reconciliation (cycleUsed + cycleAcquisitionId + acquisitions), not
+  // just events. The linkage is confirmed and the authoritative WETH/80/20/cycle come from contract reads.
+  await expect(page.getByTestId("acq-linkage")).toContainText("authoritative-confirmed");
+  await expect(page.getByTestId("acq-auth-id")).toContainText("1");
+  await expect(page.getByTestId("acq-auth-weth")).toContainText("20.000");
+  await expect(page.getByTestId("acq-auth-dist")).toContainText("1600.000");
+  await expect(page.getByTestId("acq-auth-cycle")).toContainText("42");
+
   // Proof validation + claim through the connector, then transparency updates and duplicate is disabled.
   await page.getByTestId("verify-proof").click();
   await expect(page.getByTestId("claim-status")).toContainText(/verified/i);

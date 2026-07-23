@@ -23,6 +23,8 @@ import {
   readClaimRemaining,
   readClaimUsed,
   readCycle,
+  readCycleAcquisitionId,
+  readCycleUsed,
   readLockCount,
   readLockedPrincipal,
   readErc20,
@@ -115,6 +117,18 @@ describe("contract-read service (§D)", () => {
     expect(a.cycleId).toBe(DEMO_CYCLE_ID);
     // 80/20 split reconciles against acquiredStock.
     expect(a.distributionAmount + a.reserveAmount).toBe(a.acquiredStock);
+  });
+
+  it("reads authoritative cycleUsed() and cycleAcquisitionId() from the coordinator", async () => {
+    expect(await readCycleUsed(client(), COORDINATOR, DEMO_CYCLE_ID)).toBe(true);
+    expect(await readCycleAcquisitionId(client(), COORDINATOR, DEMO_CYCLE_ID)).toBe(1n);
+  });
+
+  it("cycleUsed() is false for a cycle with no seeded acquisition", async () => {
+    const state = makeDemoState({ acquisition: null });
+    const c = createPublicClient({ chain: robinhoodChain, transport: mockTransport(state) });
+    expect(await readCycleUsed(c, COORDINATOR, DEMO_CYCLE_ID)).toBe(false);
+    expect(await readCycleAcquisitionId(c, COORDINATOR, DEMO_CYCLE_ID)).toBe(0n);
   });
 
   it("reads lock count reflecting the seeded pre-existing position", async () => {

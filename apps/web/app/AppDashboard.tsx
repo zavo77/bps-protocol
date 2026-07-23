@@ -39,10 +39,14 @@ import {
   readLockedPrincipal,
 } from "../lib/services/reads";
 import { validateClaimReadiness } from "../lib/services/claim-validation";
+import {
+  reconcileCycleAcquisition,
+  type AcquisitionReconciliation,
+} from "../lib/services/acquisition-reconcile";
 import { runActionLifecycle, type LifecycleStep } from "../lib/wallet/tx";
 import { bpsLockingVaultAbi, bpsTradeRouterAbi, distributionClaimManagerAbi } from "../lib/abis";
 import { FIXTURE_LABEL } from "../lib/fixtures";
-import { DEMO_COORDINATOR, DEMO_MANAGER, DEMO_ROUTER } from "../lib/testing/local-env";
+import { DEMO_COORDINATOR, DEMO_MANAGER, DEMO_ROUTER } from "../lib/demo-fixture";
 import {
   DEMO,
   demoDeclarationConfig,
@@ -712,6 +716,7 @@ function ClaimPanel(p: {
 
 function TransparencyPanel(p: { config: Config; onCorrectChain: boolean; refreshKey: string }) {
   const [report, setReport] = useState<TransparencyReport | null>(null);
+  const [recon, setRecon] = useState<AcquisitionReconciliation | null>(null);
   useEffect(() => {
     let live = true;
     (async () => {
@@ -727,8 +732,27 @@ function TransparencyPanel(p: { config: Config; onCorrectChain: boolean; refresh
           isFixture: true,
         });
         if (live) setReport(r);
+        // AUTHORITATIVE acquisition ↔ cycle reconciliation. Events give the expected acquisition + funding
+        // amounts; the CURRENT linkage is read from cycleUsed()/cycleAcquisitionId()/acquisitions(). Any
+        // inconsistency (or read failure) marks the acquisition transparency INVALID and fails closed.
+        const ev = r.acquisitions[0];
+        const rec = await reconcileCycleAcquisition(
+          pub,
+          DEMO_COORDINATOR,
+          DEMO.cycleId,
+          ev
+            ? {
+                acquisitionId: ev.acquisitionId,
+                wethSpent: ev.wethSpent.value,
+                distributionAmount: ev.distribution80.value,
+                reserveAmount: ev.reserve20.value,
+                acquiredStock: ev.acquiredStock.value,
+              }
+            : undefined,
+        );
+        if (live) setRecon(rec);
       } catch {
-        /* fail closed */
+        if (live) setRecon(null); // fail closed
       }
     })();
     return () => {
@@ -792,6 +816,56 @@ function TransparencyPanel(p: { config: Config; onCorrectChain: boolean; refresh
               <span className="v">{fmt(report.pendingBudgetNotYetAcquired.value)}</span>
             </div>
           </div>
+          {/* Authoritative acquisition ↔ cycle linkage from contract reads (not events). */}
+          <div className="kv">
+            <span className="k">
+              Authoritative acquisition linkage (cycle {DEMO.cycleId.toString()})
+            </span>
+            <span className="v" data-testid="acq-linkage">
+              {recon ? recon.status : "reading…"}
+            </span>
+          </div>
+          {recon?.ok && recon.record ? (
+            <div className="grid" data-testid="acq-authoritative">
+              <div className="kv">
+                <span className="k">Authoritative acquisition id</span>
+                <span className="v" data-testid="acq-auth-id">
+                  {recon.onchainAcquisitionId?.toString() ?? "—"}
+                </span>
+              </div>
+              <div className="kv">
+                <span className="k">Authoritative WETH spent</span>
+                <span className="v" data-testid="acq-auth-weth">
+                  {fmt(recon.record.wethSpent)}{" "}
+                  <span className="prov prov-fixture">onchain-verified</span>
+                </span>
+              </div>
+              <div className="kv">
+                <span className="k">Authoritative 80% distribution</span>
+                <span className="v" data-testid="acq-auth-dist">
+                  {fmt(recon.record.distributionAmount)}
+                </span>
+              </div>
+              <div className="kv">
+                <span className="k">Authoritative 20% reserve</span>
+                <span className="v" data-testid="acq-auth-reserve">
+                  {fmt(recon.record.reserveAmount)}
+                </span>
+              </div>
+              <div className="kv">
+                <span className="k">Authoritative cycle</span>
+                <span className="v" data-testid="acq-auth-cycle">
+                  {recon.record.cycleId.toString()}
+                </span>
+              </div>
+            </div>
+          ) : recon && !recon.ok ? (
+            <p className="small" data-testid="acq-linkage-invalid" role="alert">
+              Acquisition transparency INVALID — {recon.status}
+              {recon.detail ? `: ${recon.detail}` : ""}. The event-derived acquisition is not
+              confirmed by current authoritative contract reads.
+            </p>
+          ) : null}
           <div className="scroll-x">
             <table className="tbl">
               <thead>
@@ -804,21 +878,30 @@ function TransparencyPanel(p: { config: Config; onCorrectChain: boolean; refresh
                   <th>Cycle</th>
                   <th>Remaining</th>
                   <th>Claimed</th>
+                  <th>Authoritative</th>
                 </tr>
               </thead>
               <tbody>
-                {report.acquisitions.map((a) => (
-                  <tr key={a.acquisitionId.toString()} data-testid="acq-row">
-                    <td>{a.acquisitionId.toString()}</td>
-                    <td>{a.stockToken}</td>
-                    <td>{fmt(a.wethSpent.value)}</td>
-                    <td>{fmt(a.distribution80.value)}</td>
-                    <td>{fmt(a.reserve20.value)}</td>
-                    <td>{a.cycleId.value === null ? "—" : a.cycleId.value.toString()}</td>
-                    <td data-testid="acq-remaining">{fmt(a.remaining.value)}</td>
-                    <td data-testid="acq-claimed">{fmt(a.claimed.value)}</td>
-                  </tr>
-                ))}
+                {report.acquisitions.map((a) => {
+                  const confirmed = recon?.ok && recon.onchainAcquisitionId === a.acquisitionId;
+                  return (
+                    <tr
+                      key={a.acquisitionId.toString()}
+                      data-testid="acq-row"
+                      data-authoritative={confirmed ? "confirmed" : "invalid"}
+                    >
+                      <td>{a.acquisitionId.toString()}</td>
+                      <td>{a.stockToken}</td>
+                      <td>{fmt(a.wethSpent.value)}</td>
+                      <td>{fmt(a.distribution80.value)}</td>
+                      <td>{fmt(a.reserve20.value)}</td>
+                      <td>{a.cycleId.value === null ? "—" : a.cycleId.value.toString()}</td>
+                      <td data-testid="acq-remaining">{fmt(a.remaining.value)}</td>
+                      <td data-testid="acq-claimed">{fmt(a.claimed.value)}</td>
+                      <td>{confirmed ? "confirmed" : "unconfirmed"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

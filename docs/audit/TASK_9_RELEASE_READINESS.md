@@ -21,17 +21,28 @@ bundle; and every substantive Task 8 acceptance item is implemented on the real 
 covered by a named test. No Critical, High, or Medium finding was identified.
 
 Production nonetheless remains **blocked** by external inputs that are outside this repository's control
-(independent contract audit, legal/eligibility approval, Rialto production terms + credential, finalized
-role/wallet-control addresses, source-backed Stock-Token/oracle configuration, liquidity/valuation/float
-decision, restricted participant list, production RPC + monitoring, and explicit founder authorization) and
-by one in-repo gate item recorded as a Low/Informational finding: the application currently defaults to the
-local deterministic mock wallet config, so a real-injected-wallet production build path is not yet wired and
-`apps/web/lib/testing/*` (including the throwaway demo key) is still part of the demonstration bundle.
-
-This is not a code defect — the app is a deliberately fail-closed **local demonstration** (live writes
-disabled, all data labeled fixture) — but it is a required entry condition before any real-wallet canary.
+(independent contract audit, legal/eligibility approval, Rialto production terms + secure server-only
+credential use, finalized role/wallet-control addresses, source-backed Stock-Token/oracle configuration,
+liquidity/valuation/float decision, restricted participant list, production RPC + monitoring, and explicit
+founder authorization).
 
 **No FAIL condition exists.**
+
+> **UPDATE — Task 9A remediation (2026-07-23), verdict retained as PASS WITH EXTERNAL BLOCKERS.**
+> The original Task 9 report (committed as `46c7877`) raised three in-repo gate items — the demonstration
+> bundle shipping `lib/testing/*` + the deterministic key (L-1), and the authoritative coordinator/acquisition
+> getters existing but not consumed by a production path (L-2). Task 9A **closed all three** in commit
+> `fix(release): close task 9 readiness blockers`: the default production build is now provably free of
+> `lib/testing/*`, the mock provider, and the deterministic key (built-bundle scan = 0 markers); the app
+> defaults to the injected/production wallet config and fails closed with no mock fallback; and the
+> `cycleUsed()` / `cycleAcquisitionId()` / `acquisitions()` reads are now consumed on the real application
+> path to reconcile acquisition↔cycle linkage (marking transparency invalid on any mismatch). Full evidence,
+> updated test totals, and the corrected acceptance ledger are in **§21 (Task 9A remediation)** below; §1's
+> original prose is preserved above for the audit record but is superseded on the L-1/L-2 points by §21.
+> The Rialto onboarding/credential-creation item is **removed** from the blocker list — partner status is
+> ACTIVE, integrator id 124, and a server credential named `bps` exists (not accessed or disclosed here);
+> remaining Rialto conditions are terms approval, secure server-only configuration, a production
+> route/allowance/quote-validation rehearsal, and founder authorization.
 
 ---
 
@@ -191,55 +202,52 @@ Legend: **PASS** = implemented on the real application/service path and covered 
 relevant, the Chromium E2E). "Frozen-interface note" flags items where the frozen ABI/getter exists and is
 exercised but is not yet surfaced through a dedicated read service or consumed by a component.
 
-| #   | Requirement                                                | Implementation (file · symbol)                                                                                                                                                             | Test (file · exact name)                                                                                                                                                                              | Browser E2E         | Result                 |
-| --- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ---------------------- |
-| 1   | Provider-derived chain state                               | `mock-eip1193.ts` `request(eth_chainId)`; `AppDashboard.tsx` `useChainId`                                                                                                                  | `mock-eip1193.test.ts` · "chainChanged: …updates the exposed chain id"; `AppDashboard.test.tsx` · "rejected network switch preserves the wrong-chain state"                                           | ✅                  | PASS                   |
-| 2   | Provider actually changes to 4663                          | `mock-eip1193.ts` `wallet_switchEthereumChain` mutates `state.chainId` + emits; `AppDashboard.tsx` `switchChain`                                                                           | `AppDashboard.test.tsx` · "full flow: switch → …"                                                                                                                                                     | ✅ "switch to 4663" | PASS                   |
-| 3   | accountsChanged handling                                   | `mock-eip1193.ts` `__setAccounts`→`accountsChanged`                                                                                                                                        | `mock-eip1193.test.ts` · "accountsChanged: updates the selected/exposed account"                                                                                                                      | —                   | PASS                   |
-| 4   | chainChanged handling                                      | `mock-eip1193.ts` emit `chainChanged`                                                                                                                                                      | `mock-eip1193.test.ts` · "chainChanged: …"                                                                                                                                                            | ✅                  | PASS                   |
-| 5   | disconnect + explicit reconnect                            | `mock-eip1193.ts` `__disconnect`, `eth_requestAccounts` restores                                                                                                                           | `mock-eip1193.test.ts` · "disconnect: exposes no accounts", "reconnect does NOT silently re-establish consent"                                                                                        | —                   | PASS                   |
-| 6   | Connected-account typed-data signing + recovery            | `AppDashboard.tsx` `signDeclaration` (`useSignTypedData` + `recoverTypedDataAddress`)                                                                                                      | `mock-eip1193.test.ts` · "the same signature IS accepted for the account that actually signed"; `AppDashboard.test.tsx` full flow                                                                     | ✅                  | PASS                   |
-| 7   | Signature/account mismatch rejection                       | `eligibility.ts` `verifyDeclaration`→`wrong-signer`; `AppDashboard.tsx` recovered≠address guard                                                                                            | `mock-eip1193.test.ts` · "a signature recovering to a DIFFERENT account…", "after accountsChanged…no longer matches"                                                                                  | —                   | PASS                   |
-| 8   | Declaration and eligibility are separate controls          | `eligibility.ts` `deriveEligibilityState`; `app/demo.ts` `demoEligibilityService`                                                                                                          | `eligibility.test.ts` (14); `AppDashboard.test.tsx` full flow (`elig-state`)                                                                                                                          | ✅                  | PASS                   |
-| 9   | Exact approval + post-approval reconciliation              | `wallet/tx.ts` `runActionLifecycle` (exact `amount`, `reread-allowance`)                                                                                                                   | `tx.test.ts` · "runs approve -> … with EXACT approval", "skips approval when allowance already sufficient"                                                                                            | ✅                  | PASS                   |
-| 10  | Approval rejection + reverted approval                     | `tx.ts` approve `catch`; `await-approval` receipt status                                                                                                                                   | `tx.test.ts` · "surfaces a rejected APPROVAL at the approve step", "fails when the APPROVAL receipt reverts"                                                                                          | —                   | PASS                   |
-| 11  | Allowance-reconciliation failure                           | `tx.ts` `reread-allowance` guard                                                                                                                                                           | `tx.test.ts` · "fails at reread-allowance when the approval did not raise the allowance"                                                                                                              | —                   | PASS                   |
-| 12  | Simulation failure                                         | `tx.ts` `simulate` `catch`                                                                                                                                                                 | `tx.test.ts` · "fails on a reverting simulation before submitting"                                                                                                                                    | —                   | PASS                   |
-| 13  | Stale quote                                                | `trade.ts` `tradeSubmissionGate`→`stale-quote`                                                                                                                                             | `trade.test.ts` · "submission gate fails closed on each missing condition" (`quoteFresh:false`)                                                                                                       | —                   | PASS¹                  |
-| 14  | Expired deadline                                           | `trade.ts` `tradeSubmissionGate`→`deadline-expired`                                                                                                                                        | `trade.test.ts` · same gate test (`deadline:500n`)                                                                                                                                                    | —                   | PASS¹                  |
-| 15  | Wallet rejection                                           | `tx.ts` submit `catch`→`user-rejected`                                                                                                                                                     | `tx.test.ts` · "surfaces wallet rejection at submit"                                                                                                                                                  | —                   | PASS                   |
-| 16  | Confirmed replacement                                      | `tx.ts` `waitConfirmed` `onReplaced` (repriced→follow receipt)                                                                                                                             | `tx.test.ts` · "follows a repriced replacement to its confirmed receipt and succeeds"                                                                                                                 | —                   | PASS                   |
-| 17  | Cancelled replacement                                      | `tx.ts` `waitConfirmed` cancelled→failure                                                                                                                                                  | `tx.test.ts` · "treats a CANCELLED replacement as a failed action (never success on a hash)"                                                                                                          | —                   | PASS                   |
-| 18  | Reverted action receipt                                    | `tx.ts` `await-receipt` status≠success                                                                                                                                                     | `tx.test.ts` · "fails on a reverted receipt"                                                                                                                                                          | —                   | PASS                   |
-| 19  | Confirmation-depth waiting + failure                       | `tx.ts` `confirmations`; `waitConfirmed` confirm-error                                                                                                                                     | `tx.test.ts` · "honors a confirmation depth greater than 1 and still reconciles", "fails closed on a confirmation error (e.g. wait timeout)"                                                          | —                   | PASS                   |
-| 20  | Final-state reconciliation failure                         | `tx.ts` `reconcile` step                                                                                                                                                                   | `tx.test.ts` · "fails at reconcile when the confirmed state does not match (never success on hash alone)"                                                                                             | —                   | PASS                   |
-| 21  | Trades only target BPSTradeRouter                          | `trade.ts` `buildTradePreview` `target=tradeRouter` + `assertOfficialRoute`; `AppDashboard.tsx` uses `preview.target` for simulate+approval                                                | `trade.test.ts` · "assertOfficialRoute rejects a non-router target (e.g. SwapRouter02)"                                                                                                               | ✅                  | PASS                   |
-| 22  | Real connector-driven locking + reconciliation             | `AppDashboard.tsx` `LockPanel.runLock` (`connectorWallet`; reconcile `lockedPrincipal`)                                                                                                    | `AppDashboard.test.tsx` full flow (lock→1500.000 reconciled)                                                                                                                                          | ✅                  | PASS                   |
-| 23  | Real connector-driven partial withdrawal + reconciliation  | `AppDashboard.tsx` `runWithdraw` (`withdraw(lockId)`; reconcile)                                                                                                                           | `AppDashboard.test.tsx` full flow (withdraw→500.000; button disabled)                                                                                                                                 | ✅                  | PASS                   |
-| 24  | Authoritative cycle + claim-manager reads                  | `reads.ts` `readCycle`/`readAssetFunding`/`readClaimUsed`/`readClaimRemaining`; `claim-validation.ts` `validateClaimReadiness` (wired `AppDashboard.tsx:603`)                              | `reads.test.ts` (authoritative reads); `claim-validation.test.ts` (8)                                                                                                                                 | ✅                  | PASS                   |
-| 25  | `cycleUsed` + `cycleAcquisitionId` reads (where supported) | Present in `abis.ts` (`distributionFundingCoordinatorAbi`) and exercised by `mock-rpc.ts` `handleCall`; **no read-service wrapper, no component consumer**                                 | — (no dedicated service test; ABI shape only)                                                                                                                                                         | —                   | Frozen-interface note² |
-| 26  | Acquisition + funding-record reads                         | App path: event-derived `transparency-reads.ts` (`AcquisitionRecorded`/`Funded`) in `TransparencyPanel`. Authoritative getter `reads.ts` `readAcquisition` tested but **not app-consumed** | `transparency-reads.test.ts`; `reads.test.ts` · "reads authoritative acquisition record via acquisitions()"                                                                                           | ✅ (events)         | PASS³                  |
-| 27  | Current root cannot be overridden by an old event          | `claim-validation.ts` compares artifact root to `readCycle` (current on-chain root)                                                                                                        | `claim-validation.test.ts` · "an OLD event root cannot override a CHANGED current cycle root"                                                                                                         | —                   | PASS                   |
-| 28  | Complete artifact/leaf/proof/claim-state validation        | `AppDashboard.tsx` verify (version/chain/manager/account) + `validateClaimReadiness` + `claim.ts` `verifyClaim` (leaf/proof)                                                               | `claim.test.ts` (6); `claim-validation.test.ts` (8)                                                                                                                                                   | ✅                  | PASS                   |
-| 29  | Oracle heartbeat/staleness/sequencer/grace                 | `oracle-reads.ts` `readFeed`/`readSequencer` + `oracle.ts` `evaluateFeed`                                                                                                                  | `oracle-reads.test.ts` · "a stale updatedAt…", "reads the sequencer as DOWN…", "enforces the sequencer grace period…"                                                                                 | —                   | PASS⁴                  |
-| 30  | `oraclePaused` + multiplier config                         | `oracle-reads.ts` `readFeed.oraclePaused`; `oracle.ts` `config.multiplier`                                                                                                                 | `oracle-reads.test.ts` · "propagates oraclePaused() = true", "carries the per-token multiplier into the priced verdict"                                                                               | —                   | PASS⁴                  |
-| 31  | Event-derived buy/sell/burn/budget metrics                 | `transparency-reads.ts` `aggregate` + `transparency.ts`; `TransparencyPanel` (`tx-sellvol`, `tx-repurchase-burn`, `tx-budget-delivered`)                                                   | `transparency-reads.test.ts` · "decodes OfficialSell…", "decodes BpsRepurchasedAndBurned…", "decodes StockBudgetDelivered…"                                                                           | ✅                  | PASS                   |
-| 32  | Acquisition, 80/20, funding + claim linkage                | `transparency.ts` `buildTransparencyReport` (`splitReconciles`, cycle linkage)                                                                                                             | `transparency.test.ts` · "acquisition row reconciles 80/20 and links to its cycle"; `transparency-reads.test.ts` linkage cases                                                                        | ✅                  | PASS                   |
-| 33  | Log chunking/overlap/dedup/confirmation exclusion          | `reads.ts` `getLogsChunked`/`dedupeLogs`; `mock-rpc.ts` `eth_getLogs` range filter                                                                                                         | `transparency-reads.test.ts` · "dedupes across overlapping ranges", "excludes logs within the confirmation depth end-to-end (fetchTransparency)", "deduplicates identical (block, tx, logIndex) logs" | —                   | PASS                   |
-| 34  | Full deterministic Chromium workflow                       | `e2e/flow.spec.ts`                                                                                                                                                                         | `playwright test` — 1 passed                                                                                                                                                                          | ✅                  | PASS                   |
-| 35  | Live controls disabled without valid production config     | `AppDashboard.tsx` `writesAllowed(demoDeployment)`=false; not-live banner; `live-trade` disabled                                                                                           | `AppDashboard.test.tsx` · "before connect: protocol-not-live, disabled live writes, fixture label"                                                                                                    | ✅                  | PASS                   |
+| #   | Requirement                                                | Implementation (file · symbol)                                                                                                                                                                 | Test (file · exact name)                                                                                                                                                                              | Browser E2E         | Result         |
+| --- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------- |
+| 1   | Provider-derived chain state                               | `mock-eip1193.ts` `request(eth_chainId)`; `AppDashboard.tsx` `useChainId`                                                                                                                      | `mock-eip1193.test.ts` · "chainChanged: …updates the exposed chain id"; `AppDashboard.test.tsx` · "rejected network switch preserves the wrong-chain state"                                           | ✅                  | PASS           |
+| 2   | Provider actually changes to 4663                          | `mock-eip1193.ts` `wallet_switchEthereumChain` mutates `state.chainId` + emits; `AppDashboard.tsx` `switchChain`                                                                               | `AppDashboard.test.tsx` · "full flow: switch → …"                                                                                                                                                     | ✅ "switch to 4663" | PASS           |
+| 3   | accountsChanged handling                                   | `mock-eip1193.ts` `__setAccounts`→`accountsChanged`                                                                                                                                            | `mock-eip1193.test.ts` · "accountsChanged: updates the selected/exposed account"                                                                                                                      | —                   | PASS           |
+| 4   | chainChanged handling                                      | `mock-eip1193.ts` emit `chainChanged`                                                                                                                                                          | `mock-eip1193.test.ts` · "chainChanged: …"                                                                                                                                                            | ✅                  | PASS           |
+| 5   | disconnect + explicit reconnect                            | `mock-eip1193.ts` `__disconnect`, `eth_requestAccounts` restores                                                                                                                               | `mock-eip1193.test.ts` · "disconnect: exposes no accounts", "reconnect does NOT silently re-establish consent"                                                                                        | —                   | PASS           |
+| 6   | Connected-account typed-data signing + recovery            | `AppDashboard.tsx` `signDeclaration` (`useSignTypedData` + `recoverTypedDataAddress`)                                                                                                          | `mock-eip1193.test.ts` · "the same signature IS accepted for the account that actually signed"; `AppDashboard.test.tsx` full flow                                                                     | ✅                  | PASS           |
+| 7   | Signature/account mismatch rejection                       | `eligibility.ts` `verifyDeclaration`→`wrong-signer`; `AppDashboard.tsx` recovered≠address guard                                                                                                | `mock-eip1193.test.ts` · "a signature recovering to a DIFFERENT account…", "after accountsChanged…no longer matches"                                                                                  | —                   | PASS           |
+| 8   | Declaration and eligibility are separate controls          | `eligibility.ts` `deriveEligibilityState`; `app/demo.ts` `demoEligibilityService`                                                                                                              | `eligibility.test.ts` (14); `AppDashboard.test.tsx` full flow (`elig-state`)                                                                                                                          | ✅                  | PASS           |
+| 9   | Exact approval + post-approval reconciliation              | `wallet/tx.ts` `runActionLifecycle` (exact `amount`, `reread-allowance`)                                                                                                                       | `tx.test.ts` · "runs approve -> … with EXACT approval", "skips approval when allowance already sufficient"                                                                                            | ✅                  | PASS           |
+| 10  | Approval rejection + reverted approval                     | `tx.ts` approve `catch`; `await-approval` receipt status                                                                                                                                       | `tx.test.ts` · "surfaces a rejected APPROVAL at the approve step", "fails when the APPROVAL receipt reverts"                                                                                          | —                   | PASS           |
+| 11  | Allowance-reconciliation failure                           | `tx.ts` `reread-allowance` guard                                                                                                                                                               | `tx.test.ts` · "fails at reread-allowance when the approval did not raise the allowance"                                                                                                              | —                   | PASS           |
+| 12  | Simulation failure                                         | `tx.ts` `simulate` `catch`                                                                                                                                                                     | `tx.test.ts` · "fails on a reverting simulation before submitting"                                                                                                                                    | —                   | PASS           |
+| 13  | Stale quote                                                | `trade.ts` `tradeSubmissionGate`→`stale-quote`                                                                                                                                                 | `trade.test.ts` · "submission gate fails closed on each missing condition" (`quoteFresh:false`)                                                                                                       | —                   | PASS¹          |
+| 14  | Expired deadline                                           | `trade.ts` `tradeSubmissionGate`→`deadline-expired`                                                                                                                                            | `trade.test.ts` · same gate test (`deadline:500n`)                                                                                                                                                    | —                   | PASS¹          |
+| 15  | Wallet rejection                                           | `tx.ts` submit `catch`→`user-rejected`                                                                                                                                                         | `tx.test.ts` · "surfaces wallet rejection at submit"                                                                                                                                                  | —                   | PASS           |
+| 16  | Confirmed replacement                                      | `tx.ts` `waitConfirmed` `onReplaced` (repriced→follow receipt)                                                                                                                                 | `tx.test.ts` · "follows a repriced replacement to its confirmed receipt and succeeds"                                                                                                                 | —                   | PASS           |
+| 17  | Cancelled replacement                                      | `tx.ts` `waitConfirmed` cancelled→failure                                                                                                                                                      | `tx.test.ts` · "treats a CANCELLED replacement as a failed action (never success on a hash)"                                                                                                          | —                   | PASS           |
+| 18  | Reverted action receipt                                    | `tx.ts` `await-receipt` status≠success                                                                                                                                                         | `tx.test.ts` · "fails on a reverted receipt"                                                                                                                                                          | —                   | PASS           |
+| 19  | Confirmation-depth waiting + failure                       | `tx.ts` `confirmations`; `waitConfirmed` confirm-error                                                                                                                                         | `tx.test.ts` · "honors a confirmation depth greater than 1 and still reconciles", "fails closed on a confirmation error (e.g. wait timeout)"                                                          | —                   | PASS           |
+| 20  | Final-state reconciliation failure                         | `tx.ts` `reconcile` step                                                                                                                                                                       | `tx.test.ts` · "fails at reconcile when the confirmed state does not match (never success on hash alone)"                                                                                             | —                   | PASS           |
+| 21  | Trades only target BPSTradeRouter                          | `trade.ts` `buildTradePreview` `target=tradeRouter` + `assertOfficialRoute`; `AppDashboard.tsx` uses `preview.target` for simulate+approval                                                    | `trade.test.ts` · "assertOfficialRoute rejects a non-router target (e.g. SwapRouter02)"                                                                                                               | ✅                  | PASS           |
+| 22  | Real connector-driven locking + reconciliation             | `AppDashboard.tsx` `LockPanel.runLock` (`connectorWallet`; reconcile `lockedPrincipal`)                                                                                                        | `AppDashboard.test.tsx` full flow (lock→1500.000 reconciled)                                                                                                                                          | ✅                  | PASS           |
+| 23  | Real connector-driven partial withdrawal + reconciliation  | `AppDashboard.tsx` `runWithdraw` (`withdraw(lockId)`; reconcile)                                                                                                                               | `AppDashboard.test.tsx` full flow (withdraw→500.000; button disabled)                                                                                                                                 | ✅                  | PASS           |
+| 24  | Authoritative cycle + claim-manager reads                  | `reads.ts` `readCycle`/`readAssetFunding`/`readClaimUsed`/`readClaimRemaining`; `claim-validation.ts` `validateClaimReadiness` (wired `AppDashboard.tsx:603`)                                  | `reads.test.ts` (authoritative reads); `claim-validation.test.ts` (8)                                                                                                                                 | ✅                  | PASS           |
+| 25  | `cycleUsed` + `cycleAcquisitionId` reads (where supported) | **Task 9A:** `reads.ts` `readCycleUsed`/`readCycleAcquisitionId`, consumed by `acquisition-reconcile.ts` `reconcileCycleAcquisition` on the `TransparencyPanel` path                           | `reads.test.ts` · "reads authoritative cycleUsed()/cycleAcquisitionId()"; `acquisition-reconcile.test.ts` (10)                                                                                        | ✅ `acq-linkage`    | PASS (Task 9A) |
+| 26  | Acquisition + funding-record reads                         | **Task 9A:** `TransparencyPanel` consumes `readAcquisition` (authoritative WETH/80/20/cycle) + reconciles funding vs events (`funding-record-mismatch` on disagreement); events remain history | `acquisition-reconcile.test.ts` (10); `reads.test.ts` · "reads authoritative acquisition record via acquisitions()"                                                                                   | ✅ `acq-auth-*`     | PASS (Task 9A) |
+| 27  | Current root cannot be overridden by an old event          | `claim-validation.ts` compares artifact root to `readCycle` (current on-chain root)                                                                                                            | `claim-validation.test.ts` · "an OLD event root cannot override a CHANGED current cycle root"                                                                                                         | —                   | PASS           |
+| 28  | Complete artifact/leaf/proof/claim-state validation        | `AppDashboard.tsx` verify (version/chain/manager/account) + `validateClaimReadiness` + `claim.ts` `verifyClaim` (leaf/proof)                                                                   | `claim.test.ts` (6); `claim-validation.test.ts` (8)                                                                                                                                                   | ✅                  | PASS           |
+| 29  | Oracle heartbeat/staleness/sequencer/grace                 | `oracle-reads.ts` `readFeed`/`readSequencer` + `oracle.ts` `evaluateFeed`                                                                                                                      | `oracle-reads.test.ts` · "a stale updatedAt…", "reads the sequencer as DOWN…", "enforces the sequencer grace period…"                                                                                 | —                   | PASS⁴          |
+| 30  | `oraclePaused` + multiplier config                         | `oracle-reads.ts` `readFeed.oraclePaused`; `oracle.ts` `config.multiplier`                                                                                                                     | `oracle-reads.test.ts` · "propagates oraclePaused() = true", "carries the per-token multiplier into the priced verdict"                                                                               | —                   | PASS⁴          |
+| 31  | Event-derived buy/sell/burn/budget metrics                 | `transparency-reads.ts` `aggregate` + `transparency.ts`; `TransparencyPanel` (`tx-sellvol`, `tx-repurchase-burn`, `tx-budget-delivered`)                                                       | `transparency-reads.test.ts` · "decodes OfficialSell…", "decodes BpsRepurchasedAndBurned…", "decodes StockBudgetDelivered…"                                                                           | ✅                  | PASS           |
+| 32  | Acquisition, 80/20, funding + claim linkage                | `transparency.ts` `buildTransparencyReport` (`splitReconciles`, cycle linkage)                                                                                                                 | `transparency.test.ts` · "acquisition row reconciles 80/20 and links to its cycle"; `transparency-reads.test.ts` linkage cases                                                                        | ✅                  | PASS           |
+| 33  | Log chunking/overlap/dedup/confirmation exclusion          | `reads.ts` `getLogsChunked`/`dedupeLogs`; `mock-rpc.ts` `eth_getLogs` range filter                                                                                                             | `transparency-reads.test.ts` · "dedupes across overlapping ranges", "excludes logs within the confirmation depth end-to-end (fetchTransparency)", "deduplicates identical (block, tx, logIndex) logs" | —                   | PASS           |
+| 34  | Full deterministic Chromium workflow                       | `e2e/flow.spec.ts`                                                                                                                                                                             | `playwright test` — 1 passed                                                                                                                                                                          | ✅                  | PASS           |
+| 35  | Live controls disabled without valid production config     | `AppDashboard.tsx` `writesAllowed(demoDeployment)`=false; not-live banner; `live-trade` disabled                                                                                               | `AppDashboard.test.tsx` · "before connect: protocol-not-live, disabled live writes, fixture label"                                                                                                    | ✅                  | PASS           |
 
-**Ledger result: 33 full PASS; item 26 PASS with note; item 25 recorded as a frozen-interface note.** No FAIL.
+**Ledger result (after Task 9A): 35 / 35 PASS.** No FAIL. (Original Task 9 ledger: 33 full PASS, item 26 PASS
+with note, item 25 a frozen-interface note — items 25/26 were closed to full PASS in Task 9A; see §21.6.)
 
 ¹ Items 13/14 are enforced by the app-core `tradeSubmissionGate` and its test. In the current build the live
 submission path that consumes the gate is disabled (`writesAllowed`=false); the demo trade button exercises
 the lifecycle against the mock. Correct and fail-closed, but the gate is not on an active live path yet.
-² Item 25: `cycleUsed`/`cycleAcquisitionId` are present in the ABI and answered by the deterministic mock,
-but there is **no `readCycleUsed`/`readCycleAcquisitionId` service and no component consumer**. Acceptance
-says "where supported"; this is not a defect but is not a PASS-with-app-path. Recorded as finding L-2.
-³ Item 26: the application surfaces acquisition/funding/claim linkage via **decoded events** (app-wired in
-`TransparencyPanel`). The authoritative coordinator getter `readAcquisition` is implemented and unit-tested
-but not consumed by a component. See finding L-2.
+² Item 25 (Task 9A): now consumed on the real app path — see §21.3/§21.6.
+³ Item 26 (Task 9A): now consumes `readAcquisition` authoritatively — see §21.3/§21.6.
 ⁴ Items 29/30: the oracle layer is a **read/operator-policy boundary** (service + pure model with tests). By
 design it is not consumed by a browser write path — acquisitions/`minStockOut` are an operator/server-side
 concern — so it is PASS at the service+model level, not wired to a live in-browser action.
@@ -392,21 +400,21 @@ and sends use the connector; no protected Rialto endpoint was called; no live RP
 **Low**
 
 - **L-1 — App defaults to the local mock wallet config; demo bundle includes `lib/testing/*` + the throwaway
-  key.** Evidence: `app/providers.tsx` → `app/wagmi-local.ts` (`createLocalWagmiConfig(makeDemoState())`);
-  `bps-task8b-local-test-wallet` and `createMockEip1193Provider` present in `apps/web/.next/static`. Impact:
-  no real-injected-wallet production path is wired yet; the demonstration bundle ships the mock provider and a
-  public label-derived, asset-less key. **Blocks restricted deployment?** Not the current labeled demo, but it
-  **is** a required entry condition before any real-wallet canary. Recommended action: before canary, wire a
-  production wagmi config that uses the user's injected wallet and a production manifest, and exclude
-  `apps/web/lib/testing/*` from the production build; verify the built bundle contains no mock provider/key.
+  key. — RESOLVED in Task 9A (see §21).** Original evidence: `app/providers.tsx` → `app/wagmi-local.ts`
+  (`createLocalWagmiConfig(makeDemoState())`); `bps-task8b-local-test-wallet` and `createMockEip1193Provider`
+  present in `apps/web/.next/static`. **Remediation:** the app now defaults to `app/wagmi-production.ts` (real
+  `injected()` connector, no mock fallback → fail closed); the deterministic mock wiring is compiled in ONLY
+  for the isolated E2E build via the `bps-wagmi-active` build-time alias (`next.config.mjs`, `BPS_E2E=1`); the
+  production-needed demo constants were relocated to the key-free `lib/demo-fixture.ts`. Post-remediation the
+  default production build's `.next/static` scan is **0** for every testing/key marker (§21). No longer a
+  gate item.
 
-- **L-2 — Authoritative coordinator getters not surfaced/consumed.** `cycleUsed`/`cycleAcquisitionId` exist in
-  `abis.ts` and are answered by the mock but have no read-service wrapper or component consumer; `readAcquisition`
-  is implemented + unit-tested but not consumed by a component (the app uses event-derived acquisition data).
-  Impact: acceptance items 25/26 rely on the event path for the UI while the authoritative getters are
-  available but idle. **Blocks restricted deployment?** No. Recommended action: either wire the authoritative
-  getters into the transparency/claim views for defense-in-depth, or record explicitly that acquisition
-  transparency is intentionally event-derived.
+- **L-2 — Authoritative coordinator getters not surfaced/consumed. — RESOLVED in Task 9A (see §21).**
+  `cycleUsed`/`cycleAcquisitionId` now have read-service wrappers (`readCycleUsed`/`readCycleAcquisitionId`),
+  and `reconcileCycleAcquisition` consumes `cycleUsed()` + `cycleAcquisitionId()` + `readAcquisition()` on the
+  real `TransparencyPanel` path to reconcile acquisition↔cycle linkage against events, marking the
+  transparency result INVALID on any mismatch or read failure. Ledger items 25/26 are now full PASS (§21). No
+  longer a gate item.
 
 **Informational**
 
@@ -557,3 +565,151 @@ represented as, an independent third-party smart-contract security audit, a form
 legal / jurisdiction / eligibility review. A PASS (or PASS WITH EXTERNAL BLOCKERS) here does **not** authorize
 Task 10, deployment, pool creation, liquidity provision, public launch, or the separate launchpad project.
 Those remain gated on the external inputs in §14 and explicit founder authorization.
+
+---
+
+## 21. Task 9A remediation (2026-07-23) — internal blockers closed
+
+Task 9A closed the three internal (code / build-boundary) blockers the Task 9 report identified, reran the
+full release gate, and updated this report. Baseline: `master`, HEAD `46c7877` (this report), parent
+`8c97add`, clean tree. Constraints honored: no live wallet/signature/tx, no deploy/broadcast, no production
+RPC write, no protected Rialto request, `RIALTO_API_KEY` never read; no frozen Solidity/interface/contract
+test, no `packages/shared/src`, no Task 7 file, no dependency/lockfile, and no economics change (all
+re-verified — §21.5). All Task 9A changes are under `apps/web/` plus this report.
+
+### 21.1 Original findings addressed
+
+1. The production browser bundle included `lib/testing/*` and the deterministic mock-provider key (was L-1).
+2. `cycleUsed` / `cycleAcquisitionId` were supported by the frozen interface + mock but not consumed by a
+   production service/component path (was L-2, part).
+3. `readAcquisition` was tested but not consumed by the authoritative application path (was L-2, part).
+
+### 21.2 §A — production browser-bundle isolation (finding 1)
+
+- The app now defaults to `app/wagmi-production.ts` — a wagmi config built from the real `injected()`
+  connector with an `http` production RPC transport, `multiInjectedProviderDiscovery: true`, and **no** mock
+  provider. `injectedWalletAvailable()` reports availability with **no mock fallback**, so a missing wallet
+  fails closed. `app/providers.tsx` imports the active config through the build-time specifier
+  `bps-wagmi-active`, which resolves to `app/wagmi-active.ts` (production) by default and is aliased to
+  `app/wagmi-active.e2e.ts` (the deterministic mock wiring) **only** in the isolated E2E build
+  (`next.config.mjs`, gated by `BPS_E2E=1`). `app/wagmi-local.ts` was deleted.
+- The production-needed demo constants + demo account address were relocated to the **key-free**
+  `lib/demo-fixture.ts` (imports nothing from `lib/testing/*`; hardcodes the public
+  `DEMO_ACCOUNT_ADDRESS = 0xD9d99859BB8C504daf3A3235a5C73DE4047a0f8B`, asserted equal to the test-only
+  `localTestAccount.address`). `app/demo.ts` and `app/AppDashboard.tsx` now import from `lib/demo-fixture.ts`
+  instead of `lib/testing/*`. `lib/testing/local-env.ts` re-exports those constants for tests.
+- Component tests inject the deterministic mock config through the same explicit `config` prop as before; the
+  Chromium E2E runs against the isolated `BPS_E2E=1` build (deterministic mock wiring compiled in) and was
+  **not** weakened — it additionally now asserts the authoritative acquisition linkage (§21.3).
+
+**Production client dependency evidence.** `git grep` over `app/` + non-testing `lib/` (excluding tests)
+finds **no** import of `lib/testing`, `local-account`, `localTestAccount`, `createDemoWalletClient`,
+`createMockEip1193Provider`, `createLocalWagmiConfig`, or `privateKeyToAccount`. A source-guard test
+(`lib/production-isolation.test.ts`) enforces this over the production module graph
+(`page → providers → wagmi-active → wagmi-production`, plus `demo.ts` / `AppDashboard.tsx` / `demo-fixture.ts`)
+and asserts `DEMO_ACCOUNT_ADDRESS === localTestAccount.address`.
+
+**Final production browser-bundle scan** (default `npm run build`, no `BPS_E2E`; `apps/web/.next/static`):
+
+| Marker                                                                 | Files |
+| ---------------------------------------------------------------------- | ----: |
+| `bps-task8b-local-test-wallet` (key label)                             | **0** |
+| `createMockEip1193Provider` / `mockEip1193`                            | **0** |
+| `createLocalWagmiConfig` / `makeDemoState` / `installDemoTransparency` | **0** |
+| `LOCAL_TEST_PRIVATE_KEY` / `local-account`                             | **0** |
+| `lib/testing` (any)                                                    | **0** |
+| `multiInjectedProviderDiscovery` (production injected config present)  |     1 |
+
+The deterministic key/provider remain only in the isolated test/E2E build and in `lib/testing/*` (test-only).
+
+### 21.3 §B — authoritative coordinator & acquisition reads (findings 2 & 3)
+
+- New read services: `readCycleUsed()` and `readCycleAcquisitionId()` (`lib/services/reads.ts`), joining the
+  existing `readAcquisition()` — all manifest/chain-bound and fail-closed (`ReadFailedError`).
+- New service `lib/services/acquisition-reconcile.ts` (`reconcileCycleAcquisition`) reads
+  `cycleUsed(cycleId)` → `cycleAcquisitionId(cycleId)` → `acquisitions(id)` and reconciles them against the
+  event-derived expectation, returning one of: `authoritative-confirmed`, `cycle-unused`,
+  `cycle-acquisition-mismatch`, `acquisition-missing`, `acquisition-cycle-mismatch`,
+  `funding-record-mismatch`, `read-failed`. Current authoritative state comes from contract reads; events
+  supply only the expectation/history.
+- The `TransparencyPanel` (`app/AppDashboard.tsx`) now consumes this: it renders the authoritative acquisition
+  id, WETH spent, 80% distribution, 20% reserve and cycle from `readAcquisition()` (not events), shows the
+  linkage status (`data-testid="acq-linkage"`), and on any inconsistency or read failure marks the
+  acquisition transparency **INVALID** (`data-testid="acq-linkage-invalid"`) and flags each row
+  `data-authoritative="invalid"`. Event provenance (tx hashes, block numbers, emitting addresses, provenance
+  labels) is preserved in the event-derived report. No unsupported fields were invented.
+
+### 21.4 New tests (positive + negative)
+
+- `lib/services/acquisition-reconcile.test.ts` (**10**): successful authoritative reconciliation; unused
+  cycle (clean); unused-but-events-reference-one; used cycle with correct id; cycle/acquisition id mismatch;
+  missing acquisition; acquisition/event cycle mismatch; funding-record mismatch; malformed read; RPC failure
+  at each read step.
+- `lib/services/reads.test.ts` (**+2**): authoritative `cycleUsed()`/`cycleAcquisitionId()`; false/zero for a
+  cycle with no acquisition.
+- `app/production-config.test.tsx` (**4**): the app does not silently default to the mock (active config ===
+  production config, no `mockEip1193` connector); fails closed with no injected wallet (`injectedWalletAvailable`
+  false); reports available only with a real provider; test-provider injection only via the explicit `config`
+  prop boundary.
+- `lib/production-isolation.test.ts` (**3**): production-graph modules import no `lib/testing`/key material;
+  the key-free fixture imports no testing/key module; `DEMO_ACCOUNT_ADDRESS === localTestAccount.address`.
+
+### 21.5 Full validation after Task 9A
+
+| Check                                                                                                          | Result                                                   |
+| -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `forge fmt --check` / `forge build` / `forge test`                                                             | PASS / PASS / **398 passed, 0 failed, 0 skipped**        |
+| `@bps/web` Vitest                                                                                              | **148 passed** (20 files, 0 skipped) — was 129 (+19)     |
+| `@bps/shared` / `@bps/pilot` / `@bps/rialto` / indexer / worker / db                                           | 52 / 12 / 30 / 1 / 1 / 1 (unchanged)                     |
+| **TypeScript total**                                                                                           | **245 passed, 0 skipped** — was 226 (+19)                |
+| Playwright Chromium E2E (isolated `BPS_E2E=1` build)                                                           | **1 passed** (now asserts authoritative linkage)         |
+| `npm run check` (format + lint + typecheck + all-workspace tests + production `next build` + 3 Foundry stages) | **exit 0** (ran twice)                                   |
+| Default production `next build` + `.next/static` scan                                                          | clean (§21.2)                                            |
+| `npm ls`                                                                                                       | healthy (only cross-platform OPTIONAL native deps unmet) |
+| `git diff --check`                                                                                             | clean                                                    |
+
+**No test was deleted, skipped, or weakened** (all deltas are additive; the E2E gained assertions). Foundry
+≥ 398 and TypeScript ≥ 226 both hold.
+
+**Frozen boundaries re-verified (all EMPTY):** `git diff 90e338a..HEAD -- packages/contracts/src/**/*.sol`;
+`git diff cd98df3..HEAD -- packages/contracts`; `git diff 90e338a..HEAD -- packages/shared/src`;
+`git diff cd98df3..HEAD -- packages/contracts/script packages/contracts/deploy`. No `package.json`/lockfile
+change. Economics unchanged (contracts byte-identical).
+
+### 21.6 Corrected acceptance-ledger results
+
+- **Item 25 (`cycleUsed`/`cycleAcquisitionId` reads):** now **PASS** — `readCycleUsed`/`readCycleAcquisitionId`
+  services (`reads.ts`), consumed by `reconcileCycleAcquisition` on the `TransparencyPanel` path; tests in
+  `reads.test.ts` + `acquisition-reconcile.test.ts`; E2E asserts `acq-linkage = authoritative-confirmed`.
+- **Item 26 (acquisition + funding-record reads):** now **PASS (authoritative)** — the app consumes
+  `readAcquisition()` for the authoritative WETH/80/20/cycle and reconciles funding amounts against events
+  (`funding-record-mismatch` on disagreement), no longer relying exclusively on event-derived data.
+- **Item 35 (live controls disabled without valid production config):** reaffirmed and strengthened — the
+  production path uses the injected connector with no mock fallback and fails closed when no wallet is present
+  (`production-config.test.tsx`); live writes remain manifest-gated.
+
+Ledger result after Task 9A: **35 / 35 PASS.**
+
+### 21.7 Updated readiness decision
+
+- **Frozen protocol code:** READY (code) — unchanged; external audit still required.
+- **Task 7 deployment system:** READY (code), BLOCKED (external).
+- **Task 8 application:** READY (code) — all 35 ledger items PASS; production bundle isolated; authoritative
+  reconciliation consumed.
+- **Deterministic deployment-rehearsal:** READY to run (opt-in; needs read-only `ROBINHOOD_FORK_RPC`).
+- **Restricted canary:** BLOCKED only by the external inputs (§14, as amended below) — the previously-blocking
+  in-repo wallet-isolation item is now closed.
+- **Public / unrestricted launch:** BLOCKED (audit, legal, liquidity/valuation/float, authorization).
+
+**External blockers (amended):** independent contract audit; legal/jurisdiction/eligibility approval;
+production declaration/eligibility/proof-artifact configuration (still fail-closed scaffolds); finalized
+role/deployer addresses + wallet-control model; source-backed Stock-Token + oracle/sequencer configuration;
+liquidity/valuation/public-float decision (the $1M FDV / 1.25% float proposal is **not** accepted);
+restricted participant list; production RPC + monitoring; explicit founder authorization. **Rialto:** partner
+status ACTIVE, integrator id 124, server credential `bps` exists (not accessed/disclosed) — onboarding and
+credential creation are **not** blockers; remaining Rialto conditions are terms approval, secure server-only
+configuration, a production route/allowance/quote-validation rehearsal, and founder authorization.
+
+**Task 9A verdict:** **PASS WITH EXTERNAL BLOCKERS** — all three internal code/build-boundary findings are
+closed and evidence-backed; production remains gated solely on the external inputs above. This remains an
+internal review, not an independent external audit (§20).

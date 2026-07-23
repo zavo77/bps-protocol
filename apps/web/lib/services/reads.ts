@@ -257,6 +257,42 @@ export async function readAcquisition(
   }
 }
 
+/** Authoritative "has this cycle already consumed an acquisition?" flag (coordinator.cycleUsed()). */
+export async function readCycleUsed(
+  client: PublicClient,
+  coordinator: Address,
+  cycleId: bigint,
+): Promise<boolean> {
+  try {
+    return await client.readContract({
+      address: coordinator,
+      abi: distributionFundingCoordinatorAbi,
+      functionName: "cycleUsed",
+      args: [cycleId],
+    });
+  } catch (e) {
+    throw new ReadFailedError("coordinator.cycleUsed", e);
+  }
+}
+
+/** Authoritative acquisition id bound to a cycle (coordinator.cycleAcquisitionId()); 0 if unbound. */
+export async function readCycleAcquisitionId(
+  client: PublicClient,
+  coordinator: Address,
+  cycleId: bigint,
+): Promise<bigint> {
+  try {
+    return await client.readContract({
+      address: coordinator,
+      abi: distributionFundingCoordinatorAbi,
+      functionName: "cycleAcquisitionId",
+      args: [cycleId],
+    });
+  } catch (e) {
+    throw new ReadFailedError("coordinator.cycleAcquisitionId", e);
+  }
+}
+
 export async function readLeaf(
   client: PublicClient,
   manager: Address,
