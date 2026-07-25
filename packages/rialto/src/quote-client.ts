@@ -160,6 +160,9 @@ export async function fetchRialtoAllowanceQuote(
       headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
       signal: AbortSignal.timeout(timeoutMs),
       cache: "no-store",
+      // TASK 10H-1 hardening: never follow a redirect — a quote endpoint that redirects is treated
+      // as a hard failure (prevents silent hand-off to an unapproved host).
+      redirect: "error",
     });
   } catch (err) {
     // Never surface the error body/headers (may echo the request). Timeout vs other = sanitized code.

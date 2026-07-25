@@ -1,30 +1,34 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-25T13:45:00Z",
+  "updatedUtc": "2026-07-25T15:05:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "d699f7aea2d8ec7ebf47de8a9d2789791b8da92f",
+  "head": "9043476509a9c7f662c5cf580f50e5ae1e0a382d",
   "workingTree": {
     "dirty": true,
-    "note": "10F-1 checkpoint d699f7ae baseline + post-checkpoint continuity metadata + uncommitted TASK 10G-1 changes awaiting review.",
+    "note": "10G-2 checkpoint 9043476 baseline + post-checkpoint continuity metadata + uncommitted TASK 10H-1 changes awaiting review.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
       "docs/continuity/CHANGELOG.md",
-      ".prettierignore"
+      "packages/rialto/src/quote-client.ts",
+      "packages/rialto/src/server.ts"
     ],
     "untracked": [
-      "apps/indexer/src/lock-snapshot/",
-      "apps/indexer/src/snapshot-cli.ts",
-      "docs/audit/snapshots/",
-      "docs/audit/BPS_PRODUCTION_SNAPSHOT_PIPELINE_2026-07-25.md",
-      "docs/audit/BPS_PRODUCTION_SNAPSHOT_PIPELINE_2026-07-25.evidence.json"
+      "packages/rialto/src/quote-structural.ts",
+      "packages/rialto/src/price-guard.ts",
+      "packages/rialto/src/boundary-status.ts",
+      "packages/rialto/src/quote-structural.test.ts",
+      "packages/rialto/src/price-guard.test.ts",
+      "packages/rialto/src/boundary-status.test.ts",
+      "docs/audit/BPS_RIALTO_PRODUCTION_BOUNDARY_2026-07-25.md",
+      "docs/audit/BPS_RIALTO_PRODUCTION_BOUNDARY_2026-07-25.evidence.json"
     ]
   },
   "phase": "post-canary",
-  "latestCompletedMilestone": "TASK 10G-1 — production snapshot enumeration + chain-bound PoD artifacts: SNAPSHOT PIPELINE PASS (2026-07-25; pinned block 18791290; on-chain leaf parity 1/1; two-run byte-identical artifacts)",
-  "currentTask": "none — TASK 10G-1 complete, awaiting review (changes uncommitted)",
-  "nextTask": "Production Rialto venue integration and settlement hardening (B-3): quote capture, settlement-selector pinning, venue eligibility; independent audit (B-1) in parallel",
+  "latestCompletedMilestone": "TASK 10H-1 — Rialto production boundary hardening: PARTIAL — RIALTO QUOTE ACCESS REQUIRED (2026-07-25; enforcement machinery fail-closed on quote access, selector pinning, and price/risk policy)",
+  "currentTask": "none — TASK 10H-1 complete (PARTIAL), awaiting review (changes uncommitted)",
+  "nextTask": "Authorized Rialto API access + real read-only quote rerun (selector pinning, sanitized evidence); independent audit (B-1) in parallel",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,
@@ -133,7 +137,9 @@
       "passed": 30
     },
     "rialtoVitest": {
-      "passed": 30
+      "passed": 69,
+      "files": 5,
+      "note": "39 boundary-hardening tests added in 10H-1"
     },
     "canaryVerifyAll": "PASS (9 suites)",
     "playwrightE2E": "PASS (historical ~2026-07-24; single smoke flow; rerun before relying)",
@@ -160,7 +166,7 @@
     {
       "id": "B-3",
       "severity": "high",
-      "summary": "Rialto production terms + Stock-Token KYC/allowlist path unproven",
+      "summary": "Rialto boundary PARTIAL: fail-closed machinery shipped (10H-1); remaining: authorized API access, selector pinning, approved price/risk policies, venue replay semantics",
       "owner": "founder+Rialto/issuer"
     },
     {
@@ -236,6 +242,15 @@
       "checkpointCommit": "d699f7aea2d8ec7ebf47de8a9d2789791b8da92f",
       "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25",
       "note": "User-verified confirmation of the off-device copy; not independently inspected by Claude."
+    },
+    "snapshotPipelineArchive": {
+      "file": "bps-experiment-snapshot-pipeline-2026-07-25-9043476.tar.gz",
+      "path": "C:Projects\bps-backups\bps-experiment-snapshot-pipeline-2026-07-25-9043476.tar.gz",
+      "sizeBytes": 149996786,
+      "sha256": "5b45c966d83029ddcfcc44e949dc77ba14575c9e4d5ed92c81b448b894d6e6d0",
+      "checkpointCommit": "9043476509a9c7f662c5cf580f50e5ae1e0a382d",
+      "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25",
+      "note": "User-verified destination-side evidence; not independently inspected by Claude."
     }
   },
   "snapshotPipeline": {
@@ -252,6 +267,30 @@
     "legalEligibility": "UNRESOLVED — artifacts labeled TECHNICAL CANDIDATE / NOT AUTHORIZED FOR PUBLICATION",
     "rialtoB3": "UNADDRESSED",
     "auditB1": "NOT BEGUN",
-    "publication": "NO root published; unsigned payload UNSIGNED_DO_NOT_BROADCAST"
+    "publication": "NO root published; unsigned payload UNSIGNED_DO_NOT_BROADCAST",
+    "checkpointCommit": "9043476509a9c7f662c5cf580f50e5ae1e0a382d",
+    "finalEvidenceSha256": "aa7aa1f709bc323eaeecf73849bbf53f6df6b3ffcddcbf0c2ea83f71623a98f8",
+    "finalReportSha256": "4b6089c653c0622db979cd328a721926ae3b07817f81a6e90f19db9c9265ba07",
+    "supersededEvidenceSha256": "3935c05a96ffaa46f887699b518a6def3255761a795db9db7123a16164829e22",
+    "supersededReportSha256": "81569855a45e82f3c3e25b387fbc73412897473ba8d5be1e410536a250bb3ef1"
+  },
+  "rialtoBoundary": {
+    "classification": "PARTIAL — RIALTO QUOTE ACCESS REQUIRED",
+    "date": "2026-07-25",
+    "registry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+    "resolvedFeature2Router": "0xc94135b63772b91d79d0a2daab2a8801f32359bd",
+    "routerCodeHash": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611",
+    "technicalValidationAsset": "NVDA 0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC — TECHNICAL VENUE VALIDATION ASSET — LEGAL ELIGIBILITY UNVERIFIED — NOT AN APPROVED PRODUCTION BASKET",
+    "quoteAccess": "ABSENT (RIALTO_API_URL/RIALTO_API_KEY unconfigured; presence checked as booleans only)",
+    "selectorValidation": "machinery shipped; approved-selector list EMPTY by default (SELECTOR_POLICY_MISSING fail-closed); selector unpinned pending a real quote",
+    "priceRiskPolicy": "machinery shipped; NO approved feed/staleness/deviation/cap policy exists (decision pack #10/#12) — fails closed",
+    "settlementHardening": "frozen contracts already enforce all section-9 requirements (mapped to named Foundry tests); no contract change made",
+    "mainnetNonMutation": "IDENTICAL before/after; zero acquisitions; nonces 16/16 + 8/8",
+    "remainingB3Blockers": [
+      "authorized Rialto API access",
+      "venue selector pinning from a real quote",
+      "approved price/staleness/deviation/cap policies",
+      "venue replay/nonce semantics"
+    ]
   }
 }

@@ -7,6 +7,75 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-25 — TASK 10H-1: Rialto production boundary (B-3) — `PARTIAL — RIALTO QUOTE ACCESS REQUIRED`
+
+- **Type:** production-boundary hardening. NO wallet, secret, signature, broadcast, trade, allowance
+  change, deployment, mainnet mutation, root publication, nonce-8 use, dependency change, commit,
+  push, or PR. Continuity gate followed (exact state match; cycle-1 verified UNPUBLISHED on-chain).
+- **Backup:** snapshot-pipeline archive recorded **COMPLETE — USER VERIFIED 2026-07-25**
+  (`bps-experiment-snapshot-pipeline-2026-07-25-9043476.tar.gz`, 149,996,786 B, SHA-256
+  `5b45c966…e6d0`; user-verified destination-side evidence, not independently inspected).
+- **External truth (read-only, block 19062620):** registry `0x71a120Cb…687E` live (hash matches);
+  **feature 2 → router `0xc94135b63772b91d79d0a2daab2a8801f32359bd`** (24,232 B, hash
+  `0xa7041268…7611`, initialized + not paused); WETH hash matches; NVDA identity verified by
+  address + code hash vs the official-registry record (uiMultiplier 1e18, not halted) — labeled
+  TECHNICAL VENUE VALIDATION ASSET, not a production basket.
+- **Quote access:** RIALTO_API_URL/RIALTO_API_KEY unconfigured (booleans only) → no real quote, none
+  fabricated → classification per instruction. **Hardening shipped (fail-closed, policy-neutral):**
+  `quote-structural.ts` (live-router equality, EMPTY-default approved-selector schemas, forbidden
+  multicalls, decode + canonical re-encode round-trip, role binding, expiry), `price-guard.ts`
+  (integer-only independent price guard w/ uiMultiplier handling; missing policy/feed fails closed),
+  `boundary-status.ts` (never-overstating consumer states; MAINNET_SETTLEMENT_CONFIRMED unproducible
+  here), quote-client `redirect:"error"`. Settlement review: frozen contracts already satisfy every
+  section-9 requirement — mapped to named Foundry tests; **no contract change**.
+- **Suites:** rialto vitest **69/69** (39 new); web boundary 2/2; adapter/vault/coordinator Foundry
+  126/126; full forge (fork env) 418/418; `npm run check` PASS; prettier/git-diff/JSON/secret scans
+  clean; prior artifacts byte-identical. Mainnet before/after IDENTICAL (zero acquisitions).
+- **Remaining B-3:** authorized API access; selector pinning from a real quote; approved
+  price/staleness/deviation/cap policies; venue replay/nonce semantics. Legal eligibility (B-2)
+  unresolved; audit (B-1) not begun; BPSC remains a canary. Changes left **uncommitted for review**.
+- **Evidence:** `docs/audit/BPS_RIALTO_PRODUCTION_BOUNDARY_2026-07-25.{md,evidence.json}`.
+- **Next:** authorized Rialto API access + real read-only quote rerun; audit (B-1) in parallel.
+
+## 2026-07-25 — TASK 10G-2: review + checkpoint of the snapshot pipeline (commit `9043476`)
+
+- **Type:** review, reproducibility hardening, preservation. NO wallet, secret, signature, broadcast,
+  deployment, mainnet mutation, root publication, nonce-8 use, dependency VERSION change, push, or PR.
+  Continuity gate followed (exact state match; tester nonce live 8/8; all artifact hashes exact;
+  correct repository confirmed as `C:\Projects\bps-experiment` — the `bps-protocol` path was an error).
+- **Review corrections:** (1) **dual-endpoint pinned-hash guard** (`LOGS_ENDPOINT_HASH_MISMATCH`) — a
+  separate logs endpoint must agree on the pinned block hash, not only the chain id, before scan
+  results are combined; exercised live in the reproduction runs. (2) **Dependency-metadata hardening**
+  (not an upgrade): `@bps/indexer` explicitly declares `@bps/shared 0.0.0`,
+  `@openzeppelin/merkle-tree 1.0.8`, `viem 2.55.8`; lockfile updated offline (`--package-lock-only
+--offline`) — diff is exactly the apps/indexer dependency edge, ZERO external
+  version/resolved/integrity changes.
+- **Reproduction:** two fresh CLI runs byte-identical to each other AND the committed artifacts.
+  Values reproduced exactly: candidates 1, included 1, total weight `523101036779224972875501`,
+  distribution `230074787421624000`, entitlement total `230074787421624000`, dust 0. Root
+  `0xbf4a88b5ca7b12117c8fb9df350017c6c42ba27dc16d0dfad1499536a529aebb`; canonical digest
+  `0x893042b8b6c7ed1466958ce7f38964ffb6826597607431229183dd3ffef4c0c0`; proof-bundle digest
+  `0xbd8a1a7184b2c519341781fecaae8abd8176df7639decf347aab3d69081d7fa3`.
+- **Coverage validated:** all 31 map entries point to named tests/guards or justified INAPPLICABLE;
+  `LockingVaultWeight.testWeightBoundariesUnwithdrawn` inspected — asserts bonus at unlockTime−1,
+  base 1.00x at exactly unlockTime (exact expiry boundary genuinely exercised). Classification
+  **`SNAPSHOT PIPELINE PASS` upheld**. Scope: INF-3 closed for deterministic block-pinned snapshot
+  enumeration ONLY; persistent DB indexing = INF-1; provider (archival + wide-logs) config remains an
+  operational prerequisite; NOT a continuous production indexer.
+- **Evidence hashes:** superseded (pre-review) `3935c05a…9e22` / `81569855…3ef1`; **final**
+  evidence `aa7aa1f709bc323eaeecf73849bbf53f6df6b3ffcddcbf0c2ea83f71623a98f8`, report
+  `4b6089c653c0622db979cd328a721926ae3b07817f81a6e90f19db9c9265ba07`.
+- **Checkpoint commit:** `9043476509a9c7f662c5cf580f50e5ae1e0a382d` —
+  `feat(indexer): checkpoint production snapshot pipeline` (25 reviewed paths; staged list verified
+  free of secrets/deps/caches/canary/production changes).
+- **Suites at checkpoint:** indexer vitest 37/37; `npm run check` PASS; forge (fork env) 418/418;
+  prettier clean; `git diff --check` clean; all JSON parses; secret scan clean; mainnet before/after
+  IDENTICAL (16/16, 8/8, no nonce-8 tx).
+- **Backup:** new archive `bps-experiment-snapshot-pipeline-2026-07-25-9043476.tar.gz` outside the
+  repo (size/SHA in the task report; extraction-verified). **Off-device: PENDING.** All earlier
+  archive statuses preserved unchanged.
+- **Next:** production Rialto venue integration and settlement hardening (B-3) — not begun.
+
 ## 2026-07-25 — TASK 10G-1: production snapshot pipeline — `SNAPSHOT PIPELINE PASS`
 
 - **Type:** production-hardening implementation (indexer + artifacts). NO wallet, key, signer,

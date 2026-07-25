@@ -1,0 +1,295 @@
+{
+  "schemaVersion": "bps.evidence.rialto-boundary/1",
+  "generatedUtc": "2026-07-25T14:55:00Z",
+  "task": "TASK 10H-1 — production Rialto venue boundary and settlement hardening (B-3)",
+  "classification": "PARTIAL — RIALTO QUOTE ACCESS REQUIRED",
+  "prominentStatements": [
+    "No Rialto quote was executed.",
+    "No Stock Token was purchased or sold.",
+    "No mainnet allowance was changed.",
+    "No mainnet settlement occurred.",
+    "No wallet, signature or broadcast capability was used.",
+    "Technical Stock Token identity does not establish legal eligibility.",
+    "BPSC remains a canary and is not canonical BPS.",
+    "This task does not authorize deployment, root publication or public launch."
+  ],
+  "repository": {
+    "path": "C:\\Projects\\bps-experiment",
+    "branch": "master",
+    "startingHead": "9043476509a9c7f662c5cf580f50e5ae1e0a382d",
+    "dirtyTreeExplanation": "Only the post-checkpoint continuity metadata from 10G-2, preserved; plus the 10H-1 files below (uncommitted for review)."
+  },
+  "baselines": {
+    "rialtoVitest": "30/30",
+    "adapterVaultCoordinatorForge": "126/126 (13 suites)",
+    "note": "no pre-existing failures"
+  },
+  "externalTruth": {
+    "observedUtc": "2026-07-25T13:56:50.405Z",
+    "observedBlock": "19062620",
+    "chainId": 4663,
+    "registry": {
+      "address": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+      "codeSize": 4968,
+      "codeHash": "0xf8b9b92ca74f49f59f66ece51adb02dbefe254dcf967db586c4dda798268a01e"
+    },
+    "registryHashMatchesDeployRegistry": true,
+    "feature2": {
+      "featureId": 2,
+      "resolvedRouter": "0xc94135b63772b91d79d0a2daab2a8801f32359bd",
+      "routerNonzero": true,
+      "routerCodeSize": 24232,
+      "routerCodeHash": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611"
+    },
+    "feature2ActiveNote": "ownerOf(2) resolution SUCCEEDED — the feature is initialized and not paused (ownerOf reverts otherwise; semantics verified in Foundry MockRialtoRouterRegistry against real behavior).",
+    "weth": {
+      "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "codeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353"
+    },
+    "wethAgreement": "On-chain code hash equals the authoritative BPS_LAUNCH_DECISIONS.md / deploy-registry recorded value (0x5706be52…5353).",
+    "technicalValidationAsset": {
+      "label": "TECHNICAL VENUE VALIDATION ASSET — LEGAL ELIGIBILITY UNVERIFIED — NOT AN APPROVED PRODUCTION BASKET",
+      "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "codeSize": 283,
+      "codeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630",
+      "symbol": "NVDA",
+      "name": "NVIDIA • Robinhood Token",
+      "decimals": 18,
+      "uiMultiplier": "1000000000000000000",
+      "oraclePaused": false,
+      "identityEvidence": "On-chain symbol/name/decimals + code hash equal the official-registry-sourced record in packages/contracts/deploy/robinhood-mainnet.canary.json (provenance: Rialto public token whitelist chain_id=4663, 10B-3) — identity by ADDRESS + code hash, never by symbol alone.",
+      "multiplierState": "uiMultiplier = 1e18 (1.0x) current; no pending-transition signal observable on-chain; oraclePaused=false (not halted)."
+    }
+  },
+  "quoteAccess": {
+    "status": "ABSENT — RIALTO_API_URL and RIALTO_API_KEY are not configured in this environment (presence checked as booleans only; values never read into any artifact).",
+    "consequence": "No real quote was retrieved and none was fabricated. All quote-independent hardening was completed. Classification per instruction: PARTIAL — RIALTO QUOTE ACCESS REQUIRED.",
+    "sanitizedQuoteDigest": null,
+    "quoteArtifactDir": "docs/audit/rialto/2026-07-25/ NOT created (no quote to sanitize)"
+  },
+  "groundTruthFlow": {
+    "feeAccrual": "BPSTradeRouter -> StockAcquisitionVault WETH (VERIFIED on mainnet, canary + 10F-1)",
+    "quoteBoundary": "packages/rialto/src/quote-client.ts — server-only (@bps/rialto/server subpath; absent from client barrel; browser-import protection tested in apps/web/lib/rialto-boundary.test.ts), forced chain 4663/allowance/WETH/taker=adapter, full response validation, timeout+size bounds, sanitized errors",
+    "execution": "coordinator.executeAndRecordAcquisition (acquisitionOperator) -> vault.executeAcquisition -> adapter.acquireStock -> registry.ownerOf(2)-locked router call with UNMODIFIED quote calldata; exact balance-delta verification; 80/20 split; atomic revert on any mismatch",
+    "knownTrustGaps": "venue settlement selector semantics UNPINNED (recorded config blocker); no independent price feed policy; no tx-cap policy"
+  },
+  "hardeningAdded": {
+    "packages/rialto/src/quote-structural.ts": "Policy-neutral fail-closed execution validation: live-resolved-router equality, EMPTY-by-default approved-selector schema (SELECTOR_POLICY_MISSING), forbidden opaque multicall selectors, exact decode + canonical re-encode round-trip (rejects trailing/ambiguous bytes), token/amount/recipient role binding, expiry enforcement.",
+    "packages/rialto/src/price-guard.ts": "Policy-neutral fail-closed independent price guard: integer-only, decimal normalization, explicit pair binding, zero/negative/stale/incomplete rejection, corporate-action uiMultiplier handling with fail-closed pending-transition, deviation + per-tx cap enforcement; NO feed/threshold invented — missing policy fails closed (decision pack #10/#12).",
+    "packages/rialto/src/boundary-status.ts": "Consumer status classifier distinguishing quote-observed / structurally-valid / price-guard-passed / settlement-not-executed / LOCAL_FORK_ONLY / mainnet-confirmed; malformed proof never upgrades status; legal eligibility always reported UNRESOLVED; this task cannot produce MAINNET_SETTLEMENT_CONFIRMED.",
+    "packages/rialto/src/quote-client.ts": "redirect: 'error' added to the quote fetch — a redirecting endpoint is a hard failure (no silent hand-off to an unapproved host)."
+  },
+  "settlementHardeningReview": {
+    "conclusion": "The frozen adapter/vault/coordinator already enforce the section-9 requirements; no contract change was needed or made. Mapped to existing named Foundry tests below.",
+    "inputOverspend": "packages/contracts/test/StockVaultHostile.testExcessWethSpendReverts + testPartialWethSpendReverts; RialtoAdapterHostile.testExcessPull/.testPartialSpend/.testNoSpend",
+    "balanceDeltaTruth": "packages/contracts/test/StockVaultHostile.testLieOverReverts/.testLieUnderReverts (reported vs observed delta)",
+    "zeroOutput": "packages/contracts/test/RialtoAdapterHostile.testNoOutput; StockVaultHostile.testNoDeliveryReverts",
+    "belowMinimum": "packages/contracts/test/RialtoAdapterHostile.testUnderDeliver; StockVaultHostile.testUnderMinReverts",
+    "feeOnTransfer": "packages/contracts/test/RialtoEndToEnd.testFeeOnTransferStockRejectedThroughAdapterPath; RialtoAdapterHostile.testFeeOnTransferWethInputReverts",
+    "residualsAndRefunds": "packages/contracts/test/RialtoAdapterHostile ResidualWethInAdapter/ResidualStockInAdapter paths (testPartialSpend etc.); StockVaultHostile.testRetainStockReverts",
+    "allowanceCleanup": "vault/adapter forceApprove-then-zero with AllowanceNotCleared checks (CoordinatorFundingRollback + AllowanceTrapERC20 mock); failed call reverts atomically so no allowance survives (EVM rollback)",
+    "hostileRouterTheft": "packages/contracts/test/RialtoAdapterHostile.testOutputToAttacker/.testWrongTokenDelivery; StockVaultHostile.testWrongTokenDeliveryReverts",
+    "reentrancy": "packages/contracts/test/RialtoAdapterHostile.testReentrancyBlocked (+ ReentrancyGuard on adapter/vault/coordinator)",
+    "duplicateSettlement": "Each executeAndRecordAcquisition consumes fresh vault counter deltas and a new id; identical-quote replay is bounded by ExpiredQuote (RialtoAdapterSecurity.testExpiredQuote) + the acquisitionOperator authority; a venue-side quote nonce is NOT observable on-chain — recorded as a residual venue-dependency, not invented",
+    "recordMismatch": "coordinator _deriveRecord DistributionRuleMismatch/ReserveRuleMismatch/UnexpectedRelease (CoordinatorFunding suites)",
+    "fundingCap": "fundRecordedAcquisition releases exactly rec.distributionAmount (CoordinatorFunding + RialtoEndToEnd.testEndToEndClaim)",
+    "atomicRollback": "packages/contracts/test/RialtoEndToEnd.testHostileRialtoRollsBackAcquisition; CoordinatorFundingRollback suite",
+    "mockNotLive": "boundary-status classifier + tests: a mock/malformed proof can never yield MAINNET_SETTLEMENT_CONFIRMED"
+  },
+  "coverageMap": {
+    "wrongChainId": "packages/rialto/src/quote-structural.test.ts: 'wrong chain id fails' + client WRONG_CHAIN validation (existing quote-client tests)",
+    "wrongRegistry": "GUARD: adapter immutable routerRegistry (constructor-pinned; packages/contracts/test/RialtoAdapterSecurity.testConstructorZeroRegistry/.testConstructorRegistryNotAContract/.testImmutablesStored) + deploy-registry address match verified live this task",
+    "wrongFeatureId": "GUARD: adapter constant SWAP_ROUTER_FEATURE_ID=2 (immutable; testImmutablesStored)",
+    "zeroUninitializedRouter": "packages/rialto/src/quote-structural.test.ts: 'unresolved router fails' + packages/contracts/test/RialtoAdapterSecurity.testRegistryReturnsZeroRejected",
+    "pausedFeature": "packages/contracts/test/RialtoAdapterSecurity.testRegistryPausedOrUninitializedReverts (+ live probe: ownerOf(2) resolution success proves active)",
+    "routerNoBytecode": "packages/contracts/test/RialtoAdapterSecurity.testTargetWithoutCode",
+    "routerChangedAfterQuote": "packages/rialto/src/quote-structural.test.ts: 'tx.to != currently resolved router fails' + packages/contracts/test/RialtoAdapterSecurity.testStaleRouterAfterMigration",
+    "wrongTxTo": "packages/rialto/src/quote-structural.test.ts: 'tx.to != currently resolved router fails' + packages/contracts/test/RialtoAdapterSecurity.testWrongTargetRejected",
+    "emptyCalldata": "packages/rialto/src/quote-structural.test.ts: 'empty calldata fails' + packages/contracts/test/RialtoAdapterSecurity.testEmptyCallData",
+    "shortCalldata": "packages/rialto/src/quote-structural.test.ts: 'short calldata fails' + client MALFORMED_CALLDATA (<10 chars)",
+    "unknownSelector": "packages/rialto/src/quote-structural.test.ts: 'unknown selector fails'",
+    "ambiguousTrailingCalldata": "packages/rialto/src/quote-structural.test.ts: 'trailing bytes after canonical encoding fail' + 'truncated argument region fails to decode'",
+    "unsafeMulticall": "packages/rialto/src/quote-structural.test.ts: 'opaque multicall selectors are forbidden…' (DEFAULT_FORBIDDEN_SELECTORS)",
+    "wrongInputToken": "client WRONG_SELL_TOKEN (existing quote-client tests) + adapter WETH-immutable",
+    "wrongOutputToken": "packages/rialto/src/quote-structural.test.ts: 'token substitution in decoded args fails' + client WRONG_BUY_TOKEN",
+    "spoofedStockSymbol": "GUARD: identity is ADDRESS + code hash vs the official-registry record (this task's external truth), never symbol; packages/contracts/test/RialtoAdapterSecurity.testUnapprovedStock rejects non-basket addresses",
+    "inactiveStockToken": "GUARD: oraclePaused() observed live (false); INAPPLICABLE as an automated test — no approved rule maps oraclePaused to acquisition halt; recorded as a policy gap, not invented",
+    "tradingHalt": "same as inactiveStockToken — observed not-halted; halt policy is a venue/policy dependency (recorded, not invented)",
+    "wrongCorporateActionMultiplier": "packages/rialto/src/price-guard.test.ts: 'wrong multiplier (quote priced pre-split) is caught by deviation' + 'multiplier is applied correctly'",
+    "pendingMultiplierTransition": "packages/rialto/src/price-guard.test.ts: 'pending multiplier transition fails closed'",
+    "wrongInputAmount": "packages/rialto/src/quote-structural.test.ts: 'amount substitution fails' + client WRONG_SELL_AMOUNT; adapter exact-spend WethSpendMismatch",
+    "zeroInputAmount": "client BAD_CONFIG (sellAmountRaw<=0) + packages/contracts/test/RialtoAdapterSecurity.testZeroAmountIn",
+    "wrongRecipient": "packages/rialto/src/quote-structural.test.ts: 'recipient substitution fails' + client WRONG_TAKER + allowance-settlement output-to-taker model (adapter balance-delta)",
+    "wrongNativeValue": "client NONZERO_VALUE (tx.value must be exactly zero for WETH route; existing quote-client tests)",
+    "zeroMinimumOutput": "client ZERO_MIN_BUY + packages/contracts/test/RialtoAdapterSecurity.testZeroMinimum",
+    "expiredQuote": "packages/rialto/src/quote-structural.test.ts: 'missing expiry fails; expired quote fails…' + packages/contracts/test/RialtoAdapterSecurity.testExpiredQuote",
+    "excessivelyFutureDeadline": "INAPPLICABLE-with-reason: no approved max-lifetime policy exists; the validator requires expiry presence and rejects past expiry; a max-future bound is a policy input (fail-closed absent policy would block everything — recorded as policy gap)",
+    "quoteReplay": "packages/rialto/src/quote-structural.test.ts: replay branch of the expiry test (same quote revalidated later fails) + on-chain ExpiredQuote; venue-side nonce recorded as residual dependency",
+    "quoteForAnotherChain": "client WRONG_CHAIN + packages/rialto/src/quote-structural.test.ts: 'quote bound to another chain/router context…'",
+    "quoteForAnotherRouter": "packages/rialto/src/quote-structural.test.ts: 'quote bound to another chain/router context…' (ROUTER_MISMATCH)",
+    "quoteResponseMalformed": "client INVALID_JSON/MALFORMED_CALLDATA/MISSING_TX_TO (existing quote-client tests)",
+    "quoteTimeout": "client TIMEOUT (AbortSignal.timeout; existing quote-client tests)",
+    "oversizedResponse": "client OVERSIZE_RESPONSE (existing quote-client tests)",
+    "redirectToUnapprovedHost": "packages/rialto/src/quote-client.ts (runtime guard): redirect:'error' added this task — any redirect hard-fails",
+    "ssrfArbitraryEndpoint": "GUARD: apiBaseUrl is server-config only (env), URL constructed via new URL('/quote', base); no caller-supplied endpoint parameter exists; server-only subpath enforced (web boundary test)",
+    "missingAuthorization": "client MISSING_API_KEY (existing quote-client tests)",
+    "credentialLeakage": "client design: typed errors never echo headers/body; secret scan of all changed files clean; env values only ever read as booleans in this task's checks",
+    "missingIndependentPriceSource": "packages/rialto/src/price-guard.test.ts: 'missing feed fails closed'",
+    "zeroNegativeOracleAnswer": "packages/rialto/src/price-guard.test.ts: 'zero and negative answers fail'",
+    "staleOracleAnswer": "packages/rialto/src/price-guard.test.ts: 'stale answer fails per configured policy'",
+    "incompleteOracleRound": "packages/rialto/src/price-guard.test.ts: 'incomplete round fails'",
+    "decimalMismatch": "packages/rialto/src/price-guard.test.ts: 'decimal mismatch is normalized exactly' + 'absurd decimals are rejected'",
+    "unsafeNumberConversion": "packages/rialto/src/price-guard.test.ts: integer-only bigint API; 'future-dated feed timestamp' + 'zero amounts fail'; TypeScript types forbid float entry",
+    "quoteOutsideDeviation": "packages/rialto/src/price-guard.test.ts: 'quote outside the approved deviation band fails; inside passes'",
+    "missingTransactionCapPolicy": "packages/rialto/src/price-guard.test.ts: 'missing policy fails closed' (cap is part of PriceRiskPolicy; absent => PRICE_POLICY_MISSING)",
+    "inputOverspend": "see settlementHardeningReview.inputOverspend (named Foundry tests)",
+    "zeroOutput": "see settlementHardeningReview.zeroOutput",
+    "outputBelowMinimum": "see settlementHardeningReview.belowMinimum",
+    "partialUnderDelivery": "packages/contracts/test/RialtoAdapterHostile.testUnderDeliver/.testPartialSpend (atomic revert; no partial-fill path by frozen design)",
+    "feeOnTransferToken": "see settlementHardeningReview.feeOnTransfer",
+    "reentrancy": "see settlementHardeningReview.reentrancy",
+    "hostileRouter": "packages/contracts/test/RialtoAdapterHostile suite (11 hostile modes) + StockVaultHostile suite",
+    "residualAllowanceAfterSuccess": "vault/adapter approve-exact-then-clear + AllowanceNotCleared (CoordinatorFunding suites)",
+    "residualAllowanceAfterRevert": "GUARD: any failure reverts the entire tx — approval state rolls back atomically (EVM semantics; exercised by every hostile-revert test)",
+    "duplicateSettlement": "see settlementHardeningReview.duplicateSettlement",
+    "settlementRecordMismatch": "see settlementHardeningReview.recordMismatch",
+    "distributionExceedingReceived": "coordinator _deriveRecord exact 80/20 + fundRecordedAcquisition releases only rec.distributionAmount (CoordinatorFunding suites)",
+    "atomicRollback": "see settlementHardeningReview.atomicRollback",
+    "browserImportOfServerModule": "apps/web/lib/rialto-boundary.test.ts (2 tests, rerun this task)",
+    "artifactWithCredentialUrl": "secret/credential scan of every changed+untracked file — clean; evidence contains no endpoint values",
+    "mockSettlementClassifiedLive": "boundary-status.test.ts: 'a malformed mainnet receipt proof NEVER upgrades the status' + 'TASK 10H-1 cannot produce MAINNET_SETTLEMENT_CONFIRMED'",
+    "legallyUnverifiedAssetClassifiedApproved": "boundary-status.test.ts: 'legal eligibility is ALWAYS reported unresolved' + asset labeled TECHNICAL VENUE VALIDATION ASSET in evidence",
+    "artifactClaimingMainnetSettlement": "grep over all new artifacts: the string appears only inside prohibition/negation text; boundary classifier cannot emit it without a receipt proof"
+  },
+  "tests": {
+    "rialtoVitest": {
+      "passed": 69,
+      "files": 5,
+      "note": "30 baseline + 39 new (structural 16, price-guard 17, boundary-status 6)"
+    },
+    "webBoundary": {
+      "passed": 2
+    },
+    "adapterVaultCoordinatorForge": {
+      "passed": 126,
+      "suites": 13
+    },
+    "fullForge": {
+      "passed": 418,
+      "failed": 0,
+      "suites": 47
+    },
+    "npmRunCheck": "PASS end-to-end"
+  },
+  "localForkExecution": "Settlement on real-shaped state was already demonstrated in TASK 10F-1 (REHEARSAL PASS, mock venue at the registry-resolved target); re-validated via the full fork suite this task (418/418). No new fork settlement was required for the quote-independent hardening.",
+  "mainnetExecutionCount": 0,
+  "mainnetNonMutation": {
+    "before": {
+      "utc": "2026-07-25T13:55:30.966Z",
+      "chainId": 4663,
+      "block": "19061815",
+      "deployerNonceLatest": 16,
+      "deployerNoncePending": 16,
+      "testerNonceLatest": 8,
+      "testerNoncePending": 8,
+      "stockVaultWeth": "31435920663381",
+      "bpscTotalSupply": "999980924444083854102296256",
+      "testerLockedPrincipal": "475546397072022702614092",
+      "testerWethAllowanceRouter": "0",
+      "testerBpscAllowanceRouter": "0",
+      "testerBpscAllowanceVault": "0",
+      "deployerWethAllowanceNpm": "663707774444919",
+      "poolLiquidity": "3235182407869072596640",
+      "lpOwner371728": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203"
+    },
+    "after": {
+      "utc": "2026-07-25T14:03:59.659Z",
+      "chainId": 4663,
+      "block": "19066904",
+      "deployerNonceLatest": 16,
+      "deployerNoncePending": 16,
+      "testerNonceLatest": 8,
+      "testerNoncePending": 8,
+      "stockVaultWeth": "31435920663381",
+      "bpscTotalSupply": "999980924444083854102296256",
+      "testerLockedPrincipal": "475546397072022702614092",
+      "testerWethAllowanceRouter": "0",
+      "testerBpscAllowanceRouter": "0",
+      "testerBpscAllowanceVault": "0",
+      "deployerWethAllowanceNpm": "663707774444919",
+      "poolLiquidity": "3235182407869072596640",
+      "lpOwner371728": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203"
+    },
+    "comparison": "IDENTICAL excluding utc/observation height — deployer 16/16, tester 8/8 (no nonce-8), locks, allowances, vault custody, supply, pool, LP unchanged; no Stock Token acquisition occurred."
+  },
+  "commandsExecuted": [
+    "git status/rev-parse/diff (inspection)",
+    "node mainnet-snapshot-check.mjs (read-only before/after; RPC redacted)",
+    "read-only eth_call/eth_getCode probes: registry code+hash, ownerOf(2) router + code, WETH hash, NVDA identity/multiplier/oraclePaused (RPC redacted)",
+    "env presence check for RIALTO_API_URL/RIALTO_API_KEY (booleans only)",
+    "npm test/typecheck/lint --workspace @bps/rialto",
+    "npm run check; forge test (fork env)"
+  ],
+  "priorArtifactsReverified": {
+    "v9Zip": "0c958a58b8684878c4dfce4a15cdba3b2fc0e39680d46902430ab6e78a09b74d",
+    "canaryEvidence": "d6005083b20e5188ce783cde5b30159b56228398d5bf204746b536e9e36b8ec3",
+    "rehearsal10F1Evidence": "2557a3d782bd38b2c679902578f7bc5519b7b0e5f82f9fdea85e28a77d5cb065",
+    "snapshot10G1Evidence": "aa7aa1f709bc323eaeecf73849bbf53f6df6b3ffcddcbf0c2ea83f71623a98f8"
+  },
+  "filesCreatedOrModified": {
+    "packages/rialto/src/quote-structural.ts": "ddcf59a0b86e262c8f0ae0991a89a62ce5e91cdbfc867a10c2d3337740c1c611",
+    "packages/rialto/src/price-guard.ts": "6a2f4d3627800f7977b767d71eced4cea172ee52b41d1d9d09985058c60ec75a",
+    "packages/rialto/src/boundary-status.ts": "2db5705814d1fa6013da0d9817a3a54b648845b861fbdda750c8b07a28c8702d",
+    "packages/rialto/src/quote-client.ts": "af29b726e481b3dd1f0ab1a32e87478f50e31f33af2c5b878bd0931d36f5ffeb",
+    "packages/rialto/src/server.ts": "c2ae9a3647cb55d2882d7959ea5fa70550ccf8619601e044d8570471af57bc3f",
+    "packages/rialto/src/quote-structural.test.ts": "c039e62f4789042337f4ce3d6067e990e2c7e4ec6082d3dc90f686473cc9e457",
+    "packages/rialto/src/price-guard.test.ts": "34d207b8f6bebcf8a823aaf4d51ef8fd0ce1ed1d2ad696c9e8d59944d6310518",
+    "packages/rialto/src/boundary-status.test.ts": "4880b0edb744223b1b9d79d4be9c9db5eee5a1605c7cae12af117207e45ea4a8"
+  },
+  "statuses": {
+    "legalEligibility": "UNRESOLVED (B-2)",
+    "bpscCanary": "BPSC remains a canary; not canonical BPS",
+    "rialtoB3": "PARTIAL — quote access absent; selector unpinned; price/risk policy unapproved. Enforcement machinery is in place and fails closed on all three gaps.",
+    "independentAudit": "NOT BEGUN (B-1)",
+    "productionReadiness": "NOT ESTABLISHED"
+  },
+  "remainingB3Blockers": [
+    "Authorized Rialto API access (server-side RIALTO_API_URL/RIALTO_API_KEY) to retrieve a real read-only quote",
+    "Pin the real venue settlement selector + ABI from an authorized quote and record it as an approved selector policy",
+    "Founder/counsel-approved independent price feed, staleness, deviation and per-transaction/daily cap policies (decision pack #10/#12)",
+    "Venue-side quote replay/nonce semantics confirmation"
+  ],
+  "limitations": [
+    "No real quote observed — structural validator exercised only against LOCAL_TEST_ONLY schemas (clearly labeled).",
+    "oraclePaused/trading-halt handling has no approved mapping to acquisition policy (recorded, not invented).",
+    "Excessively-future-deadline bound requires an approved lifetime policy (recorded gap)."
+  ],
+  "review10H2": {
+    "date": "2026-07-25",
+    "submittedHashes": {
+      "evidenceJson": "e7bc7e6a044296ebeff1249b197416eb99a315e8f776805b7a80f18568bf006e",
+      "reportMd": "2b87cde1c6f25d2e822dd875403a529d7cd6b84222ee2ae9d301ce1c12e941df",
+      "note": "Hashes before 10H-2 review corrections; recorded, not rewritten."
+    },
+    "corrections": [
+      "Arithmetic matrix test suite added (price-guard.test.ts, 7 cases): differing sell/buy/feed decimals (18/18/18, 18/6/8, 6/18/8), 10x split and 0.5x reverse-split multipliers, 2^200-scale inputs, and an explicit conservative-floor case — all with independently derived expected values.",
+      "Trust-model clarification (documentation, no code change needed): validateQuoteExecution's nowSec and resolvedRouter are pure-function inputs injected ONLY by the trusted server boundary (no web/API caller of the quote client exists — verified by grep + browser-import tests); they are never accepted from external callers. Defense-in-depth remains: the on-chain adapter independently enforces the registry-locked target (StaleOrWrongRouter/testWrongTargetRejected) and quote deadline (ExpiredQuote) regardless of any server-side state.",
+      "Re-affirmed: revalidation-based expiry is NOT durable venue replay protection; venue nonce semantics remain an unresolved external dependency."
+    ],
+    "freshRouterRecheck": {
+      "recheckBlock": "19078598",
+      "resolvedRouter": "0xc94135b63772b91d79d0a2daab2a8801f32359bd",
+      "codeSize": 24232,
+      "codeHash": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611",
+      "matchesPriorObservation": true
+    },
+    "settlementEvidenceReview": "Cited Foundry tests spot-verified as substantive (e.g. StockVaultHostile.testLieOverReverts runs a hostile LIE_OVER mode and asserts _assertNoStateChange; RialtoAdapterHostile.testReentrancyBlocked performs a real re-entry attempt into acquireStock). No overstated claim found; no frozen contract change required.",
+    "testsAfterReview": {
+      "rialtoVitest": {
+        "passed": 76,
+        "files": 5,
+        "note": "69 + 7 matrix cases"
+      }
+    }
+  }
+}

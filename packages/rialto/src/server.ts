@@ -6,3 +6,6 @@
 // only through the "@bps/rialto/server" subpath so a client bundle that imports "@bps/rialto" can never
 // pull the key-handling code in. No NEXT_PUBLIC_* variable is used or referenced anywhere in this path.
 export * from "./quote-client.js";
+export * from "./quote-structural.js";
+export * from "./price-guard.js";
+export * from "./boundary-status.js";
