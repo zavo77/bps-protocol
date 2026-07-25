@@ -7,6 +7,40 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-25 — TASK 10H-2: review + checkpoint of the Rialto boundary (commit `adaddceb`)
+
+- **Type:** review + preservation. NO wallet, secret, signature, quote, order, broadcast, trade,
+  allowance change, deployment, root publication, mainnet mutation, nonce-8 use, dependency/lockfile
+  change, push, or PR. Continuity gate followed (exact 5M+8?? tree reconciled; cycle 1 re-verified
+  UNPUBLISHED; nonces 16 / 8/8; all accepted artifacts byte-identical).
+- **Review findings:** rialto code diff confirmed to be exactly the intended 6 hardening lines;
+  `docs/audit/rialto/2026-07-25/` correctly absent (no quote); no web caller of the quote client
+  exists (no endpoint-injection path); cited Foundry settlement tests spot-verified substantive
+  (hostile LIE_OVER + `_assertNoStateChange`; real re-entry attempt). **Corrections:** (1) 7-case
+  decimal×multiplier arithmetic matrix added to `price-guard.test.ts` (18/6/8-decimal combinations,
+  10x split, 0.5x reverse split, 2^200-scale inputs, conservative floor) — rialto suite now
+  **76/76**; (2) trust-model clarification recorded: `nowSec`/`resolvedRouter` are injected only by
+  the trusted server boundary, with on-chain adapter enforcement authoritative regardless; (3)
+  re-affirmed expiry revalidation ≠ durable venue replay protection. Classification upheld:
+  **`PARTIAL — RIALTO QUOTE ACCESS REQUIRED`** (price/risk policy + venue replay semantics
+  independently recorded as unresolved).
+- **Fresh external recheck (block 19078598):** feature-2 router identical
+  (`0xc94135b63772b91d79d0a2daab2a8801f32359bd`, code hash `0xa7041268…7611`).
+- **Evidence hashes:** submitted `e7bc7e6a…006e` / `2b87cde1…41df` → **final** evidence
+  `979f351d9a88c8f0058628417da46a8809d4a394e4440ec42025f3dd87e8d1b8`, report
+  `7b0c88c6b11a9bda072241378b5c289f62fbd64d846c43ce4b13a0dae4d75a87`.
+- **Checkpoint commit:** `adaddceb09302db78e36fdb294494fe71df0e43b` —
+  `feat(rialto): harden production venue boundary` (13 reviewed paths; staged list displayed and
+  verified free of secrets/lockfile/production/registry changes).
+- **Suites at checkpoint:** rialto 76/76; web boundary 2/2; focused Foundry 126/126; full forge
+  (fork env) 418/418; `npm run check` PASS; prettier/diff-check/JSON/secret/manifest checks clean.
+  Mainnet before/after IDENTICAL (zero acquisitions; publication state unchanged).
+- **Backup:** new archive `bps-experiment-rialto-boundary-2026-07-25-adaddceb.tar.gz` outside the
+  repo (size/SHA in task report; extraction-verified). **Off-device: PENDING.** Snapshot-pipeline
+  archive status preserved as COMPLETE — USER VERIFIED 2026-07-25.
+- **Next:** authorized Rialto API access + approved selector and price/risk decision pack, then
+  rerun the boundary against a real read-only quote. B-1 audit not begun; B-2 legal unresolved.
+
 ## 2026-07-25 — TASK 10H-1: Rialto production boundary (B-3) — `PARTIAL — RIALTO QUOTE ACCESS REQUIRED`
 
 - **Type:** production-boundary hardening. NO wallet, secret, signature, broadcast, trade, allowance

@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "bps.evidence.oracle-semantics/1",
+  "generatedUtc": "2026-07-25T15:45:00Z",
+  "task": "TASK 10I-1 — oracle semantics reconciliation, price-input hardening, decision pack",
+  "repository": {
+    "path": "C:\\Projects\\bps-experiment",
+    "branch": "master",
+    "startingHead": "adaddceb09302db78e36fdb294494fe71df0e43b",
+    "dirtyTreeExplanation": "only the accepted post-10H-2 continuity metadata at start"
+  },
+  "sourcesReviewed": {
+    "retrievedUtc": "2026-07-25T15:15:00Z to 15:25:00Z",
+    "urls": [
+      "https://docs.chain.link/data-feeds/tokenized-equity-feeds/robinhood",
+      "https://docs.robinhood.com/chain/oracles-and-price-feeds/",
+      "https://docs.robinhood.com/chain/stock-token-apis/",
+      "https://docs.rialto.xyz/developers/requesting-a-quote"
+    ],
+    "keyClaims": [
+      "Token Price = Underlying Equity Market Price x Multiplier (feed returns per-token USD; consumer must NOT re-apply uiMultiplier)",
+      "REST /prices returns raw underlying-equity bid/ask, NOT multiplier-adjusted; on-chain feed is the adjusted surface",
+      "Feeds pause + hold last value during corporate actions; no off-hours heartbeat; staleness via updatedAt; pending state via newUIMultiplier()/effectiveAt()",
+      "GET /quote returns a firm executable tx + server-stored quote_id; retrieval does not sign/approve/broadcast; slippage_bps + nonzero taker required; feature 2 direct vs 3 gasless; allowance vs Permit2; no selector/ABI documented; allowance replay semantics undocumented"
+    ],
+    "note": "No NVDA/ETH feed addresses were published in the fetched excerpts; no address was invented."
+  },
+  "defect": {
+    "finding": "10H-1 guard = mode B (raw underlying x multiplier); production source = per-token Chainlink feed -> DOUBLE multiplier application in production configuration (e.g. a 10x split would loosen the price floor 10x).",
+    "priorConclusionCorrected": "10H-2 validated the arithmetic only against its own raw-underlying semantics; the production-source mismatch was not caught there."
+  },
+  "correction": {
+    "module": "packages/rialto/src/price-guard.ts (rewritten)",
+    "typedSemantics": [
+      "PER_TOKEN_CHAINLINK (production; feed used directly; multiplier is a guard only)",
+      "RAW_UNDERLYING (evidence/testing only; multiplier exactly once; gated by allowRawUnderlyingForEvidence; RAW_UNDERLYING_NOT_APPROVED otherwise; can never substitute silently)"
+    ],
+    "formula": "expected = floor(sellRaw * inAnswer * 10^outFeedDec * 10^outDec * perTokenDen / (10^sellDec * 10^inFeedDec * perTokenNum)); single conservative floor; bigint-only; decimals<=77",
+    "wethMapping": "WETH priced via an ETH/USD feed is an asset-mapping POLICY requiring approval (decision D-11); not decided here",
+    "sequencerMachinery": "policy-neutral fail-closed: configured feed identity (no substitution), answer==0 up, round/timestamp validity, configured post-recovery grace; missing config/observation fails closed; no address/grace/heartbeat/staleness/off-hours value invented",
+    "offHoursRule": "recorded: fail closed whenever the published freshness limit is exceeded; any market-session-aware policy is a future approved decision (D-12/D-19); no market calendar implemented"
+  },
+  "enforcementBoundary": {
+    "typescriptGuard": "trusted-server validation only",
+    "bypass": "a privileged operator can call DistributionFundingCoordinator.executeAndRecordAcquisition with an arbitrary minStockOut — the on-chain layer has NO independent price check",
+    "onchainAuthoritative": [
+      "registry-locked router target",
+      "quote deadline (ExpiredQuote)",
+      "exact spend + balance-delta >= minStockOut",
+      "residual/allowance checks",
+      "80/20 split"
+    ],
+    "minimalProposedFutureChange": "oracle-floor validation of minStockOut in the coordinator (or a guarded executor wrapper) reading approved feeds on-chain; requires coordinator redeployment — production-deployment-cycle decision; NOT made"
+  },
+  "tests": {
+    "rialtoVitest": {
+      "passed": 79,
+      "files": 5,
+      "note": "26 corrected/new price cases (all 20 required section-6 conditions incl. split continuity + double-apply unrepresentability) + 5 sequencer cases + structural/status/client suites"
+    }
+  },
+  "decisionPack": {
+    "path": "docs/decisions/BPS_RIALTO_ACCESS_AND_PRICE_RISK_DECISION_PACK_2026-07-25.md",
+    "decisions": 24,
+    "status": "ALL PROPOSED — NOT APPROVED",
+    "accessRequest": "drafted, NOT sent"
+  },
+  "classification": "PARTIAL — RIALTO QUOTE ACCESS REQUIRED",
+  "independentlyRecorded": [
+    "APPROVED PRICE AND RISK POLICY REQUIRED",
+    "VENUE SELECTOR UNVERIFIED",
+    "VENUE REPLAY SEMANTICS UNRESOLVED",
+    "LEGAL ELIGIBILITY UNRESOLVED"
+  ],
+  "prohibitionsHonored": "no /quote, no integrator endpoint, no key operation, no wallet/signature/broadcast, no allowance/selector/feed/policy approval, no dependency/lockfile change",
+  "filesCreatedOrModified": {
+    "packages/rialto/src/price-guard.ts": "b9d0f536dcfd8f75c8fd3e89aba49ec58a131f3198079dca54719e52eb0eed3c",
+    "packages/rialto/src/price-guard.test.ts": "cdbb09a1474c470d7a19fbf4e80f5673d73f0e9645df4974827eb0b51399ee9e",
+    "docs/audit/BPS_RIALTO_ORACLE_SEMANTICS_REVIEW_2026-07-25.md": "8a54766dbf1ea4554db31acbabbca0dc6aa3fe5baf5956cb72721cb5489cedf0",
+    "docs/decisions/BPS_RIALTO_ACCESS_AND_PRICE_RISK_DECISION_PACK_2026-07-25.md": "bb574794fd67084aaac606cc803f56b7dfd2f430b9859e4ba452d4ef89599a97",
+    "docs/audit/BPS_RIALTO_PRODUCTION_BOUNDARY_2026-07-25.md": "ad298ebf0ed186cca6c331a554251e9de5ce6d0b0b57db604b317085e4c06f56",
+    "docs/audit/BPS_RIALTO_PRODUCTION_BOUNDARY_2026-07-25.evidence.json": "63d94b7a49df6fdf91b2c0a085428eb68ee16b10722d518aa70366b667a99537"
+  }
+}

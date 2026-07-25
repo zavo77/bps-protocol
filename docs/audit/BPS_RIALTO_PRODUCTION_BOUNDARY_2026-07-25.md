@@ -105,3 +105,19 @@ expiry revalidation is not durable venue replay protection. Fresh router re-reso
 
 Obtain authorized Rialto API access and rerun this boundary against a real read-only quote
 (selector pinning + sanitized quote evidence), alongside commissioning the independent audit (B-1).
+
+## TASK 10I-1 correction (2026-07-25, appended — history preserved)
+
+1. **Price-unit defect (CRITICAL, corrected):** the 10H-1 price guard modeled its feed answer as
+   the RAW UNDERLYING share price and multiplied by `uiMultiplier`. The verified official
+   semantics (Chainlink tokenized-equity feeds) return the PER-TOKEN price with the multiplier
+   ALREADY included — the production configuration would have DOUBLE-APPLIED the multiplier. The
+   guard was rewritten with typed semantics (`PER_TOKEN_CHAINLINK` used directly;
+   `RAW_UNDERLYING` an explicitly gated evidence mode applying the multiplier exactly once), a
+   two-feed expected-output model, and L2 sequencer machinery. See
+   `docs/audit/BPS_RIALTO_ORACLE_SEMANTICS_REVIEW_2026-07-25.md`.
+2. **Wording:** the earlier read-only description of `/quote` is corrected to **NON-BINDING,
+   NON-SIGNED, NON-BROADCAST QUOTE RETRIEVAL** — it returns a firm executable payload and a
+   server-stored `quote_id`.
+3. 10H-2-final hashes (evidence `979f351d…d1b8`, report `7b0c88c6…5a87`) are preserved as
+   historical facts and superseded by the post-correction hashes in the 10I-1 report.

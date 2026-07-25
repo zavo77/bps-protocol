@@ -1,34 +1,23 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-25T15:05:00Z",
+  "updatedUtc": "2026-07-25T14:45:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "9043476509a9c7f662c5cf580f50e5ae1e0a382d",
+  "head": "adaddceb09302db78e36fdb294494fe71df0e43b",
   "workingTree": {
     "dirty": true,
-    "note": "10G-2 checkpoint 9043476 baseline + post-checkpoint continuity metadata + uncommitted TASK 10H-1 changes awaiting review.",
+    "note": "Rialto-boundary checkpoint adaddceb committed (13 reviewed paths). Only these post-checkpoint continuity updates remain uncommitted.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
-      "docs/continuity/CHANGELOG.md",
-      "packages/rialto/src/quote-client.ts",
-      "packages/rialto/src/server.ts"
+      "docs/continuity/CHANGELOG.md"
     ],
-    "untracked": [
-      "packages/rialto/src/quote-structural.ts",
-      "packages/rialto/src/price-guard.ts",
-      "packages/rialto/src/boundary-status.ts",
-      "packages/rialto/src/quote-structural.test.ts",
-      "packages/rialto/src/price-guard.test.ts",
-      "packages/rialto/src/boundary-status.test.ts",
-      "docs/audit/BPS_RIALTO_PRODUCTION_BOUNDARY_2026-07-25.md",
-      "docs/audit/BPS_RIALTO_PRODUCTION_BOUNDARY_2026-07-25.evidence.json"
-    ]
+    "untracked": []
   },
   "phase": "post-canary",
-  "latestCompletedMilestone": "TASK 10H-1 — Rialto production boundary hardening: PARTIAL — RIALTO QUOTE ACCESS REQUIRED (2026-07-25; enforcement machinery fail-closed on quote access, selector pinning, and price/risk policy)",
-  "currentTask": "none — TASK 10H-1 complete (PARTIAL), awaiting review (changes uncommitted)",
-  "nextTask": "Authorized Rialto API access + real read-only quote rerun (selector pinning, sanitized evidence); independent audit (B-1) in parallel",
+  "latestCompletedMilestone": "TASK 10H-2 — review + checkpoint of the Rialto boundary (2026-07-25; commit adaddceb09302db78e36fdb294494fe71df0e43b; classification PARTIAL — RIALTO QUOTE ACCESS REQUIRED upheld; arithmetic matrix + trust-model corrections)",
+  "currentTask": "none — 10H-2 complete; awaiting next authorization",
+  "nextTask": "Authorized Rialto API access + approved selector and price/risk decision pack (founder/counsel), then rerun the boundary against a real read-only quote",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,
@@ -137,9 +126,9 @@
       "passed": 30
     },
     "rialtoVitest": {
-      "passed": 69,
+      "passed": 76,
       "files": 5,
-      "note": "39 boundary-hardening tests added in 10H-1"
+      "note": "46 boundary tests incl. 10H-2 arithmetic matrix"
     },
     "canaryVerifyAll": "PASS (9 suites)",
     "playwrightE2E": "PASS (historical ~2026-07-24; single smoke flow; rerun before relying)",
@@ -251,6 +240,11 @@
       "checkpointCommit": "9043476509a9c7f662c5cf580f50e5ae1e0a382d",
       "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25",
       "note": "User-verified destination-side evidence; not independently inspected by Claude."
+    },
+    "rialtoBoundaryArchive": {
+      "file": "bps-experiment-rialto-boundary-2026-07-25-adaddceb.tar.gz",
+      "offDeviceEncryptedTransfer": "PENDING",
+      "note": "path/size/SHA in task report + CHANGELOG"
     }
   },
   "snapshotPipeline": {
@@ -291,6 +285,12 @@
       "venue selector pinning from a real quote",
       "approved price/staleness/deviation/cap policies",
       "venue replay/nonce semantics"
-    ]
+    ],
+    "checkpointCommit": "adaddceb09302db78e36fdb294494fe71df0e43b",
+    "finalEvidenceSha256": "979f351d9a88c8f0058628417da46a8809d4a394e4440ec42025f3dd87e8d1b8",
+    "finalReportSha256": "7b0c88c6b11a9bda072241378b5c289f62fbd64d846c43ce4b13a0dae4d75a87",
+    "supersededEvidenceSha256": "e7bc7e6a044296ebeff1249b197416eb99a315e8f776805b7a80f18568bf006e",
+    "supersededReportSha256": "2b87cde1c6f25d2e822dd875403a529d7cd6b84222ee2ae9d301ce1c12e941df",
+    "routerRecheck": "block 19078598: identical router 0xc94135b6…59bd + code hash 0xa7041268…7611"
   }
 }

@@ -1,11 +1,30 @@
-// TASK 10H-1 — policy-neutral, fail-closed independent price guard.
+// TASK 10I-1 — corrected, policy-neutral, fail-closed independent price guard.
 //
-// A venue-supplied amountOutMinimum is NOT an independent price guard. This module compares the
-// quoted/minimum output against an INDEPENDENT reference price, with explicit corporate-action
-// multiplier handling. It ships with NO feed address, NO staleness limit, NO deviation limit and NO
-// transaction cap: all of those are approved-policy inputs (founder decision pack #10/#12). Absent
-// policy or feed data fails closed. Integer arithmetic only — no JavaScript float ever touches an
-// amount.
+// AUTHORITATIVE SEMANTICS (verified 2026-07-25 against docs.chain.link tokenized-equity-feeds/
+// robinhood and docs.robinhood.com/chain/oracles-and-price-feeds/):
+//   - A Robinhood Stock Token Chainlink feed returns the USD price of ONE STOCK TOKEN with the
+//     corporate-action multiplier ALREADY included ("Token Price = Underlying Equity Market Price x
+//     Multiplier"; "you don't apply the multiplier yourself").
+//   - Robinhood REST /prices returns the RAW underlying-equity price (NOT multiplier-adjusted) and
+//     is NOT the settlement guard.
+//   - Feeds pause and hold their last value during corporate actions; they have NO heartbeat during
+//     off-hours; staleness must be checked via updatedAt.
+//
+// The 10H-1 implementation multiplied the answer by uiMultiplier — correct ONLY for a raw
+// underlying price. Against the production Chainlink per-token feed that would DOUBLE-APPLY the
+// multiplier. This rewrite makes price semantics an explicit type so the two sources can never be
+// confused, and computes expected output from TWO independently bound token-unit USD prices:
+//
+//   expectedOutRaw = floor( sellRaw * inAnswer * 10^outFeedDec * 10^outDec
+//                           / (10^sellDec * 10^inFeedDec * perTokenOutAnswer) )
+//
+// where perTokenOutAnswer is the feed answer directly for PER_TOKEN_CHAINLINK, and
+// underlyingAnswer * multiplierE18 / 1e18 (applied EXACTLY once) for the explicitly gated
+// RAW_UNDERLYING evidence/test mode. No JavaScript float or Number ever touches an amount; a single
+// final floor keeps the estimate conservative.
+//
+// This module still ships with NO approved feed identity, staleness, deviation, cap, sequencer or
+// grace values (founder decision pack). Missing policy fails closed.
 
 export class PriceGuardError extends Error {
   constructor(
@@ -20,46 +39,69 @@ export class PriceGuardError extends Error {
 export type PriceGuardErrorCode =
   | "PRICE_POLICY_MISSING"
   | "PRICE_FEED_MISSING"
+  | "SEMANTICS_MISMATCH"
+  | "RAW_UNDERLYING_NOT_APPROVED"
   | "NON_POSITIVE_ANSWER"
   | "STALE_ANSWER"
   | "INCOMPLETE_ROUND"
   | "BAD_DECIMALS"
+  | "ORACLE_PAUSED"
   | "MULTIPLIER_MISSING"
   | "MULTIPLIER_TRANSITION"
   | "ASSET_BINDING_MISMATCH"
+  | "SEQUENCER_POLICY_MISSING"
+  | "SEQUENCER_DOWN"
+  | "SEQUENCER_GRACE_PERIOD"
+  | "SEQUENCER_BAD_ROUND"
   | "TX_CAP_EXCEEDED"
   | "DEVIATION_EXCEEDED"
   | "UNSAFE_NUMBER";
 
-/** Independent reference price observation (e.g. a Chainlink-style round), all explicit. */
-export interface ReferencePriceObservation {
-  /** Quote asset units of price feed per ONE whole unit of the UNDERLYING (pre-multiplier) share. */
+/** Explicit price semantics — a caller cannot relabel one source as the other. */
+export type PriceSemantics = "PER_TOKEN_CHAINLINK" | "RAW_UNDERLYING";
+
+/** One independently bound token-unit USD price observation. */
+export interface UsdPriceObservation {
+  readonly semantics: PriceSemantics;
+  readonly asset: string; // the token this observation prices — bound, never assumed
   readonly answer: bigint;
   readonly decimals: number;
   readonly updatedAtSec: bigint;
   readonly roundComplete: boolean;
-  /** The pair this observation is FOR — bound explicitly, never assumed. */
-  readonly baseAsset: string; // the stock token address this prices
-  readonly quoteAsset: string; // the input asset address (e.g. WETH) or a USD sentinel per policy
   readonly observedAtBlock: bigint;
 }
 
-/** Corporate-action multiplier state read from the official token contract. */
-export interface MultiplierState {
-  /** uiMultiplier scaled 1e18 (1e18 = 1.0x). */
-  readonly currentE18: bigint;
-  /** True when an announced-but-unapplied multiplier change is in effect — fails closed. */
+/** Availability/consistency state read from the official Stock Token contract. */
+export interface StockTokenState {
+  /** uiMultiplier scaled 1e18. CONSISTENCY/AVAILABILITY GUARD ONLY for PER_TOKEN_CHAINLINK. */
+  readonly multiplierE18: bigint;
+  /** newUIMultiplier()/effectiveAt() announced but not applied — fails closed. */
   readonly transitionPending: boolean;
+  /** oraclePaused() — price must be unavailable while true. */
+  readonly oraclePaused: boolean;
 }
 
-/** APPROVED policy values. None exist in-repo today; callers must supply an approved record. */
+/** Chainlink-style L2 sequencer uptime observation (answer 0 = up, nonzero = down). */
+export interface SequencerObservation {
+  readonly feedIdentity: string; // configured identity — bound, never caller-substituted
+  readonly answer: bigint;
+  readonly startedAtSec: bigint;
+  readonly updatedAtSec: bigint;
+}
+
+/** APPROVED policy values. None exist in-repo; every field must come from an approved record. */
 export interface PriceRiskPolicy {
   readonly maxStalenessSec: bigint;
-  readonly maxDeviationBps: bigint; // quoted output may be below reference-expected by at most this
-  readonly maxTxInputRaw: bigint; // per-transaction input cap in input-asset base units
+  readonly maxDeviationBps: bigint;
+  readonly maxTxInputRaw: bigint;
+  /** Configured sequencer feed identity + post-recovery grace (L2 guard). */
+  readonly sequencerFeedIdentity: string;
+  readonly sequencerGraceSec: bigint;
+  /** RAW_UNDERLYING is evidence/testing-only unless separately approved. Default MUST be false. */
+  readonly allowRawUnderlyingForEvidence: boolean;
 }
 
-export interface PriceGuardInput {
+export interface AcquisitionPriceInput {
   readonly sellToken: string;
   readonly sellAmountRaw: bigint;
   readonly sellDecimals: number;
@@ -74,11 +116,16 @@ export interface PriceGuardResult {
   readonly minAllowedBuyAmountRaw: bigint;
   readonly deviationBpsObserved: bigint;
   readonly justification: {
-    readonly feedAnswer: string;
-    readonly feedDecimals: number;
-    readonly feedUpdatedAtSec: string;
-    readonly observedAtBlock: string;
+    readonly inputFeed: { answer: string; decimals: number; updatedAtSec: string; block: string };
+    readonly outputFeed: {
+      answer: string;
+      decimals: number;
+      updatedAtSec: string;
+      block: string;
+      semantics: PriceSemantics;
+    };
     readonly multiplierE18: string;
+    readonly multiplierApplied: boolean;
   };
 }
 
@@ -92,66 +139,116 @@ function pow10(n: number): bigint {
   return 10n ** BigInt(n);
 }
 
+function checkFeed(
+  feed: UsdPriceObservation | null,
+  expectedAsset: string,
+  which: string,
+  nowSec: bigint,
+  maxStalenessSec: bigint,
+): UsdPriceObservation {
+  if (feed === null) {
+    throw new PriceGuardError("PRICE_FEED_MISSING", `${which} feed is not configured`);
+  }
+  if (feed.asset.toLowerCase() !== expectedAsset.toLowerCase()) {
+    throw new PriceGuardError(
+      "ASSET_BINDING_MISMATCH",
+      `${which} feed prices ${feed.asset}, not ${expectedAsset}`,
+    );
+  }
+  if (feed.answer <= 0n) {
+    throw new PriceGuardError("NON_POSITIVE_ANSWER", `${which} answer must be positive`);
+  }
+  if (!feed.roundComplete) {
+    throw new PriceGuardError("INCOMPLETE_ROUND", `${which} round is incomplete`);
+  }
+  if (nowSec < feed.updatedAtSec) {
+    throw new PriceGuardError("UNSAFE_NUMBER", `${which} feed timestamp is in the future`);
+  }
+  if (nowSec - feed.updatedAtSec > maxStalenessSec) {
+    throw new PriceGuardError(
+      "STALE_ANSWER",
+      `${which} answer exceeds the approved staleness (tokenized-equity feeds hold values off-hours; the published freshness limit governs)`,
+    );
+  }
+  return feed;
+}
+
+function checkSequencer(
+  seq: SequencerObservation | null,
+  policy: PriceRiskPolicy,
+  nowSec: bigint,
+): void {
+  if (policy.sequencerFeedIdentity === "" || policy.sequencerGraceSec < 0n) {
+    throw new PriceGuardError(
+      "SEQUENCER_POLICY_MISSING",
+      "no approved sequencer feed identity / grace period is configured (fail closed)",
+    );
+  }
+  if (seq === null) {
+    throw new PriceGuardError("SEQUENCER_POLICY_MISSING", "sequencer observation unavailable");
+  }
+  if (seq.feedIdentity.toLowerCase() !== policy.sequencerFeedIdentity.toLowerCase()) {
+    throw new PriceGuardError(
+      "SEQUENCER_POLICY_MISSING",
+      "sequencer observation is not from the configured feed identity (no substitution)",
+    );
+  }
+  if (seq.startedAtSec <= 0n || seq.updatedAtSec <= 0n || nowSec < seq.startedAtSec) {
+    throw new PriceGuardError("SEQUENCER_BAD_ROUND", "sequencer round data invalid");
+  }
+  if (seq.answer !== 0n) {
+    throw new PriceGuardError("SEQUENCER_DOWN", "sequencer is not up");
+  }
+  if (nowSec - seq.startedAtSec < policy.sequencerGraceSec) {
+    throw new PriceGuardError(
+      "SEQUENCER_GRACE_PERIOD",
+      "sequencer recovered too recently — configured grace period has not elapsed",
+    );
+  }
+}
+
 /**
- * Fail-closed independent price validation. Throws on ANY missing input, stale/incomplete data,
- * multiplier transition, cap breach, or deviation beyond the approved limit.
- *
- * Unit model (explicit, to prevent REST-vs-onchain unit confusion): `answer` prices ONE whole
- * UNDERLYING share in quote-asset units at `decimals`. The token's on-chain balance units represent
- * underlying shares scaled by uiMultiplier/1e18, so:
- *   expectedBuyRaw = sellRaw * 10^buyDec * 10^feedDec * multiplierE18
- *                    / (answer * 10^sellDec * 1e18)
+ * Corrected independent acquisition-price validation over TWO bound USD feeds.
+ * Throws on any missing input, semantic mismatch, availability failure, cap or deviation breach.
  */
-export function validateIndependentPrice(
-  io: PriceGuardInput,
-  feed: ReferencePriceObservation | null,
-  multiplier: MultiplierState | null,
+export function validateAcquisitionPrice(
+  io: AcquisitionPriceInput,
+  inputFeed: UsdPriceObservation | null,
+  outputFeed: UsdPriceObservation | null,
+  tokenState: StockTokenState | null,
+  sequencer: SequencerObservation | null,
   policy: PriceRiskPolicy | null,
 ): PriceGuardResult {
   if (policy === null) {
     throw new PriceGuardError(
       "PRICE_POLICY_MISSING",
-      "no approved staleness/deviation/cap policy exists — fail closed (founder decision pack #10/#12)",
+      "no approved staleness/deviation/cap/sequencer policy exists — fail closed (decision pack)",
     );
   }
-  if (feed === null) {
+  checkSequencer(sequencer, policy, io.nowSec);
+  const inF = checkFeed(inputFeed, io.sellToken, "input", io.nowSec, policy.maxStalenessSec);
+  const outF = checkFeed(outputFeed, io.buyToken, "output", io.nowSec, policy.maxStalenessSec);
+  if (inF.semantics !== "PER_TOKEN_CHAINLINK") {
+    // The input (WETH/ETH) side has no corporate-action multiplier; only per-token semantics exist.
+    throw new PriceGuardError("SEMANTICS_MISMATCH", "input feed must be PER_TOKEN_CHAINLINK");
+  }
+  if (tokenState === null) {
+    throw new PriceGuardError("MULTIPLIER_MISSING", "stock token state unavailable");
+  }
+  if (tokenState.oraclePaused) {
     throw new PriceGuardError(
-      "PRICE_FEED_MISSING",
-      "no approved independent price feed configured",
+      "ORACLE_PAUSED",
+      "oraclePaused() is true — price is unavailable during a corporate action",
     );
   }
-  if (multiplier === null) {
-    throw new PriceGuardError(
-      "MULTIPLIER_MISSING",
-      "corporate-action multiplier state unavailable",
-    );
-  }
-  if (multiplier.transitionPending) {
+  if (tokenState.transitionPending) {
     throw new PriceGuardError(
       "MULTIPLIER_TRANSITION",
-      "multiplier transition pending — no approved transition rule exists (fail closed)",
+      "pending multiplier transition — no approved transition rule exists (fail closed)",
     );
   }
-  if (multiplier.currentE18 <= 0n) {
+  if (tokenState.multiplierE18 <= 0n) {
     throw new PriceGuardError("MULTIPLIER_MISSING", "multiplier must be positive");
-  }
-  if (
-    feed.baseAsset.toLowerCase() !== io.buyToken.toLowerCase() ||
-    feed.quoteAsset.toLowerCase() !== io.sellToken.toLowerCase()
-  ) {
-    throw new PriceGuardError("ASSET_BINDING_MISMATCH", "feed pair != transaction pair");
-  }
-  if (feed.answer <= 0n) {
-    throw new PriceGuardError("NON_POSITIVE_ANSWER", "reference answer must be positive");
-  }
-  if (!feed.roundComplete) {
-    throw new PriceGuardError("INCOMPLETE_ROUND", "reference round is incomplete");
-  }
-  if (io.nowSec < feed.updatedAtSec) {
-    throw new PriceGuardError("UNSAFE_NUMBER", "feed timestamp is in the future");
-  }
-  if (io.nowSec - feed.updatedAtSec > policy.maxStalenessSec) {
-    throw new PriceGuardError("STALE_ANSWER", "reference answer exceeds approved staleness");
   }
   if (io.sellAmountRaw <= 0n || io.minBuyAmountRaw <= 0n) {
     throw new PriceGuardError("UNSAFE_NUMBER", "amounts must be positive integers");
@@ -160,10 +257,33 @@ export function validateIndependentPrice(
     throw new PriceGuardError("TX_CAP_EXCEEDED", "input exceeds the approved per-transaction cap");
   }
 
-  const num =
-    io.sellAmountRaw * pow10(io.buyDecimals) * pow10(feed.decimals) * multiplier.currentE18;
-  const den = feed.answer * pow10(io.sellDecimals) * E18;
-  const expected = num / den; // floor — integer arithmetic only
+  // Per-token USD price of the OUTPUT asset, in outF.decimals units.
+  let perTokenNum: bigint; // numerator of per-token price
+  let perTokenDen: bigint; // denominator of per-token price
+  let multiplierApplied = false;
+  if (outF.semantics === "PER_TOKEN_CHAINLINK") {
+    // Feed already includes the multiplier — used DIRECTLY; multiplier is a guard only.
+    perTokenNum = outF.answer;
+    perTokenDen = 1n;
+  } else {
+    // RAW_UNDERLYING: evidence/testing only; multiplier applied EXACTLY once; must be approved.
+    if (!policy.allowRawUnderlyingForEvidence) {
+      throw new PriceGuardError(
+        "RAW_UNDERLYING_NOT_APPROVED",
+        "raw-underlying pricing is not approved for this configuration (fail closed)",
+      );
+    }
+    perTokenNum = outF.answer * tokenState.multiplierE18;
+    perTokenDen = E18;
+    multiplierApplied = true;
+  }
+
+  // expected = sellRaw * inAnswer * 10^outFeedDec * 10^outDec * perTokenDen
+  //            / (10^sellDec * 10^inFeedDec * perTokenNum)         — single conservative floor
+  const numerator =
+    io.sellAmountRaw * inF.answer * pow10(outF.decimals) * pow10(io.buyDecimals) * perTokenDen;
+  const denominator = pow10(io.sellDecimals) * pow10(inF.decimals) * perTokenNum;
+  const expected = numerator / denominator;
   if (expected <= 0n) {
     throw new PriceGuardError("DEVIATION_EXCEEDED", "expected output floors to zero");
   }
@@ -182,11 +302,21 @@ export function validateIndependentPrice(
     minAllowedBuyAmountRaw: minAllowed,
     deviationBpsObserved,
     justification: {
-      feedAnswer: feed.answer.toString(10),
-      feedDecimals: feed.decimals,
-      feedUpdatedAtSec: feed.updatedAtSec.toString(10),
-      observedAtBlock: feed.observedAtBlock.toString(10),
-      multiplierE18: multiplier.currentE18.toString(10),
+      inputFeed: {
+        answer: inF.answer.toString(10),
+        decimals: inF.decimals,
+        updatedAtSec: inF.updatedAtSec.toString(10),
+        block: inF.observedAtBlock.toString(10),
+      },
+      outputFeed: {
+        answer: outF.answer.toString(10),
+        decimals: outF.decimals,
+        updatedAtSec: outF.updatedAtSec.toString(10),
+        block: outF.observedAtBlock.toString(10),
+        semantics: outF.semantics,
+      },
+      multiplierE18: tokenState.multiplierE18.toString(10),
+      multiplierApplied,
     },
   };
 }

@@ -291,5 +291,14 @@
         "note": "69 + 7 matrix cases"
       }
     }
+  },
+  "correction10I1": {
+    "date": "2026-07-25",
+    "supersededHashes": {
+      "evidenceJson": "979f351d9a88c8f0058628417da46a8809d4a394e4440ec42025f3dd87e8d1b8",
+      "reportMd": "7b0c88c6b11a9bda072241378b5c289f62fbd64d846c43ce4b13a0dae4d75a87"
+    },
+    "criticalFinding": "price-guard treated the reference answer as RAW UNDERLYING and multiplied by uiMultiplier; production Chainlink tokenized-equity feeds are PER-TOKEN (multiplier included) — double application corrected via typed semantics + two-feed model + sequencer machinery (see BPS_RIALTO_ORACLE_SEMANTICS_REVIEW_2026-07-25).",
+    "wordingCorrection": "read-only /quote wording corrected to NON-BINDING, NON-SIGNED, NON-BROADCAST QUOTE RETRIEVAL (firm executable payload + server-stored quote_id)"
   }
 }
