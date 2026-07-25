@@ -7,6 +7,78 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-25 — TASK 10J-3: persist oracle/feed evidence + founder decision register
+
+- **Type:** documentation/evidence persistence only. NO oracle/contract implementation, feed/risk
+  configuration, Rialto access, quote, credential, wallet action, signature, allowance, simulation,
+  transaction, deployment, activation, dependency/lockfile change, push, or PR. Continuity gate
+  followed; existing uncommitted continuity content preserved.
+- **Discovery persisted (from TASK 10J-1 through 10J-2B, reproduced in memory this task):** official
+  Chainlink feed-directory provenance PROVEN (addresses page references
+  `feeds-robinhood-mainnet.json` + embeds proxies); official Robinhood asset endpoint
+  `https://api.robinhood.com/rhj/assets` documented on the Stock Token API page; fixed inspection
+  block 19223939 (hash `0xe94b855b7973b78c1fb6611de5f41c421a69bc80f24d6631a89925270bccdb8c`, chain
+  4663).
+- **Candidates (all CANDIDATE — NOT APPROVED / NOT CONFIGURED):** WETH
+  `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73`; ETH/USD proxy
+  `0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9` / aggregator
+  `0x6091E64eb7138EEF066a80FD3A0d7427B91f2721`; NVDA/USD proxy
+  `0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15` / aggregator
+  `0xC9d16E4f2569b9E3ea0468fD85844953713DC2a2`; NVDA token
+  `0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC` (token `uid()` equals the endpoint asset id — canonical
+  binding beyond ticker). **D-9 / D-10 = OFFICIALLY IDENTIFIED CANDIDATE — NOT APPROVED / NOT
+  CONFIGURED; D-13 = UNRESOLVED — NO ROBINHOOD CHAIN ADDRESS IN CURRENT OFFICIAL CHAINLINK LIST.**
+- **D-12:** strict-freshness approach founder-directed; exact maximum-staleness value deferred; the
+  86400-second catalog heartbeat is evidence only, not an approved ceiling.
+- **Founder register:** Group A founder-approved/ratified (D-1, D-2, D-4, D-7, D-11 conditional
+  direction, D-14, D-15, D-17=USD 250, D-18=USD 250/day, D-22B architectural direction, plus access
+  request = SEND MANUALLY); D-22B is direction-only (implementation NOT authorized); D-23
+  counsel-pending; D-24 no acquisition authorized.
+- **Process deviation disclosed:** TASK 10J-2 wrote seven non-repository response files via `curl -o`
+  (its "no file occurred" line was imprecise); 10J-2A/10J-2B made no filesystem change.
+- New files: `docs/audit/BPS_RIALTO_FEED_METADATA_2026-07-25.{md,evidence.json}`,
+  `docs/audit/BPS_FOUNDER_DECISION_REGISTER_2026-07-25.md`. Commit
+  `docs(audit): record oracle evidence and founder decisions`.
+
+## 2026-07-25 — TASK 10I-2: oracle correction review + founder ballot (commit `535e7534`)
+
+- **Type:** review + policy consolidation. NO quote, credential, wallet, signature, broadcast,
+  allowance, selector/feed/policy/legal approval, contract/economic/deployment/dependency/lockfile
+  change, push, or PR. Continuity gate followed (full 10I-1 diff reviewed from the repo; parent
+  `6cb33745…`; all superseded-history hashes preserved).
+- **Structural corrections to `price-guard.ts` (10I-1 review findings):** the caller could stamp
+  observation `semantics`; now the POLICY pins `inputFeedIdentity` / `outputFeedIdentity` /
+  `outputSemantics` and each observation must match `{feedIdentity, semantics, asset}` (else
+  FEED_IDENTITY_MISMATCH / SEMANTICS_MISMATCH / ASSET_BINDING_MISMATCH; empty identity =>
+  FEED_BINDING_MISSING). Added `roundId>0` (ZERO_ROUND), `updatedAt>0`, and uint256-domain bounds
+  before exponentiation (AMOUNT_OUT_OF_DOMAIN). RAW_UNDERLYING reachable only via approved
+  allowRawUnderlyingForEvidence + outputSemantics; never a silent fallback. Multiplier proven
+  numerically inert in PER_TOKEN mode (1x..1000x sweep). rialto vitest **89/89**.
+- **Enforcement boundary:** TS guard = trusted-server only; on-chain has NO price floor
+  (operator-supplied minStockOut can bypass it) — surfaced as ballot D-22 (A trusted-server / B
+  on-chain oracle floor / C disabled; conservative C). Neither A nor B implemented.
+- **Wording fix:** removed unsupported 'NON-BINDING'; approved phrasing 'QUOTE RETRIEVAL ONLY —
+  RETURNS A FIRM EXECUTABLE PAYLOAD; NO SIGNATURE OR BROADCAST OCCURS DURING RETRIEVAL'. Dated
+  corrections appended to the 10I-1 semantics review + corrected-10H artifacts; superseded hashes
+  preserved (10H boundary md 1e241a5f-line -> a38039a3…; boundary evidence -> 324bdaf6…; semantics
+  md -> 88530e01…).
+- **Ballot:** `docs/decisions/BPS_RIALTO_FOUNDER_APPROVAL_BALLOT_2026-07-25.md`
+  (sha `db61b58f…`) — 24 decisions in 6 groups (A founder-now / B security-now / C awaiting
+  Rialto-quote / D awaiting feed metadata / E counsel-legal / F go-no-go), each with options +
+  conservative candidate + approver + missing evidence + can-approve-now, a compact single-message
+  response template, and the DRAFT — NOT SENT access request. ALL PROPOSED — NOT APPROVED.
+  Dependency/approver reclassifications: D-5/D-6 proposable-now-validate-on-quote, D-8 not anchored
+  to docs' 50 bps, D-11 legal->price-risk/engineering, D-22 security/governance.
+- **Suites:** rialto 89/89; boundary 2/2; focused Foundry 126/126; full forge (fork env) 418/418;
+  npm run check PASS; scans clean; manifests/lockfile unchanged. Mainnet before/after IDENTICAL;
+  fresh feature-2 re-resolution (block 19125889) identical router. Accepted canary/10F-1/10G-1/
+  10H-1(semantics) hashes byte-identical. B-3 remains PARTIAL — RIALTO QUOTE ACCESS REQUIRED (+
+  APPROVED PRICE AND RISK POLICY REQUIRED / VENUE SELECTOR UNVERIFIED / VENUE REPLAY SEMANTICS
+  UNRESOLVED / LEGAL ELIGIBILITY UNRESOLVED / PRICE-GUARD TRUST MODEL NOT YET APPROVED).
+- **Backup:** archive `bps-experiment-rialto-decision-review-2026-07-25-535e7534.tar.gz` (size/SHA
+  in report; extraction-verified). Off-device: PENDING.
+- **Next:** return the ballot for founder/counsel decisions; no selection implemented until then.
+
 ## 2026-07-25 — TASK 10I-1: oracle-semantics correction + decision pack (commit `6cb33745`)
 
 - **Type:** critical correction + policy consolidation. NO quote, key operation, wallet,

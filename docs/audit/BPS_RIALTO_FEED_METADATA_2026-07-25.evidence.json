@@ -1,0 +1,296 @@
+{
+  "schemaVersion": "bps.evidence.feed-metadata/1",
+  "generatedUtc": "2026-07-25T18:30:00Z",
+  "task": "TASK 10J-3 — persist oracle/feed metadata evidence (TASK 10J-1 through 10J-2B)",
+  "scope": "Read-only official-source + on-chain discovery of the D-9 (WETH/ETH-USD), D-10 (NVDA Stock Token + feed) and D-13 (L2 sequencer) candidates. NOTHING here is approved or configured; every candidate is a CANDIDATE — NOT APPROVED / NOT CONFIGURED.",
+  "evidenceHierarchy": [
+    "1. Current official Chainlink feed catalog + Robinhood tokenized-equity feed documentation.",
+    "2. Current official Robinhood Chain documentation (incl. the Stock Token API page that documents GET https://api.robinhood.com/rhj/assets).",
+    "3. Read-only on-chain verification at an explicitly recorded Robinhood Chain block.",
+    "4. Verified contract behavior as supporting implementation evidence only, never a substitute for an official listing."
+  ],
+  "repository": {
+    "path": "C:\\Projects\\bps-experiment",
+    "branch": "master",
+    "startingHead": "535e75347c25bb4f253ab7449cd512761f22d74e",
+    "ballotSha256": "db61b58f6e298c1c73c7cc077d7905429f1a061ff377d5e5eaa94eadd606f0ca",
+    "b3Status": "PARTIAL — RIALTO QUOTE ACCESS REQUIRED"
+  },
+  "sourceLedger": [
+    {
+      "url": "https://docs.chain.link/data-feeds/price-feeds/addresses?network=robinhood",
+      "retrievedUtc": "2026-07-25T18:25:47Z",
+      "httpStatus": 200,
+      "inMemorySha256": "c978469cb394ab0fcd5110e6a39e7913d4302562a58911afca97433251844040",
+      "method": "curl streamed to sha256sum (in memory)",
+      "factSupported": "Official Chainlink addresses page references reference-data-directory.vercel.app/feeds-robinhood-mainnet.json and embeds the ETH/USD and NVDA/USD proxy addresses as first-party page data.",
+      "evidenceClass": "official-page-data",
+      "writtenToDisk": false
+    },
+    {
+      "url": "https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json",
+      "retrievedUtc": "2026-07-25T18:25:48Z",
+      "httpStatus": 200,
+      "inMemorySha256": "ff16a26cfe74f56defc6ea5fbbbbd8b6c20556298c19f258600dcd6bce81d526",
+      "method": "curl streamed to sha256sum (in memory)",
+      "factSupported": "ETH/USD and Robinhood NVDA/USD proxy, aggregator (contractAddress), decimals, heartbeat, threshold, feedCategory, feedType, marketHours; blockchainName Robinhood.",
+      "evidenceClass": "official-page-data-origin",
+      "writtenToDisk": false
+    },
+    {
+      "url": "https://docs.chain.link/data-feeds/tokenized-equity-feeds/robinhood",
+      "retrievedUtc": "2026-07-25T18:25:48Z",
+      "httpStatus": 200,
+      "inMemorySha256": "cecca1f5c5d8866ac6910938d0c0ca1f09b2d2fbf082f6aa6ae08e49f3efb1e5",
+      "method": "curl streamed to sha256sum (in memory)",
+      "factSupported": "Token Price = Underlying Equity Market Price x Multiplier; consumer must not re-apply the multiplier; 24/5 sessions; feeds may hold the last published price during closed sessions; no heartbeat during off-hours.",
+      "evidenceClass": "documentary",
+      "writtenToDisk": false
+    },
+    {
+      "url": "https://docs.chain.link/data-feeds/l2-sequencer-feeds",
+      "retrievedUtc": "2026-07-25T18:25:49Z",
+      "httpStatus": 200,
+      "inMemorySha256": "fcad9ff051416b66c72a0ad3ecac3678193eaee58e08989509c4cdd0b2357455",
+      "method": "curl streamed to sha256sum (in memory)",
+      "factSupported": "Official supported L2 sequencer-uptime networks list does not include Robinhood Chain or chain id 4663.",
+      "evidenceClass": "documentary",
+      "writtenToDisk": false
+    },
+    {
+      "url": "https://docs.robinhood.com/chain/contracts/",
+      "retrievedUtc": "2026-07-25T18:25:49Z",
+      "httpStatus": 200,
+      "inMemorySha256": "69c0902a7d186ee2a9e97bc14dc71b13fc20eabd66e3a72dbff51eb4f6012ad3",
+      "method": "curl streamed to sha256sum (in memory)",
+      "factSupported": "Canonical mainnet WETH 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73; Stock Token table generated live from the on-chain asset registry.",
+      "evidenceClass": "documentary+client-asset",
+      "writtenToDisk": false
+    },
+    {
+      "url": "https://docs.robinhood.com/chain/stock-token-apis/",
+      "retrievedUtc": "2026-07-25T18:25:50Z",
+      "httpStatus": 200,
+      "inMemorySha256": "55d6428586525600d434f68d09850dd712368803a223c1e1eb51557eee818daf",
+      "method": "curl streamed to sha256sum (in memory)",
+      "factSupported": "Official Stock Token API documentation directly identifies GET https://api.robinhood.com/rhj/assets as the asset-metadata endpoint containing per-chain deployments and current multipliers.",
+      "evidenceClass": "documentary",
+      "writtenToDisk": false
+    },
+    {
+      "url": "https://docs.robinhood.com/chain/oracles-and-price-feeds/",
+      "retrievedUtc": "2026-07-25T18:25:52Z",
+      "httpStatus": 200,
+      "inMemorySha256": "72622a4bc1da0056f3cfc1c652948ed5b390726784dd3ebb771e41ed15020d59",
+      "method": "curl streamed to sha256sum (in memory)",
+      "factSupported": "Names the Chainlink addresses page as the source of truth; consumers use the feed price directly and do not re-apply uiMultiplier.",
+      "evidenceClass": "documentary",
+      "writtenToDisk": false
+    },
+    {
+      "url": "https://docs.robinhood.com/chain/protocol-contracts/",
+      "retrievedUtc": "2026-07-25T18:25:53Z",
+      "httpStatus": 200,
+      "inMemorySha256": "c46a80a80f8c758b5757bb15a103283cfc342e43a50a338572c2070474852639",
+      "method": "curl streamed to sha256sum (in memory)",
+      "factSupported": "Lists protocol precompiles + WETH + Permit2; contains no static NVDA token address and no statically labeled stock-token registry.",
+      "evidenceClass": "documentary",
+      "writtenToDisk": false
+    },
+    {
+      "url": "https://api.robinhood.com/rhj/assets",
+      "retrievedUtc": "2026-07-25T18:25:54Z",
+      "httpStatus": 200,
+      "inMemorySha256": "a1fbf1529c12f8f1ad422088d642479d588b7a166c72c069e02e1aea46c51480",
+      "method": "curl/node parse (in memory)",
+      "factSupported": "Official Robinhood asset-metadata endpoint (documented on the Stock Token API page). Canonical NVDA record binds tokenSymbol NVDA, tokenName NVIDIA • Robinhood Token to contractAddress 0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC on chainId 4663, currentMultiplier 1.000000000000000000, status ASSET_STATUS_ACTIVE.",
+      "evidenceClass": "official-endpoint",
+      "writtenToDisk": false
+    }
+  ],
+  "provenance": {
+    "chainlinkFeedDirectory": "OFFICIAL CHAINLINK PAGE DATA ORIGIN — PROVEN. The current docs.chain.link addresses page (in-memory sha256 c978469cb394ab0fcd5110e6a39e7913d4302562a58911afca97433251844040) references https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json and independently embeds the same proxy addresses in first-party page data.",
+    "robinhoodAssetEndpoint": "OFFICIAL — the Stock Token API documentation page directly documents GET https://api.robinhood.com/rhj/assets (in-memory sha256 55d6428586525600d434f68d09850dd712368803a223c1e1eb51557eee818daf); the /chain/contracts route module additionally fetches the same endpoint. rhj is used verbatim; no expansion of the token rhj is asserted.",
+    "note": "The Chainlink feeds JSON self-identifies only as blockchainName Robinhood and does not contain the literal 4663; the chain-4663 binding rests on read-only on-chain verification at the recorded block."
+  },
+  "inspectionBlock": {
+    "chainId": 4663,
+    "rpcAvailability": "PASS",
+    "number": "19223939",
+    "hash": "0xe94b855b7973b78c1fb6611de5f41c421a69bc80f24d6631a89925270bccdb8c",
+    "timestamp": "1785003993",
+    "timestampUtc": "2026-07-25T18:26:33Z",
+    "onlyNonMutatingRpc": true
+  },
+  "canonicalWeth": {
+    "label": "CANDIDATE — NOT APPROVED / NOT CONFIGURED",
+    "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "bytecodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
+    "name": "WETH",
+    "symbol": "WETH",
+    "decimals": 18,
+    "officialSource": "docs.robinhood.com/chain/contracts/",
+    "redemptionParityNote": "Metadata alone does not prove complete 1:1 redemption parity; wrapping/deposit/withdrawal/redemption behavior is a security/engineering verification item (D-11)."
+  },
+  "ethUsdCandidate": {
+    "label": "CANDIDATE — NOT APPROVED / NOT CONFIGURED",
+    "boundary": "This is an ETH/USD feed used only as a candidate mapping for canonical WETH. It is not a direct WETH/USD feed.",
+    "proxyAddress": "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9",
+    "aggregatorAddress": "0x6091E64eb7138EEF066a80FD3A0d7427B91f2721",
+    "proxyBytecodeHash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+    "aggregatorBytecodeHash": "0x8cbea1fd25321771256158fd6beb8689fe60cd36230b22c65e77c2a03c5972fd",
+    "decimals": 8,
+    "onchainDescription": "ETH / USD",
+    "officialCatalogName": "ETH / USD",
+    "version": 6,
+    "proxyReportedAggregator": "0x6091e64eb7138eef066a80fd3a0d7427b91f2721",
+    "proxyReportedAggregatorMatchesCatalog": true,
+    "officialCatalogDecimals": 8,
+    "officialCatalogHeartbeatSeconds": 86400,
+    "officialCatalogDeviationPercent": 0.5,
+    "officialCatalogMarketHours": "Crypto",
+    "latestRoundData": {
+      "roundId": "18446744073709552852",
+      "answer": "186543329577",
+      "startedAt": "1784987022",
+      "startedAtUtc": "2026-07-25T13:43:42Z",
+      "updatedAt": "1784987034",
+      "updatedAtUtc": "2026-07-25T13:43:54Z",
+      "answeredInRound": "18446744073709552852"
+    },
+    "structuralRoundValidity": {
+      "roundIdPositive": true,
+      "answerPositive": true,
+      "updatedAtPositive": true,
+      "answeredInRoundGeRoundId": true,
+      "note": "Structural validity only; NOT an evaluation against any BPS freshness policy."
+    }
+  },
+  "canonicalNvda": {
+    "label": "CANDIDATE — NOT APPROVED / NOT CONFIGURED",
+    "tokenProvenanceClassification": "OFFICIAL LIVE ROBINHOOD LISTING — REPRODUCIBLY ESTABLISHED",
+    "officialEndpointRecord": {
+      "endpoint": "https://api.robinhood.com/rhj/assets",
+      "id": "0x00000000000000000000000000000000915f477416294f5099a5e0e09f327ce5",
+      "tokenSymbol": "NVDA",
+      "tokenName": "NVIDIA • Robinhood Token",
+      "contractAddress": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "chainId": 4663,
+      "status": "ASSET_STATUS_ACTIVE",
+      "currentMultiplier": "1.000000000000000000",
+      "pendingMultiplier": ""
+    },
+    "onchainCorroboration": {
+      "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "bytecodeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630",
+      "name": "NVIDIA • Robinhood Token",
+      "symbol": "NVDA",
+      "decimals": 18,
+      "uid": "0x00000000000000000000000000000000915f477416294f5099a5e0e09f327ce5",
+      "uidMatchesEndpointId": true,
+      "uiMultiplier": "1000000000000000000",
+      "newUIMultiplier": "1000000000000000000",
+      "effectiveAt": "0",
+      "oraclePaused": false
+    },
+    "endpointEstablishes": "The official endpoint establishes the canonical token: ticker + name + exact contractAddress + chainId 4663 + current multiplier + active status.",
+    "onchainCorroborates": "On-chain calls corroborate identity (name/symbol/decimals), that the token's own uid() equals the endpoint asset id, and that uiMultiplier 1e18 matches currentMultiplier 1.0 and oraclePaused false matches ASSET_STATUS_ACTIVE."
+  },
+  "nvdaUsdCandidate": {
+    "label": "CANDIDATE — NOT APPROVED / NOT CONFIGURED",
+    "proxyAddress": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
+    "aggregatorAddress": "0xC9d16E4f2569b9E3ea0468fD85844953713DC2a2",
+    "proxyBytecodeHash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+    "aggregatorBytecodeHash": "0x86c40717eec9baaca05681fa740851a8780f155d7b748a6a33a859ae67717d8a",
+    "decimals": 8,
+    "officialCatalogName": "Robinhood NVDA / USD",
+    "onchainDescription": "RHNVDA / USD",
+    "version": 6,
+    "proxyReportedAggregator": "0xc9d16e4f2569b9e3ea0468fd85844953713dc2a2",
+    "proxyReportedAggregatorMatchesCatalog": true,
+    "officialCatalogDecimals": 8,
+    "officialCatalogHeartbeatSeconds": 86400,
+    "officialCatalogDeviationPercent": 0.5,
+    "officialCatalogMarketHours": "us_equities_24/5",
+    "semantics": "The feed reports the Stock Token's multiplier-adjusted Total Return Value. Do not multiply the feed answer by uiMultiplier() again. During closed sessions the feed may hold its last value; tokenized-equity feeds have no heartbeat during off-hours.",
+    "latestRoundData": {
+      "roundId": "18446744073709552076",
+      "answer": "20637470000",
+      "startedAt": "1784923024",
+      "startedAtUtc": "2026-07-24T19:57:04Z",
+      "updatedAt": "1784923036",
+      "updatedAtUtc": "2026-07-24T19:57:16Z",
+      "answeredInRound": "18446744073709552076"
+    },
+    "structuralRoundValidity": {
+      "roundIdPositive": true,
+      "answerPositive": true,
+      "updatedAtPositive": true,
+      "answeredInRoundGeRoundId": true,
+      "note": "Structural validity only. The observation age at the inspection block was consistent with a held value over a closed session; this does NOT establish closed-session freshness or resolve BPS policy."
+    }
+  },
+  "classifications": {
+    "D9": "OFFICIALLY IDENTIFIED CANDIDATE — NOT APPROVED / NOT CONFIGURED",
+    "D10": "OFFICIALLY IDENTIFIED CANDIDATE — NOT APPROVED / NOT CONFIGURED",
+    "D13": "UNRESOLVED — NO ROBINHOOD CHAIN ADDRESS IN CURRENT OFFICIAL CHAINLINK LIST"
+  },
+  "d12Wording": "D-12's strict-freshness approach is founder-directed, but the exact maximum-staleness value remains deferred. The 86400-second catalog heartbeat is evidence for later analysis, not an approved ceiling, production setting or closed-session freshness guarantee.",
+  "inconsistencies": [
+    "NVDA/USD feed on-chain description() is 'RHNVDA / USD' while the Chainlink catalog name is 'Robinhood NVDA / USD' — same asset, different string representation; the aggregator address matches the catalog exactly.",
+    "The Chainlink feeds JSON carries blockchainName Robinhood but no chain id field; the chain-4663 binding is established solely by on-chain verification."
+  ],
+  "remainingSecurityEngineering": [
+    "D-9: verify canonical WETH wrapping implementation, deposit/withdrawal behavior, redemption parity, ETH/USD suitability for this exact WETH, proxy/aggregator handling, round validity and future freshness enforcement.",
+    "D-10: wire the reproduced canonical NVDA feed-and-token binding, with freshness enforcement.",
+    "D-12: choose a maximum-staleness value (deferred; no numeric constraint approved).",
+    "D-16: calibrate the independent-price deviation limit against a real quote.",
+    "D-19: implement off-hours fail-closed behavior.",
+    "D-22B: implement coordinator-level on-chain oracle-floor / guarded-executor enforcement and obtain independent review.",
+    "B-1: standing external security audit."
+  ],
+  "processDeviationTask10J2": {
+    "disclosure": "TASK 10J-2 wrote seven response bodies to the session scratchpad directory OUTSIDE the git repository via curl -o; its report line claiming no file occurred was imprecise (no REPOSITORY file was created, but seven non-repository filesystem objects were).",
+    "files": [
+      {
+        "name": "tokenized-equity.html",
+        "bytes": 359934,
+        "sha256": "cecca1f5c5d8866ac6910938d0c0ca1f09b2d2fbf082f6aa6ae08e49f3efb1e5"
+      },
+      {
+        "name": "l2-sequencer.html",
+        "bytes": 340572,
+        "sha256": "fcad9ff051416b66c72a0ad3ecac3678193eaee58e08989509c4cdd0b2357455"
+      },
+      {
+        "name": "addresses-robinhood.html",
+        "bytes": 16943376,
+        "sha256": "c978469cb394ab0fcd5110e6a39e7913d4302562a58911afca97433251844040"
+      },
+      {
+        "name": "rh-oracles.html",
+        "bytes": 47416,
+        "sha256": "72622a4bc1da0056f3cfc1c652948ed5b390726784dd3ebb771e41ed15020d59"
+      },
+      {
+        "name": "rh-contracts.html",
+        "bytes": 22144,
+        "sha256": "69c0902a7d186ee2a9e97bc14dc71b13fc20eabd66e3a72dbff51eb4f6012ad3"
+      },
+      {
+        "name": "feeds-robinhood.json",
+        "bytes": 79765,
+        "sha256": "ff16a26cfe74f56defc6ea5fbbbbd8b6c20556298c19f258600dcd6bce81d526"
+      },
+      {
+        "name": "rh-protocol.html",
+        "bytes": 57109,
+        "sha256": "c46a80a80f8c758b5757bb15a103283cfc342e43a50a338572c2070474852639"
+      }
+    ],
+    "directory": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\2\\claude\\C--Projects-bps-experiment\\9d4a60ba-88f8-4f76-aea5-a1228d4992d0\\scratchpad\\10j2",
+    "task10J2AFilesystemChange": "none",
+    "task10J2BFilesystemChange": "none"
+  },
+  "nothingApprovedOrConfigured": "No feed, aggregator, token, heartbeat, maximum-staleness value, deviation limit, selector, sequencer address or grace period has been approved or configured by this task. Every candidate is CANDIDATE — NOT APPROVED / NOT CONFIGURED."
+}

@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-25T16:10:00Z",
+  "updatedUtc": "2026-07-25T18:35:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "6cb33745693905f576ec521422c2fca1de3605ac",
+  "head": "535e75347c25bb4f253ab7449cd512761f22d74e",
   "workingTree": {
     "dirty": true,
-    "note": "Oracle-semantics checkpoint 6cb33745 committed (10 reviewed paths). Only these post-checkpoint continuity updates remain uncommitted.",
+    "note": "Oracle+decision-review checkpoint 535e7534 committed (11 reviewed paths). Only these post-checkpoint continuity updates remain uncommitted.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
@@ -15,9 +15,9 @@
     "untracked": []
   },
   "phase": "post-canary",
-  "latestCompletedMilestone": "TASK 10I-1 — oracle semantics reconciliation + price-guard correction + decision pack (2026-07-25; commit 6cb33745693905f576ec521422c2fca1de3605ac)",
-  "currentTask": "none — awaiting founder/counsel decision-pack approvals + Rialto access",
-  "nextTask": "Founder/counsel approval of the 24-decision pack; send drafted quote:read request; then rerun the boundary against a real NON-BINDING quote (selector pinning)",
+  "latestCompletedMilestone": "TASK 10J-3 — persist oracle/feed metadata evidence + normalized founder D-1..D-24 decision register (2026-07-25)",
+  "currentTask": "none — TASK 10J-3 evidence + decision register persisted; founder ballot decisions recorded",
+  "nextTask": "Founder manually sends the drafted quote:read access request (SEND MANUALLY) and returns Rialto's response; security/engineering + counsel gates remain; no selection activated",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,
@@ -250,6 +250,11 @@
       "file": "bps-experiment-oracle-semantics-2026-07-25-6cb33745.tar.gz",
       "offDeviceEncryptedTransfer": "PENDING",
       "note": "path/size/SHA in task report + CHANGELOG"
+    },
+    "oracleDecisionReviewArchive": {
+      "file": "bps-experiment-rialto-decision-review-2026-07-25-535e7534.tar.gz",
+      "offDeviceEncryptedTransfer": "PENDING",
+      "note": "path/size/SHA in task report + CHANGELOG"
     }
   },
   "snapshotPipeline": {
@@ -324,6 +329,55 @@
         "decisions": 24,
         "status": "ALL PROPOSED — NOT APPROVED"
       }
+    },
+    "oracleDecisionReview": {
+      "date": "2026-07-25",
+      "checkpointCommit": "535e75347c25bb4f253ab7449cd512761f22d74e",
+      "structuralFixes": "policy-pinned inputFeedIdentity/outputFeedIdentity/outputSemantics (no caller relabeling); roundId>0 + updatedAt>0; uint256-domain bounds before exponentiation; rialto 89/89",
+      "wordingFix": "removed NON-BINDING -> 'QUOTE RETRIEVAL ONLY — RETURNS A FIRM EXECUTABLE PAYLOAD; NO SIGNATURE OR BROADCAST OCCURS DURING RETRIEVAL' (dated corrections; superseded hashes preserved)",
+      "ballot": {
+        "path": "docs/decisions/BPS_RIALTO_FOUNDER_APPROVAL_BALLOT_2026-07-25.md",
+        "sha256": "db61b58f6e298c1c73c7cc077d7905429f1a061ff377d5e5eaa94eadd606f0ca",
+        "decisions": 24,
+        "status": "ALL PROPOSED — NOT APPROVED"
+      },
+      "reviewEvidenceSha256": "e145a3c8a719fe8f6ac530fe946a8c5890ab7917c90fde8ce8695a00b529ff01",
+      "reviewReportSha256": "0a3a6fa240f9f4c5cff0757c06db90be09660a313f2b7f318cd4d54ad0e70ff6",
+      "corrected10HHashes": {
+        "boundaryMd": "a38039a3bf94ca22632ec3d9a44d0ef2c0638c9816980ead50b6b0917423245b",
+        "boundaryEvidence": "324bdaf68dae8552d29e84fd099a0360d477cd820555089d77a9ae67a32c266b",
+        "semanticsMd": "88530e01eb7b38c3ea187aa033e8d5654e062d411e65678fdb6d462039caeb79"
+      },
+      "priceGuardTrustModel": "NOT YET APPROVED (ballot D-22: A trusted-server / B on-chain oracle floor / C disabled; conservative = C)"
     }
+  },
+  "oracleFeedMetadata": {
+    "date": "2026-07-25",
+    "inspectionBlock": 19223939,
+    "inspectionBlockHash": "0xe94b855b7973b78c1fb6611de5f41c421a69bc80f24d6631a89925270bccdb8c",
+    "chainId": 4663,
+    "d9": "OFFICIALLY IDENTIFIED CANDIDATE — NOT APPROVED / NOT CONFIGURED",
+    "d10": "OFFICIALLY IDENTIFIED CANDIDATE — NOT APPROVED / NOT CONFIGURED",
+    "d13": "UNRESOLVED — NO ROBINHOOD CHAIN ADDRESS IN CURRENT OFFICIAL CHAINLINK LIST",
+    "d12": "D-12's strict-freshness approach is founder-directed, but the exact maximum-staleness value remains deferred. The 86400-second catalog heartbeat is evidence for later analysis, not an approved ceiling, production setting or closed-session freshness guarantee.",
+    "candidates": {
+      "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "ethUsdProxy": "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9",
+      "ethUsdAggregator": "0x6091E64eb7138EEF066a80FD3A0d7427B91f2721",
+      "nvdaUsdProxy": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
+      "nvdaUsdAggregator": "0xC9d16E4f2569b9E3ea0468fD85844953713DC2a2",
+      "nvdaToken": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "allLabel": "CANDIDATE — NOT APPROVED / NOT CONFIGURED"
+    },
+    "nvdaTokenProvenance": "OFFICIAL LIVE ROBINHOOD LISTING — REPRODUCIBLY ESTABLISHED (api.robinhood.com/rhj/assets; token uid() == endpoint asset id)",
+    "evidence": [
+      "docs/audit/BPS_RIALTO_FEED_METADATA_2026-07-25.md",
+      "docs/audit/BPS_RIALTO_FEED_METADATA_2026-07-25.evidence.json"
+    ],
+    "decisionRegister": "docs/audit/BPS_FOUNDER_DECISION_REGISTER_2026-07-25.md",
+    "task10J2ProcessDeviation": "seven non-repository response files written by 10J-2 via curl -o (disclosed); 10J-2A/10J-2B made no filesystem change",
+    "d22bBoundary": "founder-selected architectural direction ONLY; implementation NOT authorized",
+    "d23": "COUNSEL-PENDING",
+    "d24": "no acquisition/funding/allowance/quote/simulation/deployment/activation authorized"
   }
 }
