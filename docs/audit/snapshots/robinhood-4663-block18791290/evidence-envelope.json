@@ -1,0 +1,12 @@
+{
+  "canonicalSnapshotDigest": "0x893042b8b6c7ed1466958ce7f38964ffb6826597607431229183dd3ffef4c0c0",
+  "classification": "TECHNICAL CANDIDATE SNAPSHOT — LEGAL ELIGIBILITY UNVERIFIED — NOT AUTHORIZED FOR PUBLICATION",
+  "generatedUtc": "2026-07-25T12:48:38.785Z",
+  "observedChainHead": "19021784",
+  "onchainLeafParity": {
+    "checked": 1,
+    "matched": 1
+  },
+  "proofBundleDigest": "0xbd8a1a7184b2c519341781fecaae8abd8176df7639decf347aab3d69081d7fa3",
+  "schemaVersion": "bps.snapshot.evidence-envelope/1"
+}

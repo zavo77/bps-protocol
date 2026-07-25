@@ -1,32 +1,30 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-25T09:05:00Z",
+  "updatedUtc": "2026-07-25T13:45:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "6ace4803b5b637a58c122e2c89d5216a76dfe48d",
+  "head": "d699f7aea2d8ec7ebf47de8a9d2789791b8da92f",
   "workingTree": {
     "dirty": true,
-    "note": "Checkpoint 6ace4803 clean baseline + post-checkpoint continuity metadata + uncommitted TASK 10F-1 changes awaiting review.",
+    "note": "10F-1 checkpoint d699f7ae baseline + post-checkpoint continuity metadata + uncommitted TASK 10G-1 changes awaiting review.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
       "docs/continuity/CHANGELOG.md",
-      ".prettierignore",
-      "packages/contracts/foundry.toml"
+      ".prettierignore"
     ],
     "untracked": [
-      "packages/contracts/test/ForkDistributionLifecycle.t.sol",
-      "packages/contracts/test/ForkLifecycleProbe.t.sol",
-      "packages/contracts/rehearsal-evidence/",
-      "packages/contracts/canary-packet/mainnet-snapshot-check.mjs",
-      "docs/audit/BPS_DISTRIBUTION_LIFECYCLE_FORK_REHEARSAL_2026-07-25.md",
-      "docs/audit/BPS_DISTRIBUTION_LIFECYCLE_FORK_REHEARSAL_2026-07-25.evidence.json"
+      "apps/indexer/src/lock-snapshot/",
+      "apps/indexer/src/snapshot-cli.ts",
+      "docs/audit/snapshots/",
+      "docs/audit/BPS_PRODUCTION_SNAPSHOT_PIPELINE_2026-07-25.md",
+      "docs/audit/BPS_PRODUCTION_SNAPSHOT_PIPELINE_2026-07-25.evidence.json"
     ]
   },
   "phase": "post-canary",
-  "latestCompletedMilestone": "TASK 10F-1 — distribution-lifecycle fork rehearsal: REHEARSAL PASS (2026-07-25; pinned fork block 18791290; external Rialto settlement venue mocked; mainnet non-mutation proven)",
-  "currentTask": "none — TASK 10F-1 complete, awaiting review (changes uncommitted)",
-  "nextTask": "Production hardening + independent security review (HANDOVER.md section O step 3); concrete gaps from 10F-1: Rialto venue integration (B-3) and indexer-backed snapshot enumeration (INF-3)",
+  "latestCompletedMilestone": "TASK 10G-1 — production snapshot enumeration + chain-bound PoD artifacts: SNAPSHOT PIPELINE PASS (2026-07-25; pinned block 18791290; on-chain leaf parity 1/1; two-run byte-identical artifacts)",
+  "currentTask": "none — TASK 10G-1 complete, awaiting review (changes uncommitted)",
+  "nextTask": "Production Rialto venue integration and settlement hardening (B-3): quote capture, settlement-selector pinning, venue eligibility; independent audit (B-1) in parallel",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,
@@ -75,7 +73,9 @@
         "docs/audit/BPS_DISTRIBUTION_LIFECYCLE_FORK_REHEARSAL_2026-07-25.evidence.json"
       ],
       "provesProductionReadiness": false,
-      "realRwaSettlementOccurred": false
+      "realRwaSettlementOccurred": false,
+      "evidenceSha256": "2557a3d782bd38b2c679902578f7bc5519b7b0e5f82f9fdea85e28a77d5cb065",
+      "checkpointCommit": "d699f7aea2d8ec7ebf47de8a9d2789791b8da92f"
     }
   },
   "deployedCanaryContracts": {
@@ -137,7 +137,12 @@
     },
     "canaryVerifyAll": "PASS (9 suites)",
     "playwrightE2E": "PASS (historical ~2026-07-24; single smoke flow; rerun before relying)",
-    "externalSecurityAudit": "NOT_PERFORMED"
+    "externalSecurityAudit": "NOT_PERFORMED",
+    "indexerVitest": {
+      "passed": 37,
+      "files": 6,
+      "note": "lock-snapshot pipeline suites added in 10G-1"
+    }
   },
   "blockers": [
     {
@@ -178,8 +183,8 @@
     },
     {
       "id": "INF-3",
-      "severity": "medium",
-      "summary": "Indexer + worker are health skeletons only",
+      "severity": "low",
+      "summary": "Indexer enumeration CLOSED for pinned snapshots (10G-1); worker skeleton + persistent-DB indexer remain (see INF-1)",
       "owner": "engineering"
     },
     {
@@ -222,6 +227,31 @@
       "sha256": "a971760fa0748b6eeebb8f8ee3a196735e4163890fa3d673c8c8ddf8136f374d",
       "note": "Off-device copy confirmed by the USER on 2026-07-25 (user-verified; not independently inspected by Claude)."
     },
-    "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25"
+    "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25",
+    "rehearsalCheckpointArchive": {
+      "file": "bps-experiment-rehearsal-2026-07-25-d699f7ae.tar.gz",
+      "path": "C:Projects\bps-backups\bps-experiment-rehearsal-2026-07-25-d699f7ae.tar.gz",
+      "sizeBytes": 149833975,
+      "sha256": "6e68525824a3fb18e56604a91ef5c5117b53c12af03d3bc05fc4fa41e0e81039",
+      "checkpointCommit": "d699f7aea2d8ec7ebf47de8a9d2789791b8da92f",
+      "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25",
+      "note": "User-verified confirmation of the off-device copy; not independently inspected by Claude."
+    }
+  },
+  "snapshotPipeline": {
+    "classification": "SNAPSHOT PIPELINE PASS",
+    "date": "2026-07-25",
+    "pinnedBlock": 18791290,
+    "pinnedBlockHash": "0x2d332bb08395b53f571015af9959d1a0e9c68baec300265b08fe77b38ef1516f",
+    "merkleRoot": "0xbf4a88b5ca7b12117c8fb9df350017c6c42ba27dc16d0dfad1499536a529aebb",
+    "canonicalSnapshotDigest": "0x893042b8b6c7ed1466958ce7f38964ffb6826597607431229183dd3ffef4c0c0",
+    "proofBundleDigest": "0xbd8a1a7184b2c519341781fecaae8abd8176df7639decf347aab3d69081d7fa3",
+    "artifacts": "docs/audit/snapshots/robinhood-4663-block18791290/",
+    "chainBoundNow": "snapshot, entitlements, proofs, publication hashes (previously fixture/placeholder-only)",
+    "inf3": "CLOSED for pinned-snapshot generation; persistent-DB indexer remains INF-1",
+    "legalEligibility": "UNRESOLVED — artifacts labeled TECHNICAL CANDIDATE / NOT AUTHORIZED FOR PUBLICATION",
+    "rialtoB3": "UNADDRESSED",
+    "auditB1": "NOT BEGUN",
+    "publication": "NO root published; unsigned payload UNSIGNED_DO_NOT_BROADCAST"
   }
 }

@@ -1,0 +1,59 @@
+{
+  "candidateCount": 1,
+  "chainId": "4663",
+  "claimManager": "0x5ecbadf1cf050f1b86d44b979416a8e859fb2574",
+  "classification": "TECHNICAL CANDIDATE SNAPSHOT — LEGAL ELIGIBILITY UNVERIFIED — NOT AUTHORIZED FOR PUBLICATION",
+  "cycleId": "1",
+  "distributionAmount": "230074787421624000",
+  "distributionAsset": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+  "dust": "0",
+  "entitlementRule": "floor(distributionAmount * participantEffectiveWeight / totalEffectiveWeight); per-wallet floor, remainder retained as distribution dust (@bps/shared ALLOCATION_ROUNDING_POLICY)",
+  "entitlementTotal": "230074787421624000",
+  "entitlements": [
+    {
+      "address": "0x78b256a742fa2c0f84ebdaf570fcdc16ee206024",
+      "effectiveWeight": "523101036779224972875501",
+      "entitlement": "230074787421624000",
+      "leaf": "0xbf4a88b5ca7b12117c8fb9df350017c6c42ba27dc16d0dfad1499536a529aebb"
+    }
+  ],
+  "enumerationStartBlock": "18395614",
+  "includedParticipantCount": 1,
+  "indexerSyncedThrough": "18791290",
+  "inputDigests": {
+    "lockCreatedRecords": "0xc3c3cea24f2b9f12a309ec90e96eda9c654d3f290d2264f982ae94b918189c57",
+    "lockWithdrawnRecords": "0x518674ab2b227e5f11e9084f615d57663cde47bce1ba168b4c19c7ee22a73d70",
+    "request": "0xe75af2356245c43a243079fc716a23053aec9cee44b9834b567372a524692504"
+  },
+  "leafEncoding": [
+    "uint256",
+    "address",
+    "uint256",
+    "address",
+    "address",
+    "uint256"
+  ],
+  "leafOrder": [
+    "chainId",
+    "claimManager",
+    "cycleId",
+    "wallet",
+    "asset",
+    "amount"
+  ],
+  "lockingVault": "0xefa9d1c40358e281da21a1bc20a204c849cb8a42",
+  "merkleRoot": "0xbf4a88b5ca7b12117c8fb9df350017c6c42ba27dc16d0dfad1499536a529aebb",
+  "participants": [
+    {
+      "address": "0x78b256a742fa2c0f84ebdaf570fcdc16ee206024",
+      "effectiveWeight": "523101036779224972875501",
+      "lockCount": "1"
+    }
+  ],
+  "schemaVersion": "bps.snapshot.chain-bound/1",
+  "snapshotBlock": "18791290",
+  "snapshotBlockHash": "0x2d332bb08395b53f571015af9959d1a0e9c68baec300265b08fe77b38ef1516f",
+  "snapshotBlockTimestamp": "1784960546",
+  "totalEffectiveWeight": "523101036779224972875501",
+  "zeroWeightExcludedCount": 0
+}

@@ -7,6 +7,79 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-25 — TASK 10G-1: production snapshot pipeline — `SNAPSHOT PIPELINE PASS`
+
+- **Type:** production-hardening implementation (indexer + artifacts). NO wallet, key, signer,
+  signature, broadcast, eth_sendTransaction/eth_sendRawTransaction, deployment, mainnet mutation,
+  nonce-8 use, dependency change, commit, push, or PR. Read-only RPC only. Continuity gate followed.
+- **Prompt-path discrepancy recorded:** the task named `C:\Projects\bps-protocol` — a different, older
+  repository (HEAD `d03458ba…`, superseded doc copies). The expected branch/HEAD/tree exist uniquely in
+  `C:\Projects\bps-experiment` (also the CLAUDE.md scope), where the task executed.
+- **Off-device backup:** rehearsal archive `bps-experiment-rehearsal-2026-07-25-d699f7ae.tar.gz`
+  (149,833,975 B, SHA-256 `6e685258…1039`) recorded **COMPLETE — USER VERIFIED 2026-07-25**
+  (user-verified; destination copy not independently inspected). The earlier checkpoint archive's
+  historical status remains unchanged.
+- **Built (closes the two 10F-1 limitations):** `apps/indexer/src/lock-snapshot/` — fail-closed,
+  deterministic, indexer-backed candidate enumeration (LockCreated scan from the vault deployment
+  block) + authoritative block-pinned effective weights (`lockCount`/`positionWeightAt` via pinned
+  `eth_call`) + approved floor-rule entitlements + canonical StandardMerkleTree/LEAF_ABI_TYPES leaves
+  - chain-bound artifacts (canonical snapshot, proof bundle, evidence envelope, UNSIGNED publication
+    payload whose content hashes are the REAL canonical digests — placeholder hashes retired) + read-only
+    consumer boundary + `snapshot-cli`. All artifacts labeled `TECHNICAL CANDIDATE SNAPSHOT — LEGAL
+ELIGIBILITY UNVERIFIED — NOT AUTHORIZED FOR PUBLICATION`.
+- **Pinned mainnet demonstration (block 18791290, hash `0x2d332bb0…516f`):** 1 candidate discovered
+  (the live tester lock), total effective weight `523101036779224972875501` (matches canary + 10F-1
+  values, independently re-derived), entitlement + dust reconcile exactly, Merkle root
+  `0xbf4a88b5…aebb`, **on-chain `leafFor` parity 1/1 against the deployed DistributionClaimManager**,
+  **two-run byte-identical** canonical artifacts (a first-cut determinism defect — live chain head
+  embedded in the canonical artifact — was caught by this check and fixed). Artifacts under
+  `docs/audit/snapshots/robinhood-4663-block18791290/`.
+- **Infrastructure finding (INF-2 evidence):** archival provider caps `eth_getLogs` to 10-block
+  ranges; public fallback RPC has pruned historical state. Pipeline supports a split-endpoint mode
+  (archival primary + wide-range logs endpoint, chain-id cross-verified).
+- **Suites:** indexer vitest **37/37** (6 files incl. 19 fail-closed negatives + 5 parity + 4
+  consumer); full `forge test` (fork env) **418/418**; `npm run check` PASS. 31-condition negative
+  coverage map (each → named test/guard or INAPPLICABLE with reason) in the evidence manifest.
+- **Statuses:** INF-3 **CLOSED** for pinned-snapshot generation (persistent-DB indexer remains
+  INF-1); legal eligibility (B-2) UNRESOLVED; Rialto (B-3) UNADDRESSED; audit (B-1) not begun; NO
+  root published; production readiness NOT established. Mainnet non-mutation proven (before/after
+  identical; nonces 16/16, 8/8). All 10G-1 changes left **uncommitted for review**.
+- **Evidence:** `docs/audit/BPS_PRODUCTION_SNAPSHOT_PIPELINE_2026-07-25.{md,evidence.json}`.
+- **Next:** production Rialto venue integration and settlement hardening (B-3) — not begun.
+
+## 2026-07-25 — TASK 10F-1 review + checkpoint (commit `d699f7ae`)
+
+- **Type:** review, preservation and backup only. NO wallet, secret, live signature, broadcast,
+  deployment, mainnet transaction, nonce-8 use, dependency change, push, or PR. Continuity gate
+  followed (state matched the expected branch/HEAD/tree exactly; tester nonce live-confirmed 8/8).
+- **Review findings/corrections:** all 10F-1 changes verified in scope (no production contract,
+  registry, or operator change; `foundry.toml` + `.prettierignore` additions narrow; the
+  `mainnet-snapshot-check.mjs` helper proven strictly read-only, never printing the RPC URL;
+  `rehearsal-evidence/` holds only the 1,220-byte raw evidence JSON; canary artifacts byte-identical,
+  `exec/` MANIFEST 5/5). **Corrections during review:** (a) `ForkLifecycleProbe.t.sol` classified as
+  intentionally RETAINED with a recorded justification (regression guard for the NVDA storage-slot +
+  transferability assumptions); (b) an explicit one-to-one **`negativeCoverageMap`** (all 21 required
+  negative/boundary conditions → exact fork assertion or named unit test; none UNPROVEN) was added to
+  the evidence manifest, changing its SHA-256 to
+  `2557a3d782bd38b2c679902578f7bc5519b7b0e5f82f9fdea85e28a77d5cb065` (the pre-review hash `b934289c…`
+  appeared only in then-uncommitted text and was corrected before any commit).
+- **Evidence re-verified independently:** claim sum 230,074,787,421,623,997 + 3 dust ==
+  230,074,787,421,624,000 distribution; distribution + reserve == 287,593,484,277,030,000 acquired;
+  custody conservation, weights total, per-wallet floor formula, fork pin block/hash + chainId 4663 —
+  all recomputed and matching across the raw JSON, report, and manifest.
+- **Checkpoint commit:** `d699f7aea2d8ec7ebf47de8a9d2789791b8da92f` —
+  `test(contracts): checkpoint distribution lifecycle rehearsal` (11 reviewed paths; staged list
+  verified free of secrets/deps/caches/canary modifications).
+- **Suites at checkpoint:** focused fork tests PASS; full `forge test` (fork env) 418/418;
+  `npm run check` PASS; prettier clean; `git diff --check` clean; all JSON parses.
+- **Backup:** prior checkpoint archive status preserved as **COMPLETE — USER VERIFIED 2026-07-25**
+  (historical; not overwritten). NEW dated recovery archive
+  `bps-experiment-rehearsal-2026-07-25-d699f7ae.tar.gz` created outside the repository (includes
+  `.git` at the new checkpoint + uncommitted continuity metadata + all rehearsal evidence/tests;
+  excludes secrets/deps/build output); size + SHA-256 in the task report; extraction-verified.
+  **Off-device encrypted transfer: PENDING** until the user independently copies and verifies it.
+- **Next milestone:** production hardening + independent security review (NOT begun).
+
 ## 2026-07-25 — TASK 10F-1: distribution-lifecycle fork rehearsal — `REHEARSAL PASS`
 
 - **Type:** fork-only rehearsal. NO wallet, key, signature, broadcast, deployment, live transaction,

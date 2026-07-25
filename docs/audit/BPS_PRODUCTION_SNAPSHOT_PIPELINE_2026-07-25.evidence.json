@@ -1,0 +1,251 @@
+{
+  "schemaVersion": "bps.evidence.snapshot-pipeline/1",
+  "generatedUtc": "2026-07-25T13:35:00Z",
+  "task": "TASK 10G-1 — production snapshot enumeration and chain-bound Proof-of-Distribution artifacts",
+  "classification": "SNAPSHOT PIPELINE PASS",
+  "prominentStatements": [
+    "This pipeline does not establish legal eligibility.",
+    "This pipeline does not authorize root publication.",
+    "No Merkle root was published to mainnet.",
+    "No real RWA acquisition or settlement occurred.",
+    "BPSC remains a canary and is not canonical BPS.",
+    "This task does not establish production readiness or deployment authorization."
+  ],
+  "repository": {
+    "note": "Task prompt named C:\\Projects\\bps-protocol; that path is a DIFFERENT, older repository (HEAD d03458ba..., superseded doc copies). The expected branch/HEAD/tree exist uniquely in C:\\Projects\\bps-experiment (also the CLAUDE.md scope), where this task executed. Recorded as a prompt-path discrepancy, not silently resolved.",
+    "path": "C:\\Projects\\bps-experiment",
+    "branch": "master",
+    "startingHead": "d699f7aea2d8ec7ebf47de8a9d2789791b8da92f",
+    "dirtyTreeExplanation": "Pre-existing post-checkpoint continuity metadata (HANDOVER.md + docs/continuity/*) preserved; plus the TASK 10G-1 files listed below, all uncommitted for review."
+  },
+  "offDeviceBackup": {
+    "archive": "C:\\Projects\\bps-backups\\bps-experiment-rehearsal-2026-07-25-d699f7ae.tar.gz",
+    "sizeBytes": 149833975,
+    "sha256": "6e68525824a3fb18e56604a91ef5c5117b53c12af03d3bc05fc4fa41e0e81039",
+    "status": "COMPLETE — USER VERIFIED 2026-07-25",
+    "note": "User-verified; Claude did not independently inspect the destination copy."
+  },
+  "pinnedScenario": {
+    "upstreamChainId": 4663,
+    "snapshotBlock": 18791290,
+    "snapshotBlockHash": "0x2d332bb08395b53f571015af9959d1a0e9c68baec300265b08fe77b38ef1516f",
+    "snapshotBlockTimestamp": "1784960546",
+    "enumerationStartBlock": 18395614,
+    "enumerationStartJustification": "BPSLockingVault deployment block (canary step 2, tx 0x4569523a... in the accepted canary evidence); coverage guard proves no vault code exists one block earlier.",
+    "indexerCoverageThrough": "18791290",
+    "contracts": {
+      "lockingVault": "0xefa9d1c40358e281da21a1bc20a204c849cb8a42",
+      "claimManager": "0x5ecbadf1cf050f1b86d44b979416a8e859fb2574",
+      "distributionAsset_NVDA": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec"
+    },
+    "rpcPolicy": "Primary archival endpoint from env ROBINHOOD_CHAIN_RPC_URL (never printed/persisted); log scans via the repo-documented public fallback RPC (BPS_LAUNCH_DECISIONS.md section 2) because the archival provider caps eth_getLogs to 10-block ranges (INF-2 evidence); both endpoints chain-id cross-verified (LOGS_ENDPOINT_CHAIN_MISMATCH guard)."
+  },
+  "results": {
+    "candidateCount": 1,
+    "zeroWeightExcludedCount": 0,
+    "includedParticipantCount": 1,
+    "totalEffectiveWeight": "523101036779224972875501",
+    "totalEffectiveWeightCrossCheck": "Equals the live tester lock weight recorded in both the canary completion evidence and the 10F-1 rehearsal (523101036779224972875501) — independently re-derived here via pinned eth_call.",
+    "distributionAsset": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+    "distributionAmount": "230074787421624000",
+    "distributionAmountNote": "Explicit demonstration input equal to the 10F-1 rehearsal distribution figure; NO real distribution exists on mainnet — TECHNICAL CANDIDATE only.",
+    "entitlementTotal": "230074787421624000",
+    "dust": "0",
+    "accountingIdentity": "entitlementTotal + dust == distributionAmount (exact bigint); single participant => entitlement == full amount, dust 0",
+    "merkleRoot": "0xbf4a88b5ca7b12117c8fb9df350017c6c42ba27dc16d0dfad1499536a529aebb",
+    "canonicalSnapshotDigest": "0x893042b8b6c7ed1466958ce7f38964ffb6826597607431229183dd3ffef4c0c0",
+    "proofBundleDigest": "0xbd8a1a7184b2c519341781fecaae8abd8176df7639decf347aab3d69081d7fa3",
+    "onchainLeafParity": {
+      "checked": 1,
+      "matched": 1
+    },
+    "observedChainHeadAtRun": "19021784",
+    "leafEncoding": ["uint256", "address", "uint256", "address", "address", "uint256"],
+    "leafOrder": ["chainId", "claimManager", "cycleId", "wallet", "asset", "amount"],
+    "entitlementRule": "floor(distributionAmount * participantEffectiveWeight / totalEffectiveWeight); per-wallet floor, remainder retained as distribution dust (@bps/shared ALLOCATION_ROUNDING_POLICY)"
+  },
+  "determinism": {
+    "twoRunByteIdentity": "PASS — canonical-snapshot.json, proof-bundle.json, unsigned-publication.json byte-identical across two independent CLI runs (cmp); evidence envelope differs only by generatedUtc/observedChainHead by design.",
+    "defectFoundAndFixed": "First implementation embedded the live chain head in the canonical snapshot (digest varied per run). Fixed: canonical indexerSyncedThrough is deterministically the snapshot block; the observed head moved to the evidence envelope."
+  },
+  "parity": {
+    "typescriptSolidity": "PASS — (a) audited LeafVector vector reproduced by viemLeafHashRaw AND StandardMerkleTree leafHash; (b) sorted-pair proof processing reproduces the audited root; (c) LIVE pinned-block leafFor on the DEPLOYED DistributionClaimManager equals the TypeScript leaf (onchainLeafParity 1/1, enforced in-pipeline as LEAF_PARITY_MISMATCH); (d) domain-field substitution changes the leaf; (e) invalid EIP-55 casing rejected fail-closed."
+  },
+  "consumer": {
+    "result": "PASS — lookupParticipant returns exact entitlement + verifying proof for included accounts (mixed-case tolerated via canonical normalization); missing/zero-weight accounts return null (no fabrication); aggregateView sources only the canonical artifact; classification and publicationStatus ('NOT PUBLISHED — NOT AUTHORIZED') never overstated."
+  },
+  "tests": {
+    "focusedIndexerVitest": {
+      "files": 6,
+      "passed": 37,
+      "failed": 0
+    },
+    "breakdown": {
+      "health": 1,
+      "enumeration": 4,
+      "pipeline": 4,
+      "negatives": 19,
+      "parity": 5,
+      "consumer": 4
+    },
+    "fullForge": {
+      "passed": 418,
+      "failed": 0,
+      "suites": 47,
+      "note": "with fork env; includes 10F-1 fork lifecycle + probe"
+    },
+    "npmRunCheck": "PASS end-to-end (prettier, eslint, tsc, all workspace vitest incl. shared 52 / pilot 30 / web 177, next build, forge fmt/build/test)"
+  },
+  "negativeCoverageMap": {
+    "wrongChainId": "negative.test.ts: 'wrong chain id -> CHAIN_ID_MISMATCH'",
+    "wrongBlockHash": "negative.test.ts: 'wrong block hash -> BLOCK_HASH_MISMATCH (reorg protection)'",
+    "latestOrOmittedBlockPin": "negative.test.ts: 'nonexistent snapshot block -> BLOCK_NOT_FOUND (and `latest` is unrepresentable)' — the request type has no latest concept; pin is a required bigint + required hash",
+    "snapshotBeforeDeployment": "negative.test.ts: 'snapshot before vault deployment -> VAULT_NOT_DEPLOYED'",
+    "indexerBehindRequestedBlock": "negative.test.ts: 'indexer behind the requested block -> INDEXER_BEHIND'",
+    "incompleteIndexerHistory": "negative.test.ts: 'incomplete indexer history (start after deployment) -> INCOMPLETE_COVERAGE'",
+    "historicalRpcStateUnavailable": "rpc-reader.ts HISTORICAL_STATE_UNAVAILABLE guard; exercised live during ground-truthing (public fallback RPC returned 'metadata is not found' for pruned historical eth_getCode, aborting the run fail-closed before any artifact was produced)",
+    "unsupportedLockingVaultAddress": "negative.test.ts: 'unsupported locking-vault address (no code at pin) -> VAULT_NOT_DEPLOYED'",
+    "unsupportedDistributionAsset": "INAPPLICABLE at the snapshot layer with reason: no approved snapshot-time asset allowlist exists; asset validity is enforced upstream at acquisition (immutable vault basket — Foundry StockVaultBase/StockVaultAcquisition suites) and the snapshot layer validates address form only (validateRequestShape)",
+    "malformedAddress": "negative.test.ts: 'malformed address in event history -> MALFORMED_ACCOUNT' + validateRequestShape INVALID_ADDRESS for request fields",
+    "duplicateParticipant": "negative.test.ts: 'duplicate participant records cannot create duplicate entitlement'",
+    "zeroEffectiveWeight": "negative.test.ts: 'zero effective weight is excluded, not entitled'",
+    "expiredLockAtExactBoundary": "Contract-authoritative: Foundry LockingVaultWeight.testWeightBoundariesUnwithdrawn (weight exactly 1.00x at unlockTime, bonus strictly before); the pipeline consumes the contract's pinned answer verbatim",
+    "lockCreatedAfterSnapshotBlock": "negative.test.ts: 'lock created after the snapshot block is excluded from enumeration' + enumeration.test.ts: 'excludes events strictly after the snapshot block; keeps the exact-boundary block'",
+    "withdrawalBeforeSnapshot": "negative.test.ts: 'withdrawal before the snapshot yields zero weight; withdrawal after keeps weight'",
+    "withdrawalAfterSnapshot": "same named test (kept-weight branch)",
+    "zeroDistributionAmount": "negative.test.ts: 'zero distribution amount -> ZERO_DISTRIBUTION'",
+    "dustHeavyDistribution": "negative.test.ts: 'dust-heavy distribution where every entitlement floors to zero -> DUST_ONLY_DISTRIBUTION'",
+    "integerOverflowUnsafeNumber": "pipeline.test.ts: 'handles overflow-scale integers without unsafe number conversion' + negative.test.ts: 'unsafe-number conversion is rejected by canonical serialization'",
+    "entitlementSumExceedingDistributable": "pipeline.test.ts: 'produces exact weights, entitlements, dust, and verified proofs' (entitlementTotal <= amount assertion) + in-pipeline OVER_ALLOCATION guard (floor rule makes it unreachable; guard retained fail-closed)",
+    "wrongClaimEpochCycle": "negative.test.ts: 'wrong cycle / wrong claimant / wrong amount / tampered leaf / foreign proof all fail verification' + parity.test.ts: 'domain fields (chain, manager, cycle) cannot be substituted without changing the leaf'",
+    "wrongClaimant": "same named negative test",
+    "wrongAmount": "same named negative test",
+    "tamperedLeaf": "same named negative test + parity domain-substitution test",
+    "invalidProof": "same named negative test (foreign proof branch)",
+    "proofFromAnotherRoot": "same named negative test (wrong-root branch)",
+    "reorderedInputSameCanonicalResult": "pipeline.test.ts: 'reordered/mixed-case event input produces the same canonical result' + enumeration.test.ts: 'sorted output is deterministic regardless of input order'",
+    "corruptedArtifactDigest": "negative.test.ts: 'corrupted artifact digest is detected'",
+    "placeholderHashRejectedAsProductionEvidence": "negative.test.ts: 'placeholder hashes are absent: publication hashes ARE the canonical digests' (allocationsContentHash/manifestEnvelopeHash are the real canonical digests, replacing the 10F-1 keccak(\"alloc\")/keccak(\"manifest\") placeholders)",
+    "legallyUnverifiedClassifiedPublishable": "negative.test.ts: 'legally unverified snapshot cannot be classified publishable' (classification is a fixed type-level literal)",
+    "unsignedPublicationLackingSafetyClassification": "same named test asserts UNSIGNED_DO_NOT_BROADCAST + NOT AUTHORIZED FOR PUBLICATION are present; the classification is a required type-level literal in UnsignedPublication"
+  },
+  "mainnetNonMutation": {
+    "primaryControl": "Read-only RPC only (eth_chainId/getBlock/getCode/getLogs/eth_call); no signer, wallet, eth_sendTransaction or eth_sendRawTransaction exists in any code path added by this task.",
+    "before": {
+      "utc": "2026-07-25T12:34:48.571Z",
+      "chainId": 4663,
+      "block": "19013543",
+      "deployerNonceLatest": 16,
+      "deployerNoncePending": 16,
+      "testerNonceLatest": 8,
+      "testerNoncePending": 8,
+      "stockVaultWeth": "31435920663381",
+      "bpscTotalSupply": "999980924444083854102296256",
+      "testerLockedPrincipal": "475546397072022702614092",
+      "testerWethAllowanceRouter": "0",
+      "testerBpscAllowanceRouter": "0",
+      "testerBpscAllowanceVault": "0",
+      "deployerWethAllowanceNpm": "663707774444919",
+      "poolLiquidity": "3235182407869072596640",
+      "lpOwner371728": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203"
+    },
+    "after": {
+      "utc": "2026-07-25T12:52:42.472Z",
+      "chainId": 4663,
+      "block": "19024240",
+      "deployerNonceLatest": 16,
+      "deployerNoncePending": 16,
+      "testerNonceLatest": 8,
+      "testerNoncePending": 8,
+      "stockVaultWeth": "31435920663381",
+      "bpscTotalSupply": "999980924444083854102296256",
+      "testerLockedPrincipal": "475546397072022702614092",
+      "testerWethAllowanceRouter": "0",
+      "testerBpscAllowanceRouter": "0",
+      "testerBpscAllowanceVault": "0",
+      "deployerWethAllowanceNpm": "663707774444919",
+      "poolLiquidity": "3235182407869072596640",
+      "lpOwner371728": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203"
+    },
+    "comparison": "All fields identical (excluding utc/observation-height): deployer nonce 16/16, tester nonce 8/8 (NO nonce-8 tx), vault WETH, BPSC supply, tester lock principal, allowances, pool liquidity, LP owner — unchanged."
+  },
+  "commandsExecuted": [
+    "git status / rev-parse / diff (inspection)",
+    "node packages/contracts/canary-packet/mainnet-snapshot-check.mjs (read-only, before + after; RPC redacted)",
+    "npm run test/typecheck/lint/build --workspace @bps/indexer (offline)",
+    "node apps/indexer/dist/snapshot-cli.js --chain-id 4663 --block 18791290 ... --logs-rpc-env BPS_LOGS_RPC_URL (read-only; archival RPC redacted; logs via repo-documented public fallback endpoint; run twice for determinism)",
+    "npm run check (full gate)",
+    "forge test with fork env (418/418)"
+  ],
+  "canonicalArtifactsReverified": {
+    "v9ZipSha256": "0c958a58b8684878c4dfce4a15cdba3b2fc0e39680d46902430ab6e78a09b74d",
+    "canaryEvidenceManifestSha256": "d6005083b20e5188ce783cde5b30159b56228398d5bf204746b536e9e36b8ec3",
+    "rehearsalEvidenceSha256": "2557a3d782bd38b2c679902578f7bc5519b7b0e5f82f9fdea85e28a77d5cb065",
+    "rehearsalReportSha256": "030fdcb168dde99e2d2121f57c3ab4b9ded45c73ccabaf7a6d7c6c888db63114"
+  },
+  "filesCreatedOrModified": {
+    "apps/indexer/src/lock-snapshot/types.ts": "271bc9f16a607f60267125be9e9a510778afcda2772370938ce8d568c9a29315",
+    "apps/indexer/src/lock-snapshot/enumeration.ts": "226bdfd613256fde991d97374b4ab6c545be80664b3b56d2c15565ae7d960fa6",
+    "apps/indexer/src/lock-snapshot/pipeline.ts": "e7aa34bed50b40f5cdb9d030d32505c30005e07a4f32c10657eb5d31a6b91e70",
+    "apps/indexer/src/lock-snapshot/rpc-reader.ts": "027bbc5370a760841352f431437d944e111819465eee7e7e14baf4798715ee7a",
+    "apps/indexer/src/lock-snapshot/consumer.ts": "4e9330e072e3d9eab8c86cece689f4fce01e29d87b0f88bc6555141f3c52caf1",
+    "apps/indexer/src/lock-snapshot/test-fixture.ts": "8151dd4ca9051659955dedf5f09e1832f64627dbb0955c1d3fee63b8578e47af",
+    "apps/indexer/src/lock-snapshot/test-scenario.ts": "d7287cdc57098dda8c4898d4127496a2b6a1b986bedff995dbdaa5e17a89a466",
+    "apps/indexer/src/lock-snapshot/enumeration.test.ts": "1f3ab9cc767f528214ec34a43019142187cee9fa79f839e494e246f044c1068b",
+    "apps/indexer/src/lock-snapshot/pipeline.test.ts": "6c14b587d6ecf8ff769667987b3f15ac72c31b41ff271a2457a51323fb7d4626",
+    "apps/indexer/src/lock-snapshot/negative.test.ts": "ea36a08e8eb12ed23c2349226b83123ac7a8098199e12409201b1c1998b253d4",
+    "apps/indexer/src/lock-snapshot/parity.test.ts": "79810cc616fcfbb4559aa220ee38d606cacebb3b588e3bc134453a0dce085cee",
+    "apps/indexer/src/lock-snapshot/consumer.test.ts": "84814094b094e607b7f08b31fdc2a5a9b37a50f9fe7b9b1bb925d243bddfe066",
+    "apps/indexer/src/snapshot-cli.ts": "8c7806bc201f0690c5c5e7f7207cc7520d453021d2b2495d73863e6dd2044d42",
+    "docs/audit/snapshots/robinhood-4663-block18791290/canonical-snapshot.json": "fb83b65da66bf3ccda4c694910c30320f858cae13369ce5c6c797d93c5e04e33",
+    "docs/audit/snapshots/robinhood-4663-block18791290/proof-bundle.json": "8e8087107736a407d38c058834fc3181d85f6c2ecbb2bc74e3335e04b16f7830",
+    "docs/audit/snapshots/robinhood-4663-block18791290/unsigned-publication.json": "3440bf48fdc6e86ed06fa48856ebfc7ff348c8c5e80e2664469ae9c691f36ec6",
+    "docs/audit/snapshots/robinhood-4663-block18791290/evidence-envelope.json": "65dc428220531f63868c81e9e3429eca5b645bf57f2153767f4b15b18371c442",
+    ".prettierignore": "b8c1c4f0961c8eb9c5d95e6efb2df397cdd655e2cad092eaf70162ea4cfd2d51 (modified: + docs/audit/snapshots/)",
+    "apps/indexer/package.json": "modified: +dependencies {@bps/shared 0.0.0, @openzeppelin/merkle-tree 1.0.8, viem 2.55.8}",
+    "package-lock.json": "modified: apps/indexer dependency edge only (offline, lockfile-only)"
+  },
+  "limitations": [
+    "Single real participant at the pinned block (the canary tester lock) — multi-participant behavior is proven with LOCAL_TEST_ONLY fixtures, clearly labeled, never mixed into observed-mainnet evidence.",
+    "Stateless scan indexer: enumeration re-scans per run; a persistent-DB indexer (INF-1) remains open. INF-3 (indexer-backed enumeration) is CLOSED for pinned-snapshot generation by this stateless module.",
+    "Production RPC gap (INF-2) evidenced concretely: the archival provider caps eth_getLogs at 10 blocks; the public fallback is pruned (no archival state). A production archival+wide-logs endpoint is required.",
+    "The distribution amount is a demonstration input; no real distribution/funding exists on mainnet.",
+    "The @bps/pilot fixture pipeline remains fixture-only (self-declared fictional); the new chain-bound artifacts supersede its placeholder role for real snapshots.",
+    "Legal/KYC eligibility unresolved (B-2); Rialto venue integration (B-3) unaddressed; independent audit (B-1) not begun."
+  ],
+  "statuses": {
+    "inf3IndexerEnumeration": "CLOSED for pinned-snapshot generation (stateless indexer module + CLI); persistent-DB indexer remains INF-1",
+    "legalEligibility": "UNRESOLVED — every artifact labeled TECHNICAL CANDIDATE SNAPSHOT — LEGAL ELIGIBILITY UNVERIFIED — NOT AUTHORIZED FOR PUBLICATION",
+    "publication": "NOT PUBLISHED — NOT AUTHORIZED; unsigned payload is UNSIGNED_DO_NOT_BROADCAST and cannot execute as-is (no recorded acquisition exists; manager owner is the coordinator)",
+    "rialtoIntegrationB3": "UNADDRESSED",
+    "productionReadiness": "NOT ESTABLISHED"
+  },
+  "review10G2": {
+    "date": "2026-07-25",
+    "supersededHashes": {
+      "evidenceJson": "3935c05a96ffaa46f887699b518a6def3255761a795db9db7123a16164829e22",
+      "reportMd": "81569855a45e82f3c3e25b387fbc73412897473ba8d5be1e410536a250bb3ef1",
+      "note": "Hashes of these two files BEFORE the 10G-2 review corrections below; recorded, not rewritten."
+    },
+    "corrections": [
+      "Dual-endpoint pinned-block-hash guard added (LOGS_ENDPOINT_HASH_MISMATCH): when a separate logs endpoint is used, both endpoints must agree on the pinned block hash before scan results are combined with pinned state reads (chain-id equality alone is insufficient against a divergent history). Exercised live in the 10G-2 reproduction runs.",
+      "Dependency-metadata hardening (NOT an upgrade): @bps/indexer now explicitly declares @bps/shared 0.0.0, @openzeppelin/merkle-tree 1.0.8, viem 2.55.8 (previously resolved only via workspace hoisting). Lockfile updated offline (--package-lock-only --offline); diff = exactly the apps/indexer dependency edge; ZERO external version/resolved/integrity changes."
+    ],
+    "reproduction": {
+      "twoFreshRuns": "byte-identical to each other AND to the committed artifacts (cmp)",
+      "valuesReproduced": {
+        "candidates": 1,
+        "included": 1,
+        "totalEffectiveWeight": "523101036779224972875501",
+        "distribution": "230074787421624000",
+        "entitlementTotal": "230074787421624000",
+        "dust": "0"
+      },
+      "merkleRoot": "0xbf4a88b5ca7b12117c8fb9df350017c6c42ba27dc16d0dfad1499536a529aebb",
+      "canonicalSnapshotDigest": "0x893042b8b6c7ed1466958ce7f38964ffb6826597607431229183dd3ffef4c0c0",
+      "proofBundleDigest": "0xbd8a1a7184b2c519341781fecaae8abd8176df7639decf347aab3d69081d7fa3"
+    },
+    "boundaryTestVerified": "LockingVaultWeight.testWeightBoundariesUnwithdrawn inspected: asserts bonus at unlockTime-1, base 1.00x at exactly unlockTime, base after — the exact expiry boundary is genuinely exercised.",
+    "scopeStatement": "INF-3 closed for deterministic block-pinned snapshot enumeration. Persistent database-backed indexing remains outside TASK 10G-1 and is tracked separately as INF-1. Production historical-state and log-provider configuration remains an operational prerequisite. This is NOT a complete continuous production indexer."
+  }
+}

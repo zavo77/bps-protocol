@@ -10,5 +10,10 @@
     "lint": "eslint .",
     "test": "vitest run",
     "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@bps/shared": "0.0.0",
+    "@openzeppelin/merkle-tree": "1.0.8",
+    "viem": "2.55.8"
   }
 }

@@ -1,0 +1,31 @@
+{
+  "authorityNote": "publishCycle is onlyOwner on DistributionClaimManager; the owner is the DistributionFundingCoordinator, whose authorized human path is rootPublisher -> fundRecordedAcquisition bound to a RECORDED acquisition. No such acquisition exists; this payload is evidence of shape only and cannot be executed as-is.",
+  "canonicalSnapshotDigest": "0x893042b8b6c7ed1466958ce7f38964ffb6826597607431229183dd3ffef4c0c0",
+  "chainId": "4663",
+  "classification": "UNSIGNED_DO_NOT_BROADCAST — NOT AUTHORIZED FOR PUBLICATION — LEGAL ELIGIBILITY UNVERIFIED",
+  "cycleId": "1",
+  "decodedArguments": {
+    "allocationsContentHash": "0x893042b8b6c7ed1466958ce7f38964ffb6826597607431229183dd3ffef4c0c0",
+    "assets": [
+      "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec"
+    ],
+    "claimDeadline": "1792822946",
+    "claimStart": "1785046946",
+    "cycleId": "1",
+    "fundedAmounts": [
+      "230074787421624000"
+    ],
+    "manifestEnvelopeHash": "0xbd8a1a7184b2c519341781fecaae8abd8176df7639decf347aab3d69081d7fa3",
+    "merkleRoot": "0xbf4a88b5ca7b12117c8fb9df350017c6c42ba27dc16d0dfad1499536a529aebb"
+  },
+  "distributionAmount": "230074787421624000",
+  "distributionAsset": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+  "encodedCalldata": "0x027ef7d40000000000000000000000000000000000000000000000000000000000000001bf4a88b5ca7b12117c8fb9df350017c6c42ba27dc16d0dfad1499536a529aebb893042b8b6c7ed1466958ce7f38964ffb6826597607431229183dd3ffef4c0c0bd8a1a7184b2c519341781fecaae8abd8176df7639decf347aab3d69081d7fa3000000000000000000000000000000000000000000000000000000006a65a7a2000000000000000000000000000000000000000000000000000000006adc4ea2000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000001000000000000000000000000d0601ce157db5bdc3162bbac2a2c8af5320d9eec0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000033163ccd80a16c0",
+  "functionSignature": "publishCycle(uint256,bytes32,bytes32,bytes32,uint64,uint64,address[],uint256[])",
+  "merkleRoot": "0xbf4a88b5ca7b12117c8fb9df350017c6c42ba27dc16d0dfad1499536a529aebb",
+  "schemaVersion": "bps.snapshot.unsigned-publication/1",
+  "snapshotBlock": "18791290",
+  "snapshotBlockHash": "0x2d332bb08395b53f571015af9959d1a0e9c68baec300265b08fe77b38ef1516f",
+  "to": "0x5ecbadf1cf050f1b86d44b979416a8e859fb2574",
+  "value": "0"
+}
