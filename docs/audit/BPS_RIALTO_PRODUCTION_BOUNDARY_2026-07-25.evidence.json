@@ -299,6 +299,12 @@
       "reportMd": "7b0c88c6b11a9bda072241378b5c289f62fbd64d846c43ce4b13a0dae4d75a87"
     },
     "criticalFinding": "price-guard treated the reference answer as RAW UNDERLYING and multiplied by uiMultiplier; production Chainlink tokenized-equity feeds are PER-TOKEN (multiplier included) — double application corrected via typed semantics + two-feed model + sequencer machinery (see BPS_RIALTO_ORACLE_SEMANTICS_REVIEW_2026-07-25).",
-    "wordingCorrection": "read-only /quote wording corrected to NON-BINDING, NON-SIGNED, NON-BROADCAST QUOTE RETRIEVAL (firm executable payload + server-stored quote_id)"
+    "wordingCorrection": "read-only /quote wording corrected to QUOTE RETRIEVAL ONLY — RETURNS A FIRM EXECUTABLE PAYLOAD; NO SIGNATURE OR BROADCAST OCCURS DURING RETRIEVAL (firm executable payload + server-stored quote_id)"
+  },
+  "correction10I2": {
+    "date": "2026-07-25",
+    "wordingCorrection": "removed \"NON-BINDING\" (unsupported by evidence; Rialto quote is firm + server-stored) -> QUOTE RETRIEVAL ONLY — RETURNS A FIRM EXECUTABLE PAYLOAD; NO SIGNATURE OR BROADCAST OCCURS DURING RETRIEVAL",
+    "openQuestion": "whether retrieval creates a server-side obligation/reservation is deferred to Rialto (D-21); not asserted",
+    "note": "10I-1 hashes preserved; superseding hashes in the 10I-2 review report"
   }
 }

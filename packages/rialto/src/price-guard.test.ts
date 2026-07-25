@@ -1,3 +1,4 @@
+// TASK 10I-2 — corrected price-guard tests (policy-pinned feed identity + semantics, roundId).
 // TASK 10I-1 — corrected price-guard tests. Expected values independently derived by hand from
 //   expected = floor(sellRaw * inAnswer * 10^outFeedDec * 10^outDec * perTokenDen
 //                    / (10^sellDec * 10^inFeedDec * perTokenNum))
@@ -15,6 +16,8 @@ import {
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
 const NVDA = "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec";
 const SEQ_ID = "local-test-sequencer-feed";
+const IN_ID = "local-test-weth-usd-feed";
+const OUT_ID = "local-test-nvda-token-feed";
 const E18 = 10n ** 18n;
 const NOW = 1_000_100n;
 
@@ -24,6 +27,9 @@ const POLICY: PriceRiskPolicy = {
   maxTxInputRaw: 10n ** 21n,
   sequencerFeedIdentity: SEQ_ID,
   sequencerGraceSec: 600n,
+  inputFeedIdentity: IN_ID,
+  outputFeedIdentity: OUT_ID,
+  outputSemantics: "PER_TOKEN_CHAINLINK",
   allowRawUnderlyingForEvidence: false,
 };
 
@@ -41,9 +47,11 @@ function inFeed(over: Partial<UsdPriceObservation> = {}): UsdPriceObservation {
   // WETH at $2,000, 8-decimals feed
   return {
     semantics: "PER_TOKEN_CHAINLINK",
+    feedIdentity: IN_ID,
     asset: WETH,
     answer: 2_000n * 10n ** 8n,
     decimals: 8,
+    roundId: 100n,
     updatedAtSec: NOW - 60n,
     roundComplete: true,
     observedAtBlock: 19_000_000n,
@@ -55,9 +63,11 @@ function outFeed(over: Partial<UsdPriceObservation> = {}): UsdPriceObservation {
   // NVDA Stock Token at $200 PER TOKEN (multiplier already included), 8-decimals feed
   return {
     semantics: "PER_TOKEN_CHAINLINK",
+    feedIdentity: OUT_ID,
     asset: NVDA,
     answer: 200n * 10n ** 8n,
     decimals: 8,
+    roundId: 100n,
     updatedAtSec: NOW - 60n,
     roundComplete: true,
     observedAtBlock: 19_000_000n,
@@ -181,7 +191,17 @@ describe("corrected acquisition price guard (two-feed, typed semantics)", () => 
       answer: 20n * 10n ** 8n,
     };
     expect(() =>
-      run({ minBuyAmountRaw: 10n * E18 }, {}, rawOut, { ...STATE, multiplierE18: 10n * E18 }),
+      run(
+        { minBuyAmountRaw: 10n * E18 },
+        {},
+        rawOut,
+        { ...STATE, multiplierE18: 10n * E18 },
+        seq(),
+        {
+          ...POLICY,
+          outputSemantics: "RAW_UNDERLYING",
+        },
+      ),
     ).toThrowError(/RAW_UNDERLYING_NOT_APPROVED/);
     const r = run(
       { minBuyAmountRaw: 10n * E18 },
@@ -189,7 +209,7 @@ describe("corrected acquisition price guard (two-feed, typed semantics)", () => 
       rawOut,
       { ...STATE, multiplierE18: 10n * E18 },
       seq(),
-      { ...POLICY, allowRawUnderlyingForEvidence: true },
+      { ...POLICY, allowRawUnderlyingForEvidence: true, outputSemantics: "RAW_UNDERLYING" },
     );
     expect(r.expectedBuyAmountRaw).toBe(10n * E18);
     expect(r.justification.multiplierApplied).toBe(true);
@@ -305,5 +325,90 @@ describe("L2 sequencer machinery (policy-neutral, fail-closed)", () => {
     expect(() => run({}, {}, {}, STATE, seq({ startedAtSec: 0n }))).toThrowError(
       /SEQUENCER_BAD_ROUND/,
     );
+  });
+});
+
+// TASK 10I-2 additions: adversarial relabeling, policy-pinned identity, roundId, uint256 domain.
+describe("10I-2 structural guarantees (policy-pinned semantics + identity)", () => {
+  it("raw-underlying data relabeled as PER_TOKEN cannot pass under a PER_TOKEN policy (feed identity + semantics pinned by policy)", () => {
+    // Attacker supplies raw-underlying numbers but stamps semantics PER_TOKEN + the real out identity.
+    // With multiplier 10x and per-token feed answer left at $200 the relabel would (if accepted)
+    // undervalue the token 10x and loosen the floor. The output-semantics pin still matches
+    // (attacker set PER_TOKEN), so the DEEPER protection is: the guard NEVER multiplies in
+    // PER_TOKEN mode, so relabeled raw data is simply used as the (wrong) per-token price and the
+    // deviation floor rejects an inconsistent minimum. Here we prove the inverse: RAW data that
+    // needs the multiplier can ONLY be honored via the explicitly approved RAW_UNDERLYING policy.
+    const rawNumbers = { answer: 20n * 10n ** 8n }; // $20 underlying; per-token would be $200 at 10x
+    // Under a PER_TOKEN policy, $20 "per token" => $2000 buys 100 tokens; asking for 10 (the real
+    // per-token amount) is far below floor -> rejected. The relabel cannot yield the 10x windfall.
+    expect(() =>
+      run({ minBuyAmountRaw: 10n * E18 }, {}, rawNumbers, { ...STATE, multiplierE18: 10n * E18 }),
+    ).toThrowError(/DEVIATION_EXCEEDED/);
+  });
+
+  it("output semantics mismatch vs policy fails closed (SEMANTICS_MISMATCH)", () => {
+    // observation labeled RAW_UNDERLYING but policy declares PER_TOKEN
+    expect(() => run({}, {}, { semantics: "RAW_UNDERLYING" })).toThrowError(/SEMANTICS_MISMATCH/);
+  });
+
+  it("wrong feed identity is rejected even with correct asset (no relabeling by string)", () => {
+    expect(() => run({}, { feedIdentity: "attacker-in-feed" })).toThrowError(
+      /FEED_IDENTITY_MISMATCH/,
+    );
+    expect(() => run({}, {}, { feedIdentity: "attacker-out-feed" })).toThrowError(
+      /FEED_IDENTITY_MISMATCH/,
+    );
+  });
+
+  it("unpinned feed identity in policy fails closed (FEED_BINDING_MISSING)", () => {
+    expect(() => run({}, {}, {}, STATE, seq(), { ...POLICY, outputFeedIdentity: "" })).toThrowError(
+      /FEED_BINDING_MISSING/,
+    );
+    expect(() => run({}, {}, {}, STATE, seq(), { ...POLICY, inputFeedIdentity: "" })).toThrowError(
+      /FEED_BINDING_MISSING/,
+    );
+  });
+
+  it("zero roundId is rejected on either feed", () => {
+    expect(() => run({}, { roundId: 0n })).toThrowError(/ZERO_ROUND/);
+    expect(() => run({}, {}, { roundId: 0n })).toThrowError(/ZERO_ROUND/);
+  });
+
+  it("zero updatedAt is rejected (INCOMPLETE_ROUND)", () => {
+    expect(() => run({}, { updatedAtSec: 0n })).toThrowError(/INCOMPLETE_ROUND/);
+  });
+
+  it("changing uiMultiplier with the per-token feed answer unchanged CANNOT change expected output", () => {
+    const base = run().expectedBuyAmountRaw;
+    for (const m of [1n, 2n, 5n, 10n, 100n, 1000n]) {
+      const r = run({}, {}, {}, { ...STATE, multiplierE18: m * E18 });
+      expect(r.expectedBuyAmountRaw).toBe(base);
+      expect(r.justification.multiplierApplied).toBe(false);
+    }
+  });
+
+  it("oversized bigint input beyond uint256 is rejected before exponentiation (AMOUNT_OUT_OF_DOMAIN)", () => {
+    const over = 2n ** 256n;
+    expect(() =>
+      run({ sellAmountRaw: over, minBuyAmountRaw: 1n }, {}, {}, STATE, seq(), {
+        ...POLICY,
+        maxTxInputRaw: over + 1n,
+      }),
+    ).toThrowError(/AMOUNT_OUT_OF_DOMAIN/);
+  });
+
+  it("feed answer beyond uint256 is rejected (AMOUNT_OUT_OF_DOMAIN)", () => {
+    expect(() => run({}, { answer: 2n ** 256n })).toThrowError(/AMOUNT_OUT_OF_DOMAIN/);
+  });
+
+  it("large values (2^250, expected within uint256) handled exactly without JS number", () => {
+    const near = 2n ** 250n; // near*10 stays < uint256 max
+    const r = run({ sellAmountRaw: near, minBuyAmountRaw: near * 10n }, {}, {}, STATE, seq(), {
+      ...POLICY,
+      maxTxInputRaw: 2n ** 256n - 1n,
+    });
+    // expected = near * 2000e8 * 1e8 * 1e18 / (1e18 * 1e8 * 200e8) = near * 10
+    expect(r.expectedBuyAmountRaw).toBe(near * 10n);
+    expect(r.deviationBpsObserved).toBe(0n);
   });
 });

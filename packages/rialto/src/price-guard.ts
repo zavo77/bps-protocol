@@ -49,6 +49,10 @@ export type PriceGuardErrorCode =
   | "MULTIPLIER_MISSING"
   | "MULTIPLIER_TRANSITION"
   | "ASSET_BINDING_MISMATCH"
+  | "FEED_IDENTITY_MISMATCH"
+  | "FEED_BINDING_MISSING"
+  | "ZERO_ROUND"
+  | "AMOUNT_OUT_OF_DOMAIN"
   | "SEQUENCER_POLICY_MISSING"
   | "SEQUENCER_DOWN"
   | "SEQUENCER_GRACE_PERIOD"
@@ -63,9 +67,11 @@ export type PriceSemantics = "PER_TOKEN_CHAINLINK" | "RAW_UNDERLYING";
 /** One independently bound token-unit USD price observation. */
 export interface UsdPriceObservation {
   readonly semantics: PriceSemantics;
+  readonly feedIdentity: string; // the specific feed this came from — pinned by policy, never relabeled
   readonly asset: string; // the token this observation prices — bound, never assumed
   readonly answer: bigint;
   readonly decimals: number;
+  readonly roundId: bigint; // Chainlink roundId — must be > 0
   readonly updatedAtSec: bigint;
   readonly roundComplete: boolean;
   readonly observedAtBlock: bigint;
@@ -97,6 +103,14 @@ export interface PriceRiskPolicy {
   /** Configured sequencer feed identity + post-recovery grace (L2 guard). */
   readonly sequencerFeedIdentity: string;
   readonly sequencerGraceSec: bigint;
+  /**
+   * POLICY-PINNED feed bindings. The observation supplied at runtime MUST match all three, so a
+   * caller cannot relabel raw-underlying data as a production Chainlink source by changing a field:
+   * the policy — not the caller — declares which feed identity carries which semantics.
+   */
+  readonly inputFeedIdentity: string;
+  readonly outputFeedIdentity: string;
+  readonly outputSemantics: PriceSemantics;
   /** RAW_UNDERLYING is evidence/testing-only unless separately approved. Default MUST be false. */
   readonly allowRawUnderlyingForEvidence: boolean;
 }
@@ -131,6 +145,7 @@ export interface PriceGuardResult {
 
 const BPS = 10_000n;
 const E18 = 10n ** 18n;
+const MAX_UINT256 = 2n ** 256n - 1n;
 
 function pow10(n: number): bigint {
   if (!Number.isInteger(n) || n < 0 || n > 77) {
@@ -142,12 +157,32 @@ function pow10(n: number): bigint {
 function checkFeed(
   feed: UsdPriceObservation | null,
   expectedAsset: string,
+  expectedIdentity: string,
+  expectedSemantics: PriceSemantics,
   which: string,
   nowSec: bigint,
   maxStalenessSec: bigint,
 ): UsdPriceObservation {
   if (feed === null) {
     throw new PriceGuardError("PRICE_FEED_MISSING", `${which} feed is not configured`);
+  }
+  if (expectedIdentity === "") {
+    throw new PriceGuardError(
+      "FEED_BINDING_MISSING",
+      `${which} feed identity is not pinned by policy`,
+    );
+  }
+  if (feed.feedIdentity !== expectedIdentity) {
+    throw new PriceGuardError(
+      "FEED_IDENTITY_MISMATCH",
+      `${which} observation is not from the policy-pinned feed identity (no relabeling)`,
+    );
+  }
+  if (feed.semantics !== expectedSemantics) {
+    throw new PriceGuardError(
+      "SEMANTICS_MISMATCH",
+      `${which} feed semantics ${feed.semantics} != policy-declared ${expectedSemantics}`,
+    );
   }
   if (feed.asset.toLowerCase() !== expectedAsset.toLowerCase()) {
     throw new PriceGuardError(
@@ -158,8 +193,17 @@ function checkFeed(
   if (feed.answer <= 0n) {
     throw new PriceGuardError("NON_POSITIVE_ANSWER", `${which} answer must be positive`);
   }
+  if (feed.answer > MAX_UINT256) {
+    throw new PriceGuardError("AMOUNT_OUT_OF_DOMAIN", `${which} answer exceeds the uint256 domain`);
+  }
+  if (feed.roundId <= 0n) {
+    throw new PriceGuardError("ZERO_ROUND", `${which} roundId must be positive`);
+  }
   if (!feed.roundComplete) {
     throw new PriceGuardError("INCOMPLETE_ROUND", `${which} round is incomplete`);
+  }
+  if (feed.updatedAtSec <= 0n) {
+    throw new PriceGuardError("INCOMPLETE_ROUND", `${which} updatedAt must be positive`);
   }
   if (nowSec < feed.updatedAtSec) {
     throw new PriceGuardError("UNSAFE_NUMBER", `${which} feed timestamp is in the future`);
@@ -226,12 +270,27 @@ export function validateAcquisitionPrice(
     );
   }
   checkSequencer(sequencer, policy, io.nowSec);
-  const inF = checkFeed(inputFeed, io.sellToken, "input", io.nowSec, policy.maxStalenessSec);
-  const outF = checkFeed(outputFeed, io.buyToken, "output", io.nowSec, policy.maxStalenessSec);
-  if (inF.semantics !== "PER_TOKEN_CHAINLINK") {
-    // The input (WETH/ETH) side has no corporate-action multiplier; only per-token semantics exist.
-    throw new PriceGuardError("SEMANTICS_MISMATCH", "input feed must be PER_TOKEN_CHAINLINK");
-  }
+  // The input (WETH/ETH-USD) side never carries a corporate-action multiplier: its semantics are
+  // ALWAYS PER_TOKEN_CHAINLINK, pinned here (not caller-declared). The output semantics are
+  // policy-declared so raw-underlying data can never be relabeled as a production Chainlink source.
+  const inF = checkFeed(
+    inputFeed,
+    io.sellToken,
+    policy.inputFeedIdentity,
+    "PER_TOKEN_CHAINLINK",
+    "input",
+    io.nowSec,
+    policy.maxStalenessSec,
+  );
+  const outF = checkFeed(
+    outputFeed,
+    io.buyToken,
+    policy.outputFeedIdentity,
+    policy.outputSemantics,
+    "output",
+    io.nowSec,
+    policy.maxStalenessSec,
+  );
   if (tokenState === null) {
     throw new PriceGuardError("MULTIPLIER_MISSING", "stock token state unavailable");
   }
@@ -252,6 +311,11 @@ export function validateAcquisitionPrice(
   }
   if (io.sellAmountRaw <= 0n || io.minBuyAmountRaw <= 0n) {
     throw new PriceGuardError("UNSAFE_NUMBER", "amounts must be positive integers");
+  }
+  // Reject oversized bigint inputs at the server boundary (attacker-supplied huge values) before
+  // any exponentiation. On-chain amounts live in the uint256 domain.
+  if (io.sellAmountRaw > MAX_UINT256 || io.minBuyAmountRaw > MAX_UINT256) {
+    throw new PriceGuardError("AMOUNT_OUT_OF_DOMAIN", "amount exceeds the uint256 domain");
   }
   if (io.sellAmountRaw > policy.maxTxInputRaw) {
     throw new PriceGuardError("TX_CAP_EXCEEDED", "input exceeds the approved per-transaction cap");

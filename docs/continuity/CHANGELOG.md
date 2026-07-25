@@ -7,6 +7,41 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-25 — TASK 10I-1: oracle-semantics correction + decision pack (commit `6cb33745`)
+
+- **Type:** critical correction + policy consolidation. NO quote, key operation, wallet,
+  signature, broadcast, allowance, selector/feed/policy approval, deployment, mainnet mutation,
+  nonce-8 use, dependency/lockfile change, push, or PR. Continuity gate followed exactly.
+- **CRITICAL FIX:** official docs verified (Chainlink tokenized-equity + Robinhood oracle pages):
+  Stock-Token Chainlink feeds return the PER-TOKEN USD price with uiMultiplier ALREADY included;
+  REST /prices is raw-underlying. The 10H-1 guard multiplied by uiMultiplier (raw-underlying
+  model) — in production configuration it would have DOUBLE-APPLIED the multiplier (a 10x split
+  would loosen the price floor 10x). `price-guard.ts` rewritten: typed semantics
+  (PER_TOKEN_CHAINLINK direct; RAW_UNDERLYING gated evidence-only, multiplier exactly once),
+  two-feed expected-output model (WETH-USD in / NVDA-token-USD out), oraclePaused +
+  pending-multiplier + L2-sequencer fail-closed machinery. 79/79 rialto tests (all 20 required
+  arithmetic/corporate-action cases incl. split continuity + double-apply unrepresentability,
+  independently hand-derived).
+- **Enforcement boundary recorded:** TS guard = trusted-server only; on-chain has NO independent
+  price check (operator-supplied minStockOut) — minimal future coordinator-level oracle floor
+  documented, NOT made.
+- **Rialto facts corrected:** /quote = NON-BINDING, NON-SIGNED, NON-BROADCAST QUOTE RETRIEVAL
+  returning a firm executable payload + server-stored quote_id; feature 2 direct vs 3 gasless;
+  allowance vs Permit2; no documented selector/ABI; replay semantics undocumented. Dated
+  corrections appended to 10H artifacts; superseded hashes preserved (evidence 979f351d… ->
+  63d94b7a…; report 7b0c88c6… -> ad298ebf…).
+- **Decision pack:** `docs/decisions/BPS_RIALTO_ACCESS_AND_PRICE_RISK_DECISION_PACK_2026-07-25.md`
+  — 24 decisions, ALL PROPOSED — NOT APPROVED, incl. drafted (NOT sent) quote:read access request.
+- **Suites:** rialto 79/79; boundary 2/2; focused Foundry 126/126; full forge (fork env) 418/418;
+  npm run check PASS; scans clean. Mainnet before/after IDENTICAL; fresh feature-2 re-resolution
+  (block 19115535) identical router. B-3 remains PARTIAL — RIALTO QUOTE ACCESS REQUIRED (+
+  APPROVED PRICE AND RISK POLICY REQUIRED / VENUE SELECTOR UNVERIFIED / VENUE REPLAY SEMANTICS
+  UNRESOLVED / LEGAL ELIGIBILITY UNRESOLVED).
+- **Backup:** archive `bps-experiment-oracle-semantics-2026-07-25-6cb33745.tar.gz` (size/SHA in
+  report; extraction-verified). Off-device: PENDING.
+- **Next:** founder/counsel decision-pack approvals + send access request; engineering resumes on
+  approvals.
+
 ## 2026-07-25 — TASK 10H-2: review + checkpoint of the Rialto boundary (commit `adaddceb`)
 
 - **Type:** review + preservation. NO wallet, secret, signature, quote, order, broadcast, trade,

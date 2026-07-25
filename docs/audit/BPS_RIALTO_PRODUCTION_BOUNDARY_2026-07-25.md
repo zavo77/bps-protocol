@@ -121,3 +121,10 @@ Obtain authorized Rialto API access and rerun this boundary against a real read-
    server-stored `quote_id`.
 3. 10H-2-final hashes (evidence `979f351d…d1b8`, report `7b0c88c6…5a87`) are preserved as
    historical facts and superseded by the post-correction hashes in the 10I-1 report.
+
+## TASK 10I-2 wording correction (2026-07-25, appended)
+
+The 10I-1 phrasing "NON-BINDING, NON-SIGNED, NON-BROADCAST QUOTE RETRIEVAL" is superseded: Rialto
+documents the quote as firm + server-stored, so only signature/broadcast absence is evidenced.
+Corrected phrasing: **QUOTE RETRIEVAL ONLY — RETURNS A FIRM EXECUTABLE PAYLOAD; NO SIGNATURE OR BROADCAST OCCURS DURING RETRIEVAL**. 10I-1 hash for this file is preserved in history and
+superseded by the 10I-2 review report.

@@ -1,0 +1,199 @@
+{
+  "schemaVersion": "bps.evidence.oracle-decision-review/1",
+  "generatedUtc": "2026-07-25T16:40:00Z",
+  "task": "TASK 10I-2 — review 10I-1 oracle correction + consolidate 24 decisions into one ballot",
+  "repository": {
+    "path": "C:\\Projects\\bps-experiment",
+    "branch": "master",
+    "startingHead": "6cb33745693905f576ec521422c2fca1de3605ac"
+  },
+  "gate": {
+    "parentCheckpoint": "adaddceb09302db78e36fdb294494fe71df0e43b",
+    "tenI1CommitPaths": 10,
+    "reconciled": true,
+    "supersededHistoryPreserved": true
+  },
+  "sourceModeReview": {
+    "perTokenChainlinkDistinct": true,
+    "feedAnswerUsedDirectly": true,
+    "multiplierCannotAffectPerToken": "confirmed in code (perTokenNum=answer, perTokenDen=1, multiplierApplied=false) and by a sweep test over 1x..1000x",
+    "structuralCorrections": [
+      "policy now PINS inputFeedIdentity/outputFeedIdentity/outputSemantics; observation must match {feedIdentity, semantics, asset} (FEED_IDENTITY_MISMATCH / SEMANTICS_MISMATCH / ASSET_BINDING_MISMATCH); empty policy identity => FEED_BINDING_MISSING (fail closed)",
+      "input semantics pinned to PER_TOKEN_CHAINLINK by code, not caller",
+      "RAW_UNDERLYING reachable only with approved allowRawUnderlyingForEvidence AND outputSemantics=RAW_UNDERLYING; missing Chainlink config cannot fall back (PRICE_FEED_MISSING)",
+      "added roundId>0 (ZERO_ROUND), updatedAt>0, and uint256-domain bounds on amounts+answers before exponentiation (AMOUNT_OUT_OF_DOMAIN)"
+    ],
+    "noValuesInvented": true
+  },
+  "arithmetic": {
+    "verifiedFormula": "floor(sellRaw * inputFeedAnswer * 10^outFeedDec * 10^outTokenDec / (10^sellDec * 10^inFeedDec * outputFeedAnswer)) for PER_TOKEN; raw-underlying multiplies exactly once (gated)",
+    "multiplierInfluencesPerToken": false,
+    "singleFinalFloor": true,
+    "bigintOnly": true,
+    "domainBounds": "amounts+answers rejected above uint256 max before exponentiation; decimals<=77",
+    "splitContinuity": "before($200,mult1,feed$200) and after(10:1 -> $20,mult10,feed$200) both -> identical token-unit output; no second 10x"
+  },
+  "roundPauseSequencer": {
+    "feedRejections": [
+      "non-positive answer",
+      "roundId==0",
+      "updatedAt==0",
+      "future timestamp",
+      "incomplete round",
+      "stale beyond policy",
+      "wrong feed identity",
+      "wrong token",
+      "missing policy"
+    ],
+    "stockTokenRejections": [
+      "oraclePaused==true",
+      "pending multiplier transition",
+      "non-positive multiplier",
+      "semantic relabel"
+    ],
+    "sequencer": [
+      "configured identity required (policy value, not HTTP-supplied)",
+      "answer==0",
+      "valid round/timestamp",
+      "non-future startedAt",
+      "grace from startedAt",
+      "fail closed if config/observation/grace absent"
+    ],
+    "nowSecTrusted": "server clock parameter; never a quote-request field; shifted-clock tests exercise internal branches only",
+    "noMarketCalendar": true
+  },
+  "enforcementBoundary": {
+    "typescript": "trusted-server control",
+    "onchainEnforces": [
+      "registry-selected target",
+      "deadline",
+      "exact spend + balance-delta >= operator minStockOut",
+      "residuals",
+      "80/20"
+    ],
+    "onchainPriceFloor": "ABSENT",
+    "privilegedOperatorBypass": true,
+    "balletChoice": "D-22: A accept trusted-server enforcement w/ controls | B require on-chain oracle floor / guarded executor (redeploy) | C keep disabled; conservative = C unless A expressly accepted or B implemented+reviewed",
+    "neitherImplemented": true
+  },
+  "rialtoWording": {
+    "corrected": "removed \"NON-BINDING\" (unsupported) -> \"QUOTE RETRIEVAL ONLY — RETURNS A FIRM EXECUTABLE PAYLOAD; NO SIGNATURE OR BROADCAST OCCURS DURING RETRIEVAL\"",
+    "obligationQuestionOpen": "deferred to Rialto (ballot D-21 + access-request Q4); not answered on Rialto's behalf",
+    "supported": [
+      "quote:read required",
+      "firm executable payload",
+      "server-side quote_id",
+      "retrieval does not sign/broadcast",
+      "direct execution needs taker submit",
+      "allowance|permit2",
+      "feature 3 gasless not BPS",
+      "example selectors are not approval",
+      "selector/ABI/replay unresolved"
+    ]
+  },
+  "decisionPackCorrections": {
+    "D5": "architecturally proposable now; validate on real allowance-mode quote (not undecidable)",
+    "D6": "architecturally selectable; requires Rialto SC-taker confirmation",
+    "D7": "decidable now",
+    "D8": "proposable now; NOT anchored to docs' 50 bps example; conservatively deferred",
+    "D9/D10/D13/D16": "await official feed metadata",
+    "D11": "reclassified legal->primarily price-risk/engineering (counsel only if legal characterization of WETH implicated)",
+    "D22": "security/governance trust-boundary decision (counsel input on operator authority)",
+    "D23": "counsel-controlled",
+    "D24": "inherits all technical/security/legal prerequisites"
+  },
+  "ballot": {
+    "path": "docs/decisions/BPS_RIALTO_FOUNDER_APPROVAL_BALLOT_2026-07-25.md",
+    "decisions": 24,
+    "groups": [
+      "A founder now",
+      "B security/eng now",
+      "C awaiting Rialto/quote",
+      "D awaiting feed metadata",
+      "E counsel-legal",
+      "F go/no-go"
+    ],
+    "status": "ALL PROPOSED — NOT APPROVED",
+    "approvalNotActivation": true,
+    "accessRequest": "DRAFT — NOT SENT"
+  },
+  "classification": "PARTIAL — RIALTO QUOTE ACCESS REQUIRED",
+  "independentlyRecorded": [
+    "APPROVED PRICE AND RISK POLICY REQUIRED",
+    "VENUE SELECTOR UNVERIFIED",
+    "VENUE REPLAY SEMANTICS UNRESOLVED",
+    "LEGAL ELIGIBILITY UNRESOLVED",
+    "PRICE-GUARD TRUST MODEL NOT YET APPROVED"
+  ],
+  "tests": {
+    "rialtoVitest": {
+      "passed": 89,
+      "files": 5,
+      "note": "corrected two-feed guard + 10I-2 adversarial/identity/roundId/domain tests"
+    }
+  },
+  "mainnetNonMutation": {
+    "before": {
+      "utc": "2026-07-25T15:42:15.391Z",
+      "chainId": 4663,
+      "block": "19125671",
+      "deployerNonceLatest": 16,
+      "deployerNoncePending": 16,
+      "testerNonceLatest": 8,
+      "testerNoncePending": 8,
+      "stockVaultWeth": "31435920663381",
+      "bpscTotalSupply": "999980924444083854102296256",
+      "testerLockedPrincipal": "475546397072022702614092",
+      "testerWethAllowanceRouter": "0",
+      "testerBpscAllowanceRouter": "0",
+      "testerBpscAllowanceVault": "0",
+      "deployerWethAllowanceNpm": "663707774444919",
+      "poolLiquidity": "3235182407869072596640",
+      "lpOwner371728": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203"
+    },
+    "after": {
+      "utc": "2026-07-25T15:43:30.269Z",
+      "chainId": 4663,
+      "block": "19126416",
+      "deployerNonceLatest": 16,
+      "deployerNoncePending": 16,
+      "testerNonceLatest": 8,
+      "testerNoncePending": 8,
+      "stockVaultWeth": "31435920663381",
+      "bpscTotalSupply": "999980924444083854102296256",
+      "testerLockedPrincipal": "475546397072022702614092",
+      "testerWethAllowanceRouter": "0",
+      "testerBpscAllowanceRouter": "0",
+      "testerBpscAllowanceVault": "0",
+      "deployerWethAllowanceNpm": "663707774444919",
+      "poolLiquidity": "3235182407869072596640",
+      "lpOwner371728": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203"
+    },
+    "comparison": "IDENTICAL excluding utc/block: 16 / 8/8, no nonce-8, locks/allowances/vault/supply/pool/LP/publication unchanged; zero acquisitions"
+  },
+  "freshRouterRecheck": {
+    "recheckBlock": "19125889",
+    "resolvedRouter": "0xc94135b63772b91d79d0a2daab2a8801f32359bd"
+  },
+  "correctedPriorArtifacts": {
+    "docs/audit/BPS_RIALTO_PRODUCTION_BOUNDARY_2026-07-25.md": {
+      "old": "ad298ebf0ed186cca6c331a554251e9de5ce6d0b0b57db604b317085e4c06f56",
+      "new": "a38039a3bf94ca22632ec3d9a44d0ef2c0638c9816980ead50b6b0917423245b"
+    },
+    "docs/audit/BPS_RIALTO_PRODUCTION_BOUNDARY_2026-07-25.evidence.json": {
+      "old": "63d94b7a49df6fdf91b2c0a085428eb68ee16b10722d518aa70366b667a99537",
+      "new": "324bdaf68dae8552d29e84fd099a0360d477cd820555089d77a9ae67a32c266b"
+    },
+    "docs/audit/BPS_RIALTO_ORACLE_SEMANTICS_REVIEW_2026-07-25.md": {
+      "old": "1e241a5feb734e7590907c218d72aa91425c3cef2e8d5d28ec8902441cf1c317",
+      "new": "88530e01eb7b38c3ea187aa033e8d5654e062d411e65678fdb6d462039caeb79"
+    }
+  },
+  "filesCreatedOrModified": {
+    "packages/rialto/src/price-guard.ts": "c1e36ce7970f3a8dc55a2639227778dc4a3df3bfbc7ab191fe6d255e6925e18f",
+    "packages/rialto/src/price-guard.test.ts": "ac097657286b60c416eee32e1a3f9414ad9e5c3d6470eb6524135f22a3a95cc2",
+    "docs/decisions/BPS_RIALTO_FOUNDER_APPROVAL_BALLOT_2026-07-25.md": "db61b58f6e298c1c73c7cc077d7905429f1a061ff377d5e5eaa94eadd606f0ca",
+    "docs/audit/BPS_RIALTO_ORACLE_AND_DECISION_REVIEW_2026-07-25.md": "0a3a6fa240f9f4c5cff0757c06db90be09660a313f2b7f318cd4d54ad0e70ff6"
+  },
+  "prohibitionsHonored": "no /quote, no onboarding/key/nonce/gasless endpoint, no credential, no wallet/signature/broadcast, no selector/feed/policy/legal approval, no contract/economic/deployment/dependency/lockfile change"
+}

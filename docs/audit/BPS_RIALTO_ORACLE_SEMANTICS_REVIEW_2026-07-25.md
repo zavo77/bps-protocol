@@ -98,7 +98,7 @@ are not production approval); allowance-mode replay/nonce semantics are **not do
 ("request a fresh quote if the user waits").
 
 **Correction to earlier wording:** 10H artifacts described `/quote` as "read-only". Corrected to:
-**NON-BINDING, NON-SIGNED, NON-BROADCAST QUOTE RETRIEVAL** — not an order or execution, but it
+**QUOTE RETRIEVAL ONLY — RETURNS A FIRM EXECUTABLE PAYLOAD; NO SIGNATURE OR BROADCAST OCCURS DURING RETRIEVAL** — not an order or execution, but it
 returns an executable payload and a server-stored quote identifier. Dated corrections appended to
 the 10H evidence/report; superseded hashes preserved as history.
 
@@ -111,3 +111,11 @@ B-3 remains **`PARTIAL — RIALTO QUOTE ACCESS REQUIRED`**, with these independe
 All remaining approvals are consolidated in
 [`docs/decisions/BPS_RIALTO_ACCESS_AND_PRICE_RISK_DECISION_PACK_2026-07-25.md`](../decisions/BPS_RIALTO_ACCESS_AND_PRICE_RISK_DECISION_PACK_2026-07-25.md)
 (24 decisions, all `PROPOSED — NOT APPROVED`).
+
+## TASK 10I-2 wording correction (2026-07-25, appended)
+
+Rialto documents the quote as a FIRM, server-stored executable payload; therefore "NON-BINDING"
+is not supported by current evidence and has been removed. Corrected phrasing: **QUOTE RETRIEVAL ONLY — RETURNS A FIRM EXECUTABLE PAYLOAD; NO SIGNATURE OR BROADCAST OCCURS DURING RETRIEVAL**.
+Whether retrieval creates any server-side obligation/reservation remains an OPEN question for
+Rialto to answer (decision D-21); it is not asserted here. Superseding hashes are recorded in the
+10I-2 review report.

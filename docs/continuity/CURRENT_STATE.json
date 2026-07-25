@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-25T14:45:00Z",
+  "updatedUtc": "2026-07-25T16:10:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "adaddceb09302db78e36fdb294494fe71df0e43b",
+  "head": "6cb33745693905f576ec521422c2fca1de3605ac",
   "workingTree": {
     "dirty": true,
-    "note": "Rialto-boundary checkpoint adaddceb committed (13 reviewed paths). Only these post-checkpoint continuity updates remain uncommitted.",
+    "note": "Oracle-semantics checkpoint 6cb33745 committed (10 reviewed paths). Only these post-checkpoint continuity updates remain uncommitted.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
@@ -15,9 +15,9 @@
     "untracked": []
   },
   "phase": "post-canary",
-  "latestCompletedMilestone": "TASK 10H-2 — review + checkpoint of the Rialto boundary (2026-07-25; commit adaddceb09302db78e36fdb294494fe71df0e43b; classification PARTIAL — RIALTO QUOTE ACCESS REQUIRED upheld; arithmetic matrix + trust-model corrections)",
-  "currentTask": "none — 10H-2 complete; awaiting next authorization",
-  "nextTask": "Authorized Rialto API access + approved selector and price/risk decision pack (founder/counsel), then rerun the boundary against a real read-only quote",
+  "latestCompletedMilestone": "TASK 10I-1 — oracle semantics reconciliation + price-guard correction + decision pack (2026-07-25; commit 6cb33745693905f576ec521422c2fca1de3605ac)",
+  "currentTask": "none — awaiting founder/counsel decision-pack approvals + Rialto access",
+  "nextTask": "Founder/counsel approval of the 24-decision pack; send drafted quote:read request; then rerun the boundary against a real NON-BINDING quote (selector pinning)",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,
@@ -126,9 +126,9 @@
       "passed": 30
     },
     "rialtoVitest": {
-      "passed": 76,
+      "passed": 79,
       "files": 5,
-      "note": "46 boundary tests incl. 10H-2 arithmetic matrix"
+      "note": "corrected two-feed price guard (20 required cases + sequencer)"
     },
     "canaryVerifyAll": "PASS (9 suites)",
     "playwrightE2E": "PASS (historical ~2026-07-24; single smoke flow; rerun before relying)",
@@ -245,6 +245,11 @@
       "file": "bps-experiment-rialto-boundary-2026-07-25-adaddceb.tar.gz",
       "offDeviceEncryptedTransfer": "PENDING",
       "note": "path/size/SHA in task report + CHANGELOG"
+    },
+    "oracleSemanticsArchive": {
+      "file": "bps-experiment-oracle-semantics-2026-07-25-6cb33745.tar.gz",
+      "offDeviceEncryptedTransfer": "PENDING",
+      "note": "path/size/SHA in task report + CHANGELOG"
     }
   },
   "snapshotPipeline": {
@@ -291,6 +296,34 @@
     "finalReportSha256": "7b0c88c6b11a9bda072241378b5c289f62fbd64d846c43ce4b13a0dae4d75a87",
     "supersededEvidenceSha256": "e7bc7e6a044296ebeff1249b197416eb99a315e8f776805b7a80f18568bf006e",
     "supersededReportSha256": "2b87cde1c6f25d2e822dd875403a529d7cd6b84222ee2ae9d301ce1c12e941df",
-    "routerRecheck": "block 19078598: identical router 0xc94135b6…59bd + code hash 0xa7041268…7611"
+    "routerRecheck": "block 19078598: identical router 0xc94135b6…59bd + code hash 0xa7041268…7611",
+    "independentlyRecorded": [
+      "APPROVED PRICE AND RISK POLICY REQUIRED",
+      "VENUE SELECTOR UNVERIFIED",
+      "VENUE REPLAY SEMANTICS UNRESOLVED",
+      "LEGAL ELIGIBILITY UNRESOLVED"
+    ],
+    "oracleSemanticsCorrection": {
+      "date": "2026-07-25",
+      "checkpointCommit": "6cb33745693905f576ec521422c2fca1de3605ac",
+      "criticalFix": "price-guard rewritten: PER_TOKEN_CHAINLINK feeds used directly (multiplier NOT re-applied; prior formula would have double-applied it); RAW_UNDERLYING gated evidence-only; two-feed model; L2 sequencer machinery; 79/79 rialto tests",
+      "evidence": "docs/audit/BPS_RIALTO_ORACLE_SEMANTICS_REVIEW_2026-07-25.{md,evidence.json}",
+      "evidenceSha256": "4295519ce145206b10f32c9f7c6486b654142d6cf6dc21db086f92947a45b0f1",
+      "reportSha256": "1e241a5feb734e7590907c218d72aa91425c3cef2e8d5d28ec8902441cf1c317",
+      "superseded10HHashes": {
+        "evidence": "979f351d9a88c8f0058628417da46a8809d4a394e4440ec42025f3dd87e8d1b8",
+        "report": "7b0c88c6b11a9bda072241378b5c289f62fbd64d846c43ce4b13a0dae4d75a87"
+      },
+      "current10HHashes": {
+        "evidence": "63d94b7a49df6fdf91b2c0a085428eb68ee16b10722d518aa70366b667a99537",
+        "report": "ad298ebf0ed186cca6c331a554251e9de5ce6d0b0b57db604b317085e4c06f56"
+      },
+      "decisionPack": {
+        "path": "docs/decisions/BPS_RIALTO_ACCESS_AND_PRICE_RISK_DECISION_PACK_2026-07-25.md",
+        "sha256": "1c433f0a6e9d28ca8b21607292230f7a880b653ce18f6532f24a47539d35f0af",
+        "decisions": 24,
+        "status": "ALL PROPOSED — NOT APPROVED"
+      }
+    }
   }
 }
