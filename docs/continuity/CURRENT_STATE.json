@@ -1,0 +1,176 @@
+{
+  "schemaVersion": "1.0.0",
+  "updatedUtc": "2026-07-25T07:10:56Z",
+  "repositoryPath": "C:\\Projects\\bps-experiment",
+  "branch": "master",
+  "head": "7428f7470ad9805f1563ca3be57573e4257a05d4",
+  "workingTree": {
+    "dirty": true,
+    "note": "Intentional, preserved. Documentation/continuity task only; no code/deploy/tx changes.",
+    "modified": [".prettierignore", "eslint.config.mjs", "HANDOVER.md"],
+    "untracked": [
+      "docs/audit/BPS_CANARY_MAINNET_COMPLETION_2026-07-25.md",
+      "docs/audit/BPS_CANARY_MAINNET_COMPLETION_2026-07-25.evidence.json",
+      "docs/continuity/",
+      "packages/contracts/canary-packet/"
+    ]
+  },
+  "phase": "post-canary",
+  "latestCompletedMilestone": "TASK 10E-1 — post-canary mainnet reconciliation and permanent evidence checkpoint (2026-07-25)",
+  "currentTask": "TASK 10F — authoritative master handover + continuity-control system (documentation only)",
+  "nextTask": "Distribution-lifecycle fork rehearsal: fee accounting -> acquisition funding -> RWA settlement -> snapshot -> Merkle claim (fork-only; no mainnet write)",
+  "chain": {
+    "name": "Robinhood Chain Mainnet",
+    "chainId": 4663,
+    "chainIdHex": "0x1237",
+    "nativeAsset": "ETH",
+    "explorer": "https://robinhoodchain.blockscout.com",
+    "verifiedAtBlock": 18821299,
+    "verifiedUtc": "2026-07-25T07:10:56Z"
+  },
+  "productionStatus": {
+    "deployed": false,
+    "verdict": "NO-GO (TASK 7/9). Canonical BPS production is NOT deployed and requires a fresh, separately authorized deployment.",
+    "bpscIsProduction": false
+  },
+  "canaryStatus": {
+    "kind": "BPSC-TEST canary (NOT canonical BPS production)",
+    "complete": true,
+    "reconciled": true,
+    "plannedTransactions": 19,
+    "completedTransactions": 19,
+    "deployerNonce": { "latest": 16, "pending": 16 },
+    "testerNonce": { "latest": 8, "pending": 8 },
+    "testerNonce8Executed": false,
+    "testerNonce8Authorized": false,
+    "delayedWithdrawalUnlockUtc": "2026-07-31T23:02:26Z",
+    "lpPositionTokenId": 371728,
+    "pool": "0x4A429194dC4E4A1f3b1cD24bBaf7754f65ABc5EF",
+    "realizedGasAll19Wei": "1881602384200000",
+    "acquisitionBudgetAccruedWei": "31435920663381",
+    "bpscBurnedTotal": "19075555916145897703744",
+    "lifecycleFullyDemonstrated": false
+  },
+  "deployedCanaryContracts": {
+    "note": "Actual on-chain addresses (authoritative). The deploy registry predicted map is offset and its actual map is null (see HANDOVER.md DOC-1).",
+    "canaryToken": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+    "lockingVault": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
+    "claimManager": "0x5EcbADf1cF050F1B86D44B979416A8e859Fb2574",
+    "rialtoAdapter": "0xbe2C8c6CB7CeeED24708419F5aaEEF8d949866AE",
+    "coordinator": "0xE3Bd9e1D58d16A31912f804f931Cc6bfcD702205",
+    "stockVault": "0x9a5a55361BcFDD6Ded4A6EAa02D997F1108EdeC6",
+    "uniswapAdapter": "0x5891Dcc2BACD1ADC8b5a9C30B365931290d7E5E1",
+    "tradeRouter": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6"
+  },
+  "wallets": {
+    "deployer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "controlledTester": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+    "productionOperatorSafe": "UNRESOLVED"
+  },
+  "canonicalArtifacts": {
+    "economicsPolicy": "BPS-ECON-2.0",
+    "acquisitionMandate": "BPS-FRONTIER-10-1.0 (basket PROPOSED, pending approval + registry re-verification)",
+    "restrictedPolicy": "BPS-RESTRICTED-1.0 (draft)",
+    "acceptedExecutionZip": "canary-rabby-recovery-execution-review-v9.zip",
+    "acceptedExecutionZipBytes": 578871,
+    "acceptedExecutionZipSha256": "0c958a58b8684878c4dfce4a15cdba3b2fc0e39680d46902430ab6e78a09b74d",
+    "recoveryAuthorizationDigest": "0xc50d97d780c48308667d17366e383be0b70556e0d0bfbab69225222e228d8314",
+    "evidenceManifestSha256": "d6005083b20e5188ce783cde5b30159b56228398d5bf204746b536e9e36b8ec3",
+    "expiredArtifactsAreEvidenceOnly": true
+  },
+  "deploymentRegistryReferences": [
+    "packages/contracts/deploy/robinhood-mainnet.canary.json",
+    "packages/contracts/deploy/robinhood-mainnet.dryrun.json",
+    "packages/contracts/deploy/manifest.schema.json",
+    "packages/contracts/deploy/RUNBOOK.md",
+    "docs/audit/BPS_CANARY_MAINNET_COMPLETION_2026-07-25.md",
+    "docs/audit/BPS_CANARY_MAINNET_COMPLETION_2026-07-25.evidence.json"
+  ],
+  "testSummary": {
+    "lastFullRunUtc": "2026-07-25",
+    "npmRunCheck": "PASS",
+    "foundry": { "passed": 416, "failed": 0, "suites": 45 },
+    "webVitest": { "passed": 177, "files": 25 },
+    "sharedVitest": { "passed": 52 },
+    "pilotVitest": { "passed": 30 },
+    "rialtoVitest": { "passed": 30 },
+    "canaryVerifyAll": "PASS (9 suites)",
+    "playwrightE2E": "PASS (historical ~2026-07-24; single smoke flow; rerun before relying)",
+    "externalSecurityAudit": "NOT_PERFORMED"
+  },
+  "blockers": [
+    {
+      "id": "B-1",
+      "severity": "high",
+      "summary": "No independent smart-contract security audit",
+      "owner": "external auditor"
+    },
+    {
+      "id": "B-2",
+      "severity": "high",
+      "summary": "Legal entity/jurisdiction/eligibility placeholders unresolved",
+      "owner": "founder+counsel"
+    },
+    {
+      "id": "B-3",
+      "severity": "high",
+      "summary": "Rialto production terms + Stock-Token KYC/allowlist path unproven",
+      "owner": "founder+Rialto/issuer"
+    },
+    {
+      "id": "B-4",
+      "severity": "high",
+      "summary": "Founder authorizations: seed size, valuation/float, Safe m-of-n, real-money go",
+      "owner": "founder"
+    },
+    {
+      "id": "INF-1",
+      "severity": "medium",
+      "summary": "Postgres schema + @bps/db not implemented",
+      "owner": "engineering"
+    },
+    {
+      "id": "INF-2",
+      "severity": "medium",
+      "summary": "Production RPC + monitoring/alerting unresolved",
+      "owner": "founder"
+    },
+    {
+      "id": "INF-3",
+      "severity": "medium",
+      "summary": "Indexer + worker are health skeletons only",
+      "owner": "engineering"
+    },
+    {
+      "id": "DOC-1",
+      "severity": "medium",
+      "summary": "Deploy registry predicted addresses offset vs actual; actual map null",
+      "owner": "engineering"
+    }
+  ],
+  "requiredEnvVarNames": [
+    "APP_ENV",
+    "PORT",
+    "DATABASE_URL",
+    "DATABASE_MIGRATION_URL",
+    "ROBINHOOD_CHAIN_RPC_URL",
+    "ROBINHOOD_CHAIN_ID",
+    "WALLET_AUTH_SESSION_SECRET",
+    "WALLET_AUTH_DOMAIN",
+    "RIALTO_API_URL",
+    "RIALTO_API_KEY",
+    "PILOT_ALLOWLIST",
+    "PILOT_ACCESS_CODE",
+    "BPS_TOKEN_ADDRESS",
+    "BPS_STAKING_ADDRESS",
+    "TX_MAX_VALUE",
+    "TX_MAX_PER_DAY"
+  ],
+  "secrets": "NONE stored here. All secret VALUES live only in a local .env / encrypted secret store, never in the repo.",
+  "readBeforeActing": [
+    "CLAUDE.md",
+    "HANDOVER.md",
+    "docs/continuity/CURRENT_STATE.json",
+    "docs/continuity/CHANGELOG.md"
+  ]
+}

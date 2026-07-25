@@ -1,0 +1,9 @@
+ [PASS] no forbidden pattern (key/seed/keystore, raw broadcast, local signer, raw sign, AA/session keys, batching, auto-send)
+ [PASS] operator-core sends via eth_sendTransaction with a single tx (no array/batch)
+ [PASS] operator-core maintains an explicit FORBIDDEN_METHODS denylist including eth_sendRawTransaction
+ [PASS] operator-core never auto-retries (no retry/replacement mechanism)
+ [PASS] operator-core discards raw inputs after bind AND no runtime method reads this.packet/policy/snapshot  (raw read after discard)
+ [PASS] operator app.js has NO HTML/JS injection sink (innerHTML/outerHTML/insertAdjacentHTML/document.write/eval)  (textContent/createElement only)
+ [PASS] no RPC/provider URL or key token anywhere; no non-doc URL in operator/reports (env-var reference only)  (clean)
+
+[static-scan] 7/7 checks passed

@@ -1,0 +1,44 @@
+[recovery-test] canonical v9 leaves mutation-tested: 470 | source-input changed: 463 unused: 336
+[recovery-test] histogram: eth_chainId:86 eth_accounts:44 eth_getTransactionByHash:158 eth_getTransactionReceipt:158 eth_getCode:176 eth_call:48 eth_getTransactionCount:32 eth_getBlockByNumber:32 eth_getBalance:16 eth_estimateGas:16 eth_sendTransaction:7
+ [PASS] v9 bind (13 anchors + v5/v6/v7/v8 anchors + corrected deployerStepRange 1-13 + gas policy + deadline refresh + 6 tester signables)
+ [PASS] fork resumes with deployer nonce 16 / tester nonce 2
+ [PASS] steps 1-13 cannot be sent again (no deployer tx, no originalIndex<=13, tester nonces exactly 2-7)
+ [PASS] tester nonce 8 (delayed withdrawal) remains disabled
+ [PASS] deployer-selected CONNECT fails with a non-halting wrongAccount refusal
+ [PASS] tester-selected connect passes
+ [PASS] reconcile imports+verifies ALL 13 anchors + pool/position state; current=0
+ [PASS] deployer-selected PRE-CHECK refuses WITHOUT halting (v7 terminal halt cannot recur)
+ [PASS] tester-selected pre-check passes
+ [PASS] clean-fork recovery replay: steps 1-13 imported + final 6/6 tester txs executed & verified
+ [PASS] successful restart reconciliation after EVERY remaining step (13 anchors re-verified each time)
+ [PASS] exactly 6 single eth_sendTransaction calls; no forbidden method; no deployer send
+ [PASS] new deadline == pinned ts + 21600 == packet expiry; old deadline == bound v8 value 1784949999
+ [PASS] byte-diff: only the single 32-byte deadline word differs in steps 15/17
+ [PASS] the other FOUR remaining calldatas are byte-identical to the reviewed v8 versions
+ [PASS] old/new deadline words + old/new dataKeccak match the recorded refresh metadata
+ [PASS] provider block timestamp at/after packet expiry HALTS the pre-check
+ [PASS] honest returned tx verifies (orig step 14)
+ [PASS] 1.25x policy: cost at ceiling passes; above FAILS
+ [PASS] priority exactly 50,000,000 passes; 50,000,001 FAILS
+ [PASS] maxFee above reviewed ceiling FAILS
+ [PASS] gasLimit above 2x ceiling FAILS
+ [PASS] critical field: wrong sender FAILS
+ [PASS] critical field: wrong nonce FAILS
+ [PASS] critical field: wrong value FAILS
+ [PASS] critical field: wrong calldata FAILS
+ [PASS] critical field: wrong type (legacy) FAILS
+ [PASS] critical field: non-empty access list FAILS
+ [PASS] chainId ABSENT accepted (eth_chainId==4663 independently)
+ [PASS] chainId PRESENT and wrong FAILS
+ [PASS] provider chain != 4663 at verify boundary FAILS
+ [PASS] exposure = realized gas(1-13) + principal + max gas(14-19 at 1.25x) <= $130 (no double count)
+ [PASS] aggregate exposure above $130 at fresh prices FAILS the exposure gate
+ [PASS] v9 uses canaryv9 namespace; v5/v6/v7/v8 halt records untouched and not authoritative
+ [PASS] resolveUncertainSend with failing journal write stays HALTED (no blind retry)
+ [PASS] storage-unavailable-before-send: wallet NOT invoked
+ [PASS] crash-between-intent-and-response: reload HALTED uncertain (no new send for that nonce)
+ [PASS] GENERIC leaf-mutation: all 470 canonical v9 leaves fail binding when mutated
+ [PASS] SOURCE-INPUT mutation: 463 leaves shift the digest; 336 unused (raw inputs null after bind)
+ [PASS] v9 regressions: anchors/realized-gas/deployer-injection/nonce-8/gas-policy/v7+v8-anchors/deployer-range/nonces/exposure/position all FAIL binding (16 tested)
+
+[recovery-test] 40/40 checks passed

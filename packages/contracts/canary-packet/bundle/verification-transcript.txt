@@ -1,0 +1,118 @@
+TASK 10C-R2 VERIFICATION TRANSCRIPT (revoked-packet refresh; start nonce read live)
+generated (UTC): 2026-07-24T06:58:56Z
+provider RPC: env var ROBINHOOD_CHAIN_RPC_URL (URL not recorded)
+
+========================================================
+ TASK 10B-8 canary review bundle — verification runner
+ mode: live | live: true | executable: false
+========================================================
+
+>>> (1/4) SOURCE COMPILATION (solc 0.8.26, all 37 sources -> 8 bytecodes)
+
+[compile] solc 0.8.26+commit.8a97fa7a.Emscripten.clang
+ [PASS] solc is exactly 0.8.26  (0.8.26+commit.8a97fa7a.Emscripten.clang)
+ [PASS] Standard JSON contains the exact OpenZeppelin remapping
+ [PASS] Standard JSON settings: optimizer enabled runs=200, evmVersion=cancun
+ [PASS] Standard JSON contains all 37 bundled sources
+ [PASS] every Standard JSON source == the corresponding bundled source file
+ [PASS] compilation succeeded with no errors
+ [PASS] all EIGHT recompiled creation AND runtime bytecodes == bundled artifacts
+
+[compile] 7/7 checks passed
+
+>>> (2/4) OFFLINE VERIFIER
+
+[offline] executionPacketDigest:    0x7e1333f8fd0068f488a8b90d14174700d8f653b806874b1a96d10d538ad4c4e3
+[offline] fullReviewArtifactDigest: 0x8059549672a844b10775668752ff8e7bb760768842cd1fe3add3e9d395580c3a
+ [PASS] mode is live or historical-fixture, packet+policy agree, and executable=false in both  (mode=live)
+ [PASS] no provider/RPC URL embedded in packet, policy or price snapshot (env-var reference only; public price endpoints allowed)  (env-var reference only)
+ [PASS] all four safety flags false in packet
+ [PASS] all four safety flags false in policy
+ [PASS] manifest broadcastReady=false & liveWritesApproved=false
+ [PASS] price gate: a live packet requires live-mode prices, both observations <=300s at capture and capture <=300s before generation; a fixture price forces executable=false  (requireLive=true priceMode=live live=true freshAtGeneration=true)
+ [PASS] packet records generation + expiry UTC and a validity window matching policy
+ [PASS] price snapshot records separate request/response timestamps and micro-USD parsed from decimal string
+ [PASS] executionPacketDigest over normalized SIGNABLE fields matches  (0x7e1333f8fd0068f488a8b90d14174700d8f653b806874b1a96d10d538ad4c4e3)
+ [PASS] every immediate + delayed tx carries explicit chainId=4663
+ [PASS] exact sequential nonces for deployer (start 3..)
+ [PASS] exact sequential nonces for tester (start 2..)
+ [PASS] deployer + tester start nonces match packet meta.startNonces (read live, not hardcoded)
+ [PASS] delayed tx nonce continues the tester sequence exactly
+ [PASS] mutation test: changing nonce, signer, chainId or tx type FAILS verification  (all 4 mutations detected)
+ [PASS] fullReviewArtifactDigest (whole artifact minus itself) matches  (0x8059549672a844b10775668752ff8e7bb760768842cd1fe3add3e9d395580c3a)
+ [PASS] execution digest differs from full digest
+ [PASS] mutation test: any covered field change alters full digest
+ [PASS] chainId=4663 & fork block/hash/ts/baseFee match policy snapshot
+ [PASS] anvilConfig recorded (fork block/chain/baseFee/argv template + env-var reference, NO url) & live cross-check hash matched
+ [PASS] live+fork nonces recorded and equal the packet start nonces (read live, not hardcoded)
+ [PASS] price snapshot embedded == pinned file; 2 distinct sources; higher selected; raw+sha recorded
+ [PASS] all 8 CREATE addresses derive from deployer+nonce (current start nonce)
+ [PASS] bundled canonical manifest predicted addresses (startNonce) agree with CREATE
+ [PASS] provenance: creation/runtime bytecode keccak, artifact sha256, source-list, solc/optimizer(200)/cancun match
+ [PASS] every bundled source file keccak256 == solc metadata (checked 18 files)
+ [PASS] provenance records repoHead(40 hex) & dirtyTrackedTree boolean
+ [PASS] every deploy init code EXACTLY == creationBytecode ++ abi.encode(expected ctor args)
+ [PASS] EVERY immediate+delayed tx verified (type/fees/gasLimit-ceil/maxGasCost/gasUsed/receipt/dataKeccak/value + embedded args incl createPool/initialize/both approvals/vault approval)
+ [PASS] LP/buy/sell minimums NON-ZERO in calldata
+ [PASS] gasLimit == ceil(gasEstimate*120/100) for all txs (integer ceiling)
+ [PASS] every tx target ∈ allow-set (pinned infra + CREATE)
+ [PASS] canonical BPS derived from bundled manifests == [] (no canonical deployment exists) & proven
+ [PASS] canary token symbol is BPSC-TEST (not canonical BPS)
+ [PASS] LP amount0Min/amount1Min == floor(used*995/1000) & used<=desired & before-used==after
+ [PASS] buy 2/1/97 (mulDiv floor) + mins floor(actual*99/100) + vault WETH += stock
+ [PASS] sell 2/2/96 (mulDiv floor) + mins floor(actual*99/100) + tester WETH += user + within $2 cap
+ [PASS] ETH reconciles both signers (start - Σ(gasUsed*effPrice) == end)
+ [PASS] WETH reconciles (deployer: start-LPused; tester: start-buyGross+sellUser) & start==inbound($100/$20 floor)
+ [PASS] BPSC reconciles (deployer 1e9-LPused==end; tester bought-sold-locked==0)
+ [PASS] inbound ETH == Σ per-signer recorded max gas cost; actual spent <= funded
+ [PASS] withdraw returns exactly principal; no emergency exit; earliest==unlockTime
+ [PASS] fundingPlan executable=false & fundingAuthorized=false
+ [PASS] funding plan: all THREE ETH amounts & recipients correct (deployer imm, tester imm, tester delayed)
+ [PASS] funding plan: WETH transfer calldata fully decoded — recipient & amount equal declared fields ($100/$20)
+ [PASS] funding plan: exact gas-limit formulas — ETH 21000, WETH transfer 51000, WETH deposit 50000, each ceil(x*120/100)
+ [PASS] funding plan includes WETH wrapping (deposit) txs with gas in aggregate (no funder WETH assumed)
+ [PASS] every funding tx: chainId=4663 & gasLimit=ceil methodology
+ [PASS] gas totals recomputed: immediate + delayed + funding == all-inclusive
+ [PASS] immediate gas <= $10; LP<=$100; trade<=$20
+ [PASS] aggregate exposure = sum(all principal + all max-gas wei) converted ONCE to micro-USD  (68004557997888974 wei)
+ [PASS] all-inclusive exposure <= $130  ($128.211713)
+ [PASS] no signature/private-material field; meta declares none  (none)
+
+[offline] 53/53 checks passed
+
+>>> (3/4) INDEPENDENT CLEAN-FORK REPLAY
+
+
+[replay] CHECKLIST:
+ [PASS] replay fork LATEST == pinned block/hash/timestamp/baseFee
+ [PASS] live-RPC hash of pinned block == fork latest hash
+ [PASS] replay fork nonces == packet start nonces (deployer/tester, from pinned block)
+ [PASS] replay starting balances match packet (WETH exact, ETH seed)
+ [PASS] replay: every immediate tx receipt=success & gasUsed & effGasPrice EXACTLY match recorded
+ [PASS] replay: every transaction hash AND block hash match recorded
+ [PASS] replay: on-chain nonce == recorded nonce and type == 0x2 for every tx
+ [PASS] replay: all 8 deployed at predicted CREATE addresses
+ [PASS] replay: deployed runtime code matches compiled template (immutables masked)
+ [PASS] replay minted position: tokenId decoded, ownerOf==deployer, positions() fee/ticks/liquidity match recorded LP  (tokenId=357072)
+ [PASS] replay wiring from state: router/locking/claim owners, coordinator operator+publisher, vault executor/reserve/coordinator, both adapters' immutables, NVDA approved
+ [PASS] replay pool state right after mint == recorded poolSqrtAfter/poolTickAfter/poolLiquidityAfter
+ [PASS] replay OfficialBuy event == recorded buy accounting (gross/stock/burn/user/bought/burned)
+ [PASS] replay OfficialSell event == recorded sell accounting (gross/stock/burn/user/burned)
+ [PASS] replay LockCreated event == recorded lock (principal, unlockTime, lockId)
+ [PASS] replay ending balances (ETH/WETH/BPSC) match packet endingBalancesImmediate
+ [PASS] replay canary token symbol == BPSC-TEST
+ [PASS] replay delayed withdraw: success, returned==principal, gasUsed matches, LockWithdrawn(principal) & not emergency
+ [PASS] replay delayed withdraw: tx hash + block hash match recorded; nonce/type/chainId as recorded
+
+[replay] 19/19 checks passed
+
+>>> (4/4) GIT BUILD PROVENANCE
+
+ git HEAD 7428f7470ad9805f1563ca3be57573e4257a05d4 == recorded repoHead
+ tracked tree clean; recorded dirtyTrackedTree=false
+ [PASS] git provenance
+
+========================================================
+ compile: PASS | offline: PASS | replay: PASS | git: PASS
+ OVERALL: PASS  (LIVE packet — preparation only; NOT funding or execution authorization)
+========================================================

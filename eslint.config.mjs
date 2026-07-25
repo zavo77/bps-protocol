@@ -12,6 +12,7 @@ export default tseslint.config(
       "**/next-env.d.ts",
       "packages/contracts/cache/**",
       "packages/contracts/lib/**",
+      "packages/contracts/canary-packet/**",
     ],
   },
   js.configs.recommended,

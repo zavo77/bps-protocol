@@ -1,0 +1,11 @@
+RECOVERY PREFLIGHT (v8)
+ [PASS] 0. provider chain is 4663  (chainId=4663)
+ [PASS] 1. packet not expired AND live block timestamp strictly before expiry (== refreshed deadlines)  (now=2026-07-25T05:24:57.646Z chainTs=1784957097 expires=2026-07-25T11:24:00.000Z)
+ [PASS] 2. deployer latest=pending=16 and tester latest=pending=2  (deployer 16/16 tester 2/2)
+ [PASS] 3. tester balances sufficient (>= snapshot; all remaining txs are tester txs)  (tester ETH 409934390560031 WETH 10645659232447969)
+ [PASS] 4. six dependency code hashes + sizes unchanged
+ [PASS] 5. ALL 8 completed contracts code exact + pool + LP position (owner/liquidity) exact
+ [PASS] 6. current base fee fits the fee envelope  (baseFee=95330000 + prio=50000000 <= max=200000000)
+ [PASS] 7. exposure (realized gas 1-13 + principal + max gas 14-19 at 1.25x) <= $130 at fresh higher price  ($123.016513 (coinbase 1859.545 / kraken 1859.73000))
+ [PASS] 8. authorization flags true + ALL 13 completed anchors canonical on chain
+RECOVERY PREFLIGHT: PASS — recovery execution authorized for the final SIX tester transactions; signing occurs only via per-tx Rabby approval with the TESTER selected.

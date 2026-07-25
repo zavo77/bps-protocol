@@ -1,0 +1,4 @@
+# Preservation: these paths carry documented SHA-256 identities (canary evidence bundle + evidence
+# manifests). They must restore byte-identical on any future checkout — no line-ending conversion.
+packages/contracts/canary-packet/** -text
+docs/audit/*.evidence.json -text

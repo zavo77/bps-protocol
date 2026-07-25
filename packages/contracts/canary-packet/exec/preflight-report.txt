@@ -1,0 +1,11 @@
+EXECUTION-TIME PREFLIGHT
+ [FAIL] 1. packet has NOT expired  (now=2026-07-25T05:25:10.717Z expires=2026-07-24T18:05:27.000Z remaining=-40784s)
+ [FAIL] 2. signer nonces still equal packet nonces  (live deployer=16 (packet 3), tester=2 (packet 2))
+ [FAIL] 3. required ETH + WETH balances are sufficient  (NOT FUNDED — need ETH d=3878535200000000/t=391681200000000, WETH d=53181871363689545/t=10636374272737909; have ETH d=2966115952402154/t=409934390560031, WETH d=710132572995220/t=10645659232447969)
+ [PASS] 4. external dependency code hashes unchanged  (6 dependencies verified)
+ [FAIL] 5. no expected deployment address already contains code  (OCCUPIED: canaryToken@0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7,lockingVault@0xeFA9d1C40358E281da21A1BC20a204c849cB8A42,claimManager@0x5EcbADf1cF050F1B86D44B979416A8e859Fb2574,rialtoAdapter@0xbe2C8c6CB7CeeED24708419F5aaEEF8d949866AE,coordinator@0xE3Bd9e1D58d16A31912f804f931Cc6bfcD702205,stockVault@0x9a5a55361BcFDD6Ded4A6EAa02D997F1108EdeC6,uniswapAdapter@0x5891Dcc2BACD1ADC8b5a9C30B365931290d7E5E1,tradeRouter@0x4847b410D1243eD38B481B89B1D1D59a8C8691e6)
+ [PASS] 6. current base fee within packet fee bounds  (baseFee=95232000 + maxPriority=10000000 <= maxFee=200000000 : true)
+ [PASS] 7. aggregate exposure within $130  ($128.189450 <= $130)
+ [PASS] 8. execution authorized: all four flags true + canary/production/scope  (execution-enabled canary; canonical BPS production excluded)
+
+PREFLIGHT: FAIL — EXECUTION MUST STOP

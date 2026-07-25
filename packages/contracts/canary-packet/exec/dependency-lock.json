@@ -1,0 +1,26 @@
+{
+  "name": "canary-rabby-execution-review",
+  "note": "Exact versions of the vendored review/verification dependency closure (node_modules excluded from the ZIP; reinstall with npm using these pins).",
+  "dependencies": {
+    "viem": "2.55.8",
+    "ox": "0.14.32",
+    "abitype": "1.2.3",
+    "isows": "1.0.7",
+    "ws": "8.21.0",
+    "eventemitter3": "5.0.1",
+    "solc": "0.8.26",
+    "command-exists": "1.2.9",
+    "commander": "8.3.0",
+    "follow-redirects": "1.16.0",
+    "js-sha3": "0.8.0",
+    "memorystream": "0.3.1",
+    "semver": "5.7.2",
+    "tmp": "0.0.33",
+    "@noble/curves": "1.9.0",
+    "@noble/hashes": "1.8.0",
+    "@scure/bip32": "1.7.0",
+    "@scure/bip39": "1.6.0",
+    "@scure/base": "1.2.6",
+    "@adraffy/ens-normalize": "1.11.1"
+  }
+}

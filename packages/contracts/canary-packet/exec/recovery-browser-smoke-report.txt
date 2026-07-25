@@ -1,0 +1,12 @@
+ [PASS] every recovery asset returns 200 with correct content-type (port 8741)
+ [PASS] v5 pages + non-allowlisted + traversal are 403 on the v9 origin
+ [PASS] full module+fetch graph from recovery-index.html every asset is 200
+ [PASS] recovery-app.js executes over HTTP: recovery binding completes with no error
+ [PASS] Connect is the only enabled initial control; NO precheck/confirm/send exists (incl. none for step 1)
+ [PASS] step-1 anchor tx hash rendered read-only
+ [PASS] step-2 anchor tx hash rendered read-only
+ [PASS] step-13 (NPM.mint) anchor + 13-anchor count rendered read-only
+ [PASS] v9 page touches ONLY the canaryv9 storage namespace (v5/v6/v7/v8 records untouched)
+ [PASS] HTML/handler text renders only as text on the recovery page
+
+[recovery-browser-smoke] 10/10 checks passed (port 8741)

@@ -78,3 +78,45 @@ If code changes are made but `HANDOVER.md` is missing or stale, the task is not 
 ## Definition of done
 
 A task is complete only when the requested behavior exists in code, the relevant verification passes, and `HANDOVER.md` accurately reflects the resulting repository state. Scaffolding, pseudocode, TODOs, mocked live behavior, unverified claims, and documentation-only changes do not count as completion unless explicitly requested.
+
+## MANDATORY BPS CONTINUITY GATE
+
+`HANDOVER.md` is the authoritative, self-contained master handover. It is supported by
+`docs/continuity/CURRENT_STATE.json` (machine-readable state), `docs/continuity/CHANGELOG.md` (append-only
+continuity log), and `docs/continuity/BACKUP_AND_RECOVERY.md`.
+
+**Before beginning substantive work:**
+
+1. Read `HANDOVER.md` completely.
+2. Read `docs/continuity/CURRENT_STATE.json`.
+3. Read all new entries in `docs/continuity/CHANGELOG.md`.
+4. Compare the documented branch, HEAD, and working-tree state with the actual repository
+   (`git branch --show-current`, `git rev-parse HEAD`, `git status --short`).
+5. Stop and report any material discrepancy before performing risky work.
+
+**Before ending any task that changes project state**, update all of:
+
+- `HANDOVER.md`;
+- `docs/continuity/CURRENT_STATE.json`;
+- `docs/continuity/CHANGELOG.md` (append a new top entry; never rewrite earlier ones);
+- any affected decision, deployment, audit, or operational record.
+
+A **material change** includes: source-code or configuration changes; dependency upgrades; deployments or
+live transactions; changed addresses, hashes, nonces, balances, roles, or allowances; new test results; new
+artifacts; infrastructure changes; legal/compliance changes; product or economic decisions; discovered bugs
+or security findings; completed milestones; changed blockers, next actions, or operating instructions; or
+any relevant note a successor would need.
+
+Claude may **not** claim a material task is complete until the continuity files reflect the resulting state.
+If no material state changed, do not create meaningless handover churn — state that the continuity gate was
+evaluated and no update was required.
+
+**Never** put secrets, credential-bearing URLs, private keys, seed phrases, authentication cookies, or
+recovery codes into `HANDOVER.md` or any continuity file.
+
+**Every future final task report must state:** whether the continuity gate was triggered; which continuity
+files were updated; the current branch and HEAD; the working-tree status; and the exact next task.
+
+**Standing safety rules for a fresh session:** never treat an expired canary packet as execution
+authorization; never reuse the BPSC-TEST canary as production; never send tester nonce 8 or any live
+transaction without a new, bounded, independently reviewed authorization.

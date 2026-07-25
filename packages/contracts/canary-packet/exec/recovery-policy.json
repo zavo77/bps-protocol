@@ -1,0 +1,109 @@
+{
+  "policyVersion": "10D-exec",
+  "kind": "EXECUTION-MODE canary review policy (Rabby operator; individual approvals; provider RPC by env-var only)",
+  "mode": "live",
+  "live": true,
+  "executable": true,
+  "modeNote": "TASK 10D: EXECUTION-ENABLED BPSC-TEST canary packet + localhost Rabby operator. Signing happens ONLY in the user Rabby extension via per-transaction eth_sendTransaction after an explicit click. This preparation task performs NO signing/broadcast.",
+  "chainId": 4663,
+  "anvilLaunch": {
+    "binary": "anvil",
+    "forkUrlEnvVar": "ROBINHOOD_CHAIN_RPC_URL",
+    "chainId": 4663,
+    "port": 8546,
+    "argvTemplate": [
+      "anvil",
+      "--fork-url",
+      "$ROBINHOOD_CHAIN_RPC_URL",
+      "--fork-block-number",
+      "<pinnedBlock>",
+      "--chain-id",
+      "4663",
+      "--block-base-fee-per-gas",
+      "<pinnedBaseFee>",
+      "--port",
+      "<port>",
+      "--silent"
+    ],
+    "forkBlockNumber": 18134956,
+    "blockBaseFeePerGas": 108890000
+  },
+  "snapshot": {
+    "forkBlock": 18134956,
+    "forkHash": "0xc11c21c058d519cbea5420f42e658528a9fc5b408512b885e0c0eb86daae29be",
+    "forkTimestamp": 1784894727,
+    "baseFeePerGasWei": "108890000"
+  },
+  "wallets": {
+    "deployer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "tester": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024"
+  },
+  "expectedNonces": {
+    "deployer": 3,
+    "tester": 2
+  },
+  "infrastructure": {
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "uniswapV3Factory": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+    "nonfungiblePositionManager": "0x73991a25c818bf1f1128deaab1492d45638de0d3",
+    "swapRouter02": "0xCaf681a66D020601342297493863E78C959E5cb2",
+    "rialtoRegistry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+    "nvdaStockToken": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC"
+  },
+  "gas": {
+    "maxFeePerGasWei": "200000000",
+    "maxPriorityFeePerGasWei": "10000000",
+    "gasLimitMultiplierPct": 120
+  },
+  "caps": {
+    "lpWethUsd": 100,
+    "individualTradeUsd": 2,
+    "controlledTradesUsd": 20,
+    "gasUsd": 10,
+    "aggregateUsd": 130
+  },
+  "economics": {
+    "bpscPriceMicroUsd": 2,
+    "impliedFdvUsd": 2000,
+    "feeTier": 10000,
+    "tickSpacing": 200,
+    "rangeLowMultNumer": 1,
+    "rangeLowMultDenom": 4,
+    "rangeHighMult": 4,
+    "bpscLpDesiredWei": "50000000000000000000000000"
+  },
+  "safetyFlags": {
+    "broadcastReady": true,
+    "liveWritesApproved": true,
+    "executionAuthorized": true,
+    "fundingAuthorized": true
+  },
+  "manifestPath": "packages/contracts/deploy/robinhood-mainnet.canary.json",
+  "liveRpcEnvVar": "ROBINHOOD_CHAIN_RPC_URL",
+  "rpcPolicy": "Provider RPC is read exclusively from the environment variable named above. The URL is never printed, logged, serialized or stored in any artifact, report or archive.",
+  "validity": {
+    "windowSeconds": 21600,
+    "note": "6-hour execution validity window"
+  },
+  "authorizationMode": "execution",
+  "canary": true,
+  "production": false,
+  "maxAllInclusiveExposureUsd": 130,
+  "authorizationScope": "BPSC-TEST canary only; Robinhood Chain mainnet; maximum all-inclusive exposure $130; individual Rabby approvals; canonical BPS production excluded.",
+  "mustRegenerateBeforeExecution": false,
+  "rabby": {
+    "requiredChainIdHex": "0x1237",
+    "requiredChainId": 4663,
+    "autoSwitchNetwork": false,
+    "allowRawSign": false,
+    "allowBatching": false,
+    "allowAutoSend": false,
+    "bind": "127.0.0.1"
+  },
+  "reviewedAuthorizationDigest": "0x4fdfd36b99d6090fef67f21bd3b2027e8dc7e339861ae94eb0f292da2b6ee248",
+  "recoveryAuthorizationDigest": "0xc50d97d780c48308667d17366e383be0b70556e0d0bfbab69225222e228d8314",
+  "recoveryExpectedNonces": {
+    "deployer": 16,
+    "tester": 2
+  }
+}

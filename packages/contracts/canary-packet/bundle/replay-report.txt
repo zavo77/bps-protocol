@@ -1,0 +1,25 @@
+TASK 10C-R2 CLEAN-FORK REPLAY REPORT
+run (UTC): 2026-07-24T06:59:29Z
+
+[replay] CHECKLIST:
+ [PASS] replay fork LATEST == pinned block/hash/timestamp/baseFee
+ [PASS] live-RPC hash of pinned block == fork latest hash
+ [PASS] replay fork nonces == packet start nonces (deployer/tester, from pinned block)
+ [PASS] replay starting balances match packet (WETH exact, ETH seed)
+ [PASS] replay: every immediate tx receipt=success & gasUsed & effGasPrice EXACTLY match recorded
+ [PASS] replay: every transaction hash AND block hash match recorded
+ [PASS] replay: on-chain nonce == recorded nonce and type == 0x2 for every tx
+ [PASS] replay: all 8 deployed at predicted CREATE addresses
+ [PASS] replay: deployed runtime code matches compiled template (immutables masked)
+ [PASS] replay minted position: tokenId decoded, ownerOf==deployer, positions() fee/ticks/liquidity match recorded LP  (tokenId=357072)
+ [PASS] replay wiring from state: router/locking/claim owners, coordinator operator+publisher, vault executor/reserve/coordinator, both adapters' immutables, NVDA approved
+ [PASS] replay pool state right after mint == recorded poolSqrtAfter/poolTickAfter/poolLiquidityAfter
+ [PASS] replay OfficialBuy event == recorded buy accounting (gross/stock/burn/user/bought/burned)
+ [PASS] replay OfficialSell event == recorded sell accounting (gross/stock/burn/user/burned)
+ [PASS] replay LockCreated event == recorded lock (principal, unlockTime, lockId)
+ [PASS] replay ending balances (ETH/WETH/BPSC) match packet endingBalancesImmediate
+ [PASS] replay canary token symbol == BPSC-TEST
+ [PASS] replay delayed withdraw: success, returned==principal, gasUsed matches, LockWithdrawn(principal) & not emergency
+ [PASS] replay delayed withdraw: tx hash + block hash match recorded; nonce/type/chainId as recorded
+
+[replay] 19/19 checks passed

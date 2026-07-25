@@ -1,0 +1,833 @@
+{
+  "meta": {
+    "task": "10D-7-recovery-v8",
+    "kind": "EXECUTION-ENABLED BPSC-TEST canary RECOVERY v8 packet (original steps 1-13 completed on chain; final SIX tester transactions; localhost Rabby operator; per-tx user approval; NO key handling)",
+    "mode": "recovery",
+    "live": true,
+    "executable": true,
+    "executionAuthorized": true,
+    "fundingAuthorized": true,
+    "chainId": 4663,
+    "authorization": {
+      "canary": true,
+      "production": false,
+      "scope": "BPSC-TEST canary RECOVERY v8 (original steps 1-13 completed on chain); Robinhood Chain mainnet; final SIX tester transactions only (original steps 14-19, tester nonces 2-7); per-step gas-cost ceiling exactly 1.25x reviewed (accepted); maximum all-inclusive exposure $130; individual Rabby approvals; canonical BPS production excluded.",
+      "maxAllInclusiveExposureUsd": 130,
+      "signingChannel": "user Rabby extension via per-transaction eth_sendTransaction only",
+      "delayedWithdrawalDisabled": "tester nonce 8 withdraw NOT executable from the recovery operator"
+    },
+    "deployer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "tester": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+    "forkBlock": "18471121",
+    "forkBlockHash": "0x3706f1f5dc4e7d597b971d5aea917b7cde5c38d29561cb47fc380ec3425f0e1e",
+    "forkTimestamp": "1784928399",
+    "forkBaseFeePerGasWei": "107608000",
+    "generatedAtUtc": "2026-07-24T21:31:17.531Z",
+    "expiresAtUtc": "2026-07-25T03:26:39.000Z",
+    "validityWindowSeconds": 21600,
+    "originalStepCount": 19,
+    "v5ZipSha256": "5a6246ca51bd3237e6d925153439d9040b1c3674c0e026e9d8f187e7a5e64b3b",
+    "v5ReviewedAuthorizationDigest": "0x4fdfd36b99d6090fef67f21bd3b2027e8dc7e339861ae94eb0f292da2b6ee248",
+    "v6ZipSha256": "fd57f5c1bcc4d296250bfb04cab096a4f56299b0deb2edefbf4824f9414fb356",
+    "v6RecoveryAuthorizationDigest": "0xdca841943bc32b76df5a04310d30b70a4a9244dcc4d9445d8d42500fe01ecf57",
+    "v7ZipSha256": "b8dd4e6d5b141d74092791798780a1f3fc59ae21d8f3a59727e1e169a1e06253",
+    "v7RecoveryAuthorizationDigest": "0xf12f37c6b8a311efbcd706bf1850c10d02aff5e30570a9d2afe6a3712604dfea",
+    "gasPolicy": {
+      "perStepCostMultiplier": "1.25x reviewed maxGasCostWei (exact, remaining steps 14-19 only; accepted v7 policy preserved)",
+      "maxPriorityCeilingWei": "50000000",
+      "maxFeeCeilingUnchanged": true,
+      "gasLimitCeilingUnchanged": true,
+      "authorization": "TASK 10D-6 option B (accepted): per-step maximum gas-cost ceilings exactly 1.25x reviewed; maxFeePerGas ceiling unchanged; maxPriorityFeePerGas ceiling exactly 50000000 wei; gasLimit ceiling unchanged; $130 all-inclusive cap unchanged. Preserved unchanged for v8 (TASK 10D-7)."
+    },
+    "deadlineRefresh": {
+      "authorization": "TASK 10D-7: the previously authorized deadline-refresh mechanism applies to the remaining deadline-bearing steps 15 and 17 ONLY. The accepted source deadline (the bound v7 value 1784946528) was refreshed to the canonical v8 packet expiry via strict ABI decode/re-encode; a byte-diff proof restricts each change to the single 32-byte deadline word; the other four remaining calldatas are byte-identical to the accepted v7 versions.",
+      "oldDeadline": "1784946528",
+      "newDeadline": "1784949999",
+      "newDeadlineEqualsPacketExpiry": true,
+      "steps": [
+        {
+          "originalIndex": 15,
+          "label": "buyExactWethForBps",
+          "wordOffsetBytes": 132,
+          "oldDataKeccak": "0xde54b98a1ec127409a66cd50398b662c8eec6d606e58be2ac6219b4b2f941785",
+          "newDataKeccak": "0x191da9629afba53c5f245d74dbbf1e6f26dee6cdc7b74c8e8f278a3904930470"
+        },
+        {
+          "originalIndex": 17,
+          "label": "sellExactBpsForWeth",
+          "wordOffsetBytes": 164,
+          "oldDataKeccak": "0x7c2047d7a168f16dbb1541e81a0b507f39458f00e2c3927a55d4c629cc78b687",
+          "newDataKeccak": "0xe9ce65edc83bb88261143da105d0758e9013a7b6e16758bda2e3db4de44edd8e"
+        }
+      ]
+    },
+    "accountPolicy": "ALL six remaining transactions are TESTER transactions (nonces 2-7). The operator refuses to connect with any account other than the tester, and a wrong-account pre-check is a NON-HALTING refusal (nothing was sent; switching accounts and retrying the pre-check is safe) — the v7 terminal halt on accountSelected cannot recur. No deployer transaction is actionable.",
+    "feeBounds": {
+      "maxFeePerGasWei": "200000000",
+      "maxPriorityFeePerGasWei": "50000000",
+      "pinnedBaseFeePerGasWei": "107608000"
+    },
+    "remainingExecutionDigest": "0x920bf7f5a4d099354f123fd2f98b188d30fb50f6abee542009dab42181ae9f11",
+    "recoveryAuthorizationDigest": "0x5f92fd120f5a09f4e8feeab811ae2e278ba20f299c8386f32ee121e5fc896662"
+  },
+  "safetyFlags": {
+    "broadcastReady": true,
+    "liveWritesApproved": true,
+    "executionAuthorized": true,
+    "fundingAuthorized": true
+  },
+  "completedSteps": [
+    {
+      "originalIndex": 1,
+      "label": "step1",
+      "txHash": "0x36acf3e3752e0cfc2688c280680c4a9a100e3fcb2520bf41ae723f1a05612e2c",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 3,
+      "to": null,
+      "createdAddress": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+      "inputKeccak": "0x13dc5bf52698e95e35e2f48a3529e8e8e6df4367fb85690ee8ed5b395c1459ac",
+      "blockNumber": "18193678",
+      "blockHash": "0x55a088ff28d6e5e8289b79d6a08fd90351c27706b8584b8d6fb2252801bc21d2",
+      "gasUsed": "594202",
+      "effectiveGasPriceWei": "110558000",
+      "actualGasCostWei": "65693784716000",
+      "deployedRuntimeCodeHash": "0xca16cad61af5b3cbcfd27b76aa33eba77d33419ce6f7b5cc9d55fcecf3974379",
+      "deployedCodeSize": 2003
+    },
+    {
+      "originalIndex": 2,
+      "label": "step2",
+      "txHash": "0x4569523ae523090ee7b19644380b4cecb33d34d19db1cd2f52c677a724a2d758",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 4,
+      "to": null,
+      "createdAddress": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
+      "inputKeccak": "0xd77c435bf5e2a4f0505ecea2fd3f8abb8b5516d8987c6f2b09115e2b3e9b9afd",
+      "blockNumber": "18395614",
+      "blockHash": "0xec7d5abc97a88e3c127c3a8c5367f963c4f0a60153e4f5c4c0c48d7ed2661dde",
+      "gasUsed": "1256380",
+      "effectiveGasPriceWei": "121918000",
+      "actualGasCostWei": "153175336840000",
+      "deployedRuntimeCodeHash": "0xb378d3ede6f9daeeccbed21871b27cde96c58b4a879ab15ae4dde22f5fafcfbc",
+      "deployedCodeSize": 5311
+    },
+    {
+      "originalIndex": 3,
+      "label": "DistributionClaimManager",
+      "txHash": "0x6c8b970bce36b43b0aab2c1320e0881bacc5865ba0b854c278fd2dff7b97d3cc",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 5,
+      "to": null,
+      "createdAddress": "0x5EcbADf1cF050F1B86D44B979416A8e859Fb2574",
+      "inputKeccak": "0x5c30108df2de932861b9182b13f9cddf3bdfc4986b3a842cce67ed307351d580",
+      "blockNumber": "18457374",
+      "blockHash": "0x374a6e06f75df75a4f9ed88dd8ecccf6b9129e3add892e0d7cee4cdcd5b4ce88",
+      "gasUsed": "1408539",
+      "effectiveGasPriceWei": "107942000",
+      "actualGasCostWei": "152040516738000",
+      "deployedRuntimeCodeHash": "0x8da296360640c8a2f9b762d760de644ac23b794ab1149545d0722c28804a1fb6",
+      "deployedCodeSize": 5998,
+      "slot": "claimManager"
+    },
+    {
+      "originalIndex": 4,
+      "label": "RialtoStockAcquisitionAdapter",
+      "txHash": "0x0b4256157b8c8f8d570045102c058024b19b863b2447e022d66f6cae5f3bad8d",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 6,
+      "to": null,
+      "createdAddress": "0xbe2C8c6CB7CeeED24708419F5aaEEF8d949866AE",
+      "inputKeccak": "0x4c4967681cdcfb36348b080e67890398de57adb053b065a78a656c7596b0adbb",
+      "blockNumber": "18459117",
+      "blockHash": "0xeaa9dd848aa89b5cbb5b46c683b5d930c9b55e194fc72e51041350407c5f2691",
+      "gasUsed": "1068790",
+      "effectiveGasPriceWei": "107600000",
+      "actualGasCostWei": "115001804000000",
+      "deployedRuntimeCodeHash": "0x9e6e6db3405b9b5f0eb3503474469205cc4c10af691f5e5eae8f55c6b6cc724e",
+      "deployedCodeSize": 4546,
+      "slot": "rialtoAdapter"
+    },
+    {
+      "originalIndex": 5,
+      "label": "DistributionFundingCoordinator",
+      "txHash": "0xd902672f5a42586010570d61ed3bc42da0b4c9362c718dfefacdc05adddcfa2a",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 7,
+      "to": null,
+      "createdAddress": "0xE3Bd9e1D58d16A31912f804f931Cc6bfcD702205",
+      "inputKeccak": "0x4f5f15fc629622dc4e6817d1124fada4438697a8103b273f7e65a9c64758b1ad",
+      "blockNumber": "18460678",
+      "blockHash": "0x6a21d61540458ff8e04de8aeee3635892ba63ab2ddb84a49cb2874be3139fc35",
+      "gasUsed": "1618185",
+      "effectiveGasPriceWei": "107794000",
+      "actualGasCostWei": "174430633890000",
+      "deployedRuntimeCodeHash": "0x3886aa4ce0a4c38c5823ae7a04464928df322e47f00946fffd63c1a7236d1377",
+      "deployedCodeSize": 7102,
+      "slot": "coordinator"
+    },
+    {
+      "originalIndex": 6,
+      "label": "StockAcquisitionVault",
+      "txHash": "0x7cd8d07a3b86572846a1a22439114c1318df2fca841c76f60ddd7e89ae701db0",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 8,
+      "to": null,
+      "createdAddress": "0x9a5a55361BcFDD6Ded4A6EAa02D997F1108EdeC6",
+      "inputKeccak": "0xe68130d6b6f5e35dba9b0f9a8d212529aa80fc916a071b5d72ad90daa5016aab",
+      "blockNumber": "18461676",
+      "blockHash": "0xe56fa3f63a40894a40903d00daf7fd082d0202236c51a0137792a634e6a71423",
+      "gasUsed": "1747268",
+      "effectiveGasPriceWei": "107682000",
+      "actualGasCostWei": "188149312776000",
+      "deployedRuntimeCodeHash": "0xd3a283ff652b7be9477fc6a0f16303e068c112a6ab72918e575b555a7fb112ea",
+      "deployedCodeSize": 7333,
+      "slot": "stockVault"
+    },
+    {
+      "originalIndex": 7,
+      "label": "UniswapV3BPSSwapAdapter",
+      "txHash": "0xbd9f479376315ae7e7f95439e7effccc92aa106c75f42997eb2eef69c2062d8c",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 9,
+      "to": null,
+      "createdAddress": "0x5891Dcc2BACD1ADC8b5a9C30B365931290d7E5E1",
+      "inputKeccak": "0x3978bebf603ffe1874adf85fd3acc8fa6c218b66321fa678dcaeccff839b145f",
+      "blockNumber": "18461904",
+      "blockHash": "0x6503f901a988b207c99f3c59d006ae6b2ada9c5f82ba27e2f0cde2048bef7bcd",
+      "gasUsed": "982727",
+      "effectiveGasPriceWei": "107328000",
+      "actualGasCostWei": "105474123456000",
+      "deployedRuntimeCodeHash": "0xb8a2faf72e3f734a0e288fa15076682d48741904e10d6a61d816bbbba842684a",
+      "deployedCodeSize": 4115,
+      "slot": "uniswapAdapter"
+    },
+    {
+      "originalIndex": 8,
+      "label": "BPSTradeRouter",
+      "txHash": "0x9fd2989adcbc0afb891c2dfd1f9566b8f95aef870e82534f58e22d9c4e332842",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 10,
+      "to": null,
+      "createdAddress": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6",
+      "inputKeccak": "0x4a97327fafff754910236e7d181581044061cb6cffc93386030d4713abb9ca15",
+      "blockNumber": "18462165",
+      "blockHash": "0x821721c349c39c52ee56f440d967967d010ed11153741a22de0419bd1fcaaa2a",
+      "gasUsed": "2065078",
+      "effectiveGasPriceWei": "107700000",
+      "actualGasCostWei": "222408900600000",
+      "deployedRuntimeCodeHash": "0x5791a715dfdff519c57ebdfd3638dbbc5c1073142e0a67a563d6008860d3af12",
+      "deployedCodeSize": 9061,
+      "slot": "tradeRouter"
+    },
+    {
+      "originalIndex": 9,
+      "label": "WETH.approve(NPM)",
+      "txHash": "0x8b9a42e8d2bbaef520f67c4c36c65a146b2894c5af65c2a06c79f9c3a315f8a0",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 11,
+      "to": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "createdAddress": null,
+      "inputKeccak": "0x770ab5647ae0cef853458bfb24ac291f28ecb8bdb40fdf24f414905a270ce77a",
+      "blockNumber": "18462403",
+      "blockHash": "0x90db1de3c3de0793a272348006e2f2ff5f0c9a3fe10dc4fac9b07ace5cdc2e9e",
+      "gasUsed": "53437",
+      "effectiveGasPriceWei": "108102000",
+      "actualGasCostWei": "5776646574000"
+    },
+    {
+      "originalIndex": 10,
+      "label": "BPSC.approve(NPM)",
+      "txHash": "0xe8a56b1ed9b997d628c17676dea7251e06338dac6de69f7bd8a40486140163b2",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 12,
+      "to": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+      "createdAddress": null,
+      "inputKeccak": "0xb1cc40da56609c5ce3d6b907d23a7789388e90c82ad75c01550cef3a84d6b41b",
+      "blockNumber": "18462691",
+      "blockHash": "0x7969a96767bf952c388ee8a9c770f8d2ea588e99b2de3694f681edf1d1008f12",
+      "gasUsed": "46391",
+      "effectiveGasPriceWei": "107488000",
+      "actualGasCostWei": "4986475808000"
+    },
+    {
+      "originalIndex": 11,
+      "label": "factory.createPool",
+      "txHash": "0x85cc476f66800277b1738e44bca8cb5012580b33ff6f1f83fba3119adf7740d8",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 13,
+      "to": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+      "createdAddress": null,
+      "inputKeccak": "0x437b4faf9958b772f8423af0fc27630d15c7c8a1f6d967881a90965feddc743e",
+      "blockNumber": "18462963",
+      "blockHash": "0x57d744958180077e171e37c45a8779283bb0354ee17e1f55435bce2a121294c4",
+      "gasUsed": "4558970",
+      "effectiveGasPriceWei": "108124000",
+      "actualGasCostWei": "492934072280000"
+    },
+    {
+      "originalIndex": 12,
+      "label": "pool.initialize",
+      "txHash": "0x443e07448c8d02da18969fec52f871e172f85e241484563b36f856a0221091b9",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 14,
+      "to": "0x4A429194dC4E4A1f3b1cD24bBaf7754f65ABc5EF",
+      "createdAddress": null,
+      "inputKeccak": "0x0e4efc54f91fb6cdb4bb104ec92e81a889fb0425189d4e24d4a6a96bc9ee30fa",
+      "blockNumber": "18463189",
+      "blockHash": "0xf65723d1fa88d5d8680bb7cadb1074db191752ac430097ca2f21c8249d961cc7",
+      "gasUsed": "70470",
+      "effectiveGasPriceWei": "108136000",
+      "actualGasCostWei": "7620343920000"
+    },
+    {
+      "originalIndex": 13,
+      "label": "NPM.mint",
+      "txHash": "0x09ee1c10862f669461bf2596b24ca6d9331db48a84c4c928fc3eb2ad53a3a3f8",
+      "signer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+      "nonce": 15,
+      "to": "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
+      "createdAddress": null,
+      "inputKeccak": "0x548ac7546ddab4926c3d16860472b7bcd8f8f8349acb55d047a804be3f745e85",
+      "blockNumber": "18463447",
+      "blockHash": "0x433ceb8df5212b3c4e3cb920757a8b9cac863c32c88e35e4de3b341d2a61a332",
+      "gasUsed": "607764",
+      "effectiveGasPriceWei": "110054000",
+      "actualGasCostWei": "66886859256000",
+      "positionTokenId": "371728"
+    }
+  ],
+  "remaining": {
+    "count": 6,
+    "allSignersTester": true,
+    "note": "final six tester transactions (original steps 14-19; tester nonces 2-7); NO deployer transaction is actionable"
+  },
+  "addressGuards": {
+    "poolAddress": "0x4A429194dC4E4A1f3b1cD24bBaf7754f65ABc5EF",
+    "infrastructure": [
+      "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "0x1f7D7550B1B028f7571e69A784071F0205FD2efa",
+      "0x73991A25C818bF1f1128DeAaB1492D45638de0D3",
+      "0xCAF681a66d020601342297493863E78C959e5cb2",
+      "0x71a120cBbf3CE7CD910a3C50ff77afc62735687e",
+      "0x4A429194Dc4E4a1F3B1cd24Bbaf7754F65ABC5Ef"
+    ],
+    "completedContracts": {
+      "canaryToken": {
+        "address": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+        "runtimeCodeHash": "0xca16cad61af5b3cbcfd27b76aa33eba77d33419ce6f7b5cc9d55fcecf3974379"
+      },
+      "lockingVault": {
+        "address": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
+        "runtimeCodeHash": "0xb378d3ede6f9daeeccbed21871b27cde96c58b4a879ab15ae4dde22f5fafcfbc"
+      },
+      "claimManager": {
+        "address": "0x5EcbADf1cF050F1B86D44B979416A8e859Fb2574",
+        "runtimeCodeHash": "0x8da296360640c8a2f9b762d760de644ac23b794ab1149545d0722c28804a1fb6"
+      },
+      "rialtoAdapter": {
+        "address": "0xbe2C8c6CB7CeeED24708419F5aaEEF8d949866AE",
+        "runtimeCodeHash": "0x9e6e6db3405b9b5f0eb3503474469205cc4c10af691f5e5eae8f55c6b6cc724e"
+      },
+      "coordinator": {
+        "address": "0xE3Bd9e1D58d16A31912f804f931Cc6bfcD702205",
+        "runtimeCodeHash": "0x3886aa4ce0a4c38c5823ae7a04464928df322e47f00946fffd63c1a7236d1377"
+      },
+      "stockVault": {
+        "address": "0x9a5a55361BcFDD6Ded4A6EAa02D997F1108EdeC6",
+        "runtimeCodeHash": "0xd3a283ff652b7be9477fc6a0f16303e068c112a6ab72918e575b555a7fb112ea"
+      },
+      "uniswapAdapter": {
+        "address": "0x5891Dcc2BACD1ADC8b5a9C30B365931290d7E5E1",
+        "runtimeCodeHash": "0xb8a2faf72e3f734a0e288fa15076682d48741904e10d6a61d816bbbba842684a"
+      },
+      "tradeRouter": {
+        "address": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6",
+        "runtimeCodeHash": "0x5791a715dfdff519c57ebdfd3638dbbc5c1073142e0a67a563d6008860d3af12"
+      }
+    }
+  },
+  "deployedRuntimeCodeHashes": {
+    "canaryToken": "0xca16cad61af5b3cbcfd27b76aa33eba77d33419ce6f7b5cc9d55fcecf3974379",
+    "lockingVault": "0xb378d3ede6f9daeeccbed21871b27cde96c58b4a879ab15ae4dde22f5fafcfbc",
+    "claimManager": "0x8da296360640c8a2f9b762d760de644ac23b794ab1149545d0722c28804a1fb6",
+    "rialtoAdapter": "0x9e6e6db3405b9b5f0eb3503474469205cc4c10af691f5e5eae8f55c6b6cc724e",
+    "coordinator": "0x3886aa4ce0a4c38c5823ae7a04464928df322e47f00946fffd63c1a7236d1377",
+    "stockVault": "0xd3a283ff652b7be9477fc6a0f16303e068c112a6ab72918e575b555a7fb112ea",
+    "uniswapAdapter": "0xb8a2faf72e3f734a0e288fa15076682d48741904e10d6a61d816bbbba842684a",
+    "tradeRouter": "0x5791a715dfdff519c57ebdfd3638dbbc5c1073142e0a67a563d6008860d3af12"
+  },
+  "dependencies": {
+    "weth": {
+      "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "runtimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
+      "codeBytes": 2202
+    },
+    "uniswapV3Factory": {
+      "address": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+      "runtimeCodeHash": "0xec72b1abd1f2faee020cfea9c646bd8994f9fb389054f6e574f103a895091739",
+      "codeBytes": 24535
+    },
+    "nonfungiblePositionManager": {
+      "address": "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
+      "runtimeCodeHash": "0x0a493d1af3d0f25fed8efa205244ebee14114267a08647fc38c515c7cd6ead4f",
+      "codeBytes": 24384
+    },
+    "swapRouter02": {
+      "address": "0xCaf681a66D020601342297493863E78C959E5cb2",
+      "runtimeCodeHash": "0x6f36c378e272c6324c48f045182bcb54bd8ad654cf9ebd42e8893d52c4cb25dc",
+      "codeBytes": 24497
+    },
+    "rialtoRegistry": {
+      "address": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+      "runtimeCodeHash": "0xf8b9b92ca74f49f59f66ece51adb02dbefe254dcf967db586c4dda798268a01e",
+      "codeBytes": 4968
+    },
+    "nvdaStockToken": {
+      "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "runtimeCodeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630",
+      "codeBytes": 283
+    }
+  },
+  "lpUsage": {
+    "token0": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "token1": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+    "sqrtPriceX96": "2429309107248086627016861376198790",
+    "tickLower": 192600,
+    "tickUpper": 220400,
+    "liquidity": "3235182407865696782560",
+    "amount0Desired": "53181871363689545",
+    "amount1Desired": "50000000000000000000000000",
+    "amount0Used": "52518163589244626",
+    "amount1Used": "49999999999999999999992432",
+    "amount0UsedCalc": "52518163589125512",
+    "amount1UsedCalc": "49999999999999999999985680",
+    "minFormula": "floor(amountUsed*995/1000)",
+    "amount0Min": "52255572771298402",
+    "amount1Min": "49749999999999999999992469",
+    "minInCalldata": true,
+    "positionTokenId": "361207",
+    "positionOwner": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "positionFee": 10000,
+    "positionTickLower": 192600,
+    "positionTickUpper": 220400,
+    "positionLiquidity": "3235182407869072596640",
+    "deployerWethBefore": "53181871363689545",
+    "deployerWethAfter": "663707774444919",
+    "deployerBpscBefore": "1000000000000000000000000000",
+    "deployerBpscAfter": "950000000000000000000007568",
+    "poolSqrtAfter": "2429309107248086627016861376198790",
+    "poolTickAfter": 206626,
+    "poolLiquidityAfter": "3235182407869072596640"
+  },
+  "buyAccounting": {
+    "tradeId": "1",
+    "trader": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+    "recipient": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+    "adapter": "0x5891Dcc2BACD1ADC8b5a9C30B365931290d7E5E1",
+    "stockBudgetRecipient": "0x9a5a55361BcFDD6Ded4A6EAa02D997F1108EdeC6",
+    "grossWethInput": "1063637427273790",
+    "grossWethMicroUsd": "1999999",
+    "stockBudget2pct": "21272748545475",
+    "burnBudget1pct": "10636374272737",
+    "userWethBudget97pct": "1031728304455578",
+    "userBpsOutput": "951092794144045405228183",
+    "bpsBurned": "9710110994972363453967",
+    "minimumUserBpsOutput": "941581866202604951175901",
+    "minimumBurnBpsOutput": "9613009885022639819427",
+    "minFormula": "floor(actual*99/100)",
+    "testerWethBefore": "10636374272737909",
+    "testerWethAfter": "9572736845464119",
+    "testerBpsBefore": "0",
+    "testerBpsAfter": "951092794144045405228183",
+    "vaultWethBefore": "0",
+    "vaultWethAfter": "21272748545475",
+    "allocationSum": "1063637427273790"
+  },
+  "sellAccounting": {
+    "tradeId": "2",
+    "trader": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+    "recipient": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+    "adapter": "0x5891Dcc2BACD1ADC8b5a9C30B365931290d7E5E1",
+    "stockBudgetRecipient": "0x9a5a55361BcFDD6Ded4A6EAa02D997F1108EdeC6",
+    "grossBpsInput": "475546397072022702614091",
+    "grossWethOutput": "508158605895345",
+    "stockAcquisition2pct": "10163172117906",
+    "retirementBurn2pct": "10163172117906",
+    "userWethOutput96pct": "487832261659533",
+    "bpsBurned": "9365444921173534249777",
+    "minimumGrossWethOutput": "503077019836391",
+    "minimumUserWethOutput": "482953939042937",
+    "minimumBurnBpsOutput": "9271790471961798907279",
+    "minFormula": "floor(actual*99/100)",
+    "slippageTolerancePct": "1.000",
+    "userWethMicroUsd": "917290",
+    "sellCapMicroUsdLimit": "2000000",
+    "withinSellCap": true,
+    "testerWethBefore": "9572736845464119",
+    "testerWethAfter": "10060569107123652",
+    "testerBpsBefore": "951092794144045405228183",
+    "testerBpsAfter": "475546397072022702614092",
+    "vaultWethBefore": "21272748545475",
+    "vaultWethAfter": "31435920663381",
+    "allocationSum": "508158605895345"
+  },
+  "lockAndWithdraw": {
+    "account": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+    "lockId": "0",
+    "principal": "475546397072022702614092",
+    "startTime": "1784894746",
+    "duration": 604800,
+    "unlockTime": "1785499546",
+    "multiplierBps": 11000,
+    "policyVersion": 1,
+    "returnedPrincipal": "475546397072022702614092",
+    "returnedEqualsPrincipal": true
+  },
+  "positionTokenId": "371728",
+  "provenance": {
+    "repoHead": "7428f7470ad9805f1563ca3be57573e4257a05d4",
+    "dirtyTrackedTree": false,
+    "contracts": {
+      "BPSCanaryToken": {
+        "solc": "0.8.26+commit.8a97fa7a",
+        "optimizer": {
+          "enabled": true,
+          "runs": 200
+        },
+        "evmVersion": "cancun",
+        "creationBytecodeKeccak": "0xecdab9fa2684f4f866ea3f1eb283fb80c4dfb608ead554e4949942341d99f5bd",
+        "runtimeBytecodeKeccak": "0xca16cad61af5b3cbcfd27b76aa33eba77d33419ce6f7b5cc9d55fcecf3974379",
+        "artifactSha256": "0xe6ef9b41aea7cc84ced75163d9f8b14727c17e2c5e3668df1c1d2b89d230d526",
+        "sourceListKeccak": "0x76ad5f06e6c53a6b4b06fe57867701a002a5c831db3e9f50c56ef3a9273458aa"
+      },
+      "BPSLockingVault": {
+        "solc": "0.8.26+commit.8a97fa7a",
+        "optimizer": {
+          "enabled": true,
+          "runs": 200
+        },
+        "evmVersion": "cancun",
+        "creationBytecodeKeccak": "0x8f6dbbcbe54b5b5a16743eb685137139379ca95025dd08a2a6bb717fef4d7d29",
+        "runtimeBytecodeKeccak": "0x1d0e6d3964194ab2815730696bc9ca8a8370920620927720b8e7d0631f3b3db6",
+        "artifactSha256": "0x0bf0fbe618a999575266397f9f855a74736452a46cd3fcfd2441f88266e64090",
+        "sourceListKeccak": "0xc35ded962e3838ed072e8579a7e946a2d7d46be58ab46458373de3932aba5aba"
+      },
+      "DistributionClaimManager": {
+        "solc": "0.8.26+commit.8a97fa7a",
+        "optimizer": {
+          "enabled": true,
+          "runs": 200
+        },
+        "evmVersion": "cancun",
+        "creationBytecodeKeccak": "0xc647bef95780d496876fc3588d1b4962a3c0af7af957d606ca0258e3a7447506",
+        "runtimeBytecodeKeccak": "0x6d08b89eb8b5568de1184bb4781fe8a23d4349701c4864e5ad90a11612923ad0",
+        "artifactSha256": "0x5c0277980fe7fae02f6f2c6c0f052e94b9a2df632cdb5de3fc5a7b57f0fb0321",
+        "sourceListKeccak": "0x60d513326d8265c3528888b7d359b38cf475ac509074b47b7812d3b6d7ddec24"
+      },
+      "RialtoStockAcquisitionAdapter": {
+        "solc": "0.8.26+commit.8a97fa7a",
+        "optimizer": {
+          "enabled": true,
+          "runs": 200
+        },
+        "evmVersion": "cancun",
+        "creationBytecodeKeccak": "0x03096576107bb557b7ac1927fa201d7e58dd1bd26afaa751cfbb1297ee33b6ad",
+        "runtimeBytecodeKeccak": "0xa821a5adbb56ee0c6330d3b2bba31ecccdc585a7dfc2ac36e4690b9370f51cf0",
+        "artifactSha256": "0xa1394a0737c341b69aeb81aaf46b58723e3f209db62d1c2dd46787bff8f6322d",
+        "sourceListKeccak": "0x19639416c76c3cdf55aadf8f46198b0c57bfae205305942f0c296652748f313f"
+      },
+      "DistributionFundingCoordinator": {
+        "solc": "0.8.26+commit.8a97fa7a",
+        "optimizer": {
+          "enabled": true,
+          "runs": 200
+        },
+        "evmVersion": "cancun",
+        "creationBytecodeKeccak": "0xdff5014cd1f977508593e012b5f3d33cffbc79795d4f1a4981420f38e6954227",
+        "runtimeBytecodeKeccak": "0x59a420d9548166cbfaee924bdbf4b8edeb8ed97c139b07d7dd3b14f6ef43318a",
+        "artifactSha256": "0x2760acf03b8b7b4e2db853c1ce409bb84fc0f7718a23e67b0d3b22cdc1fa9c80",
+        "sourceListKeccak": "0x69ac7ed688f911e9aae3b60e4072b4bdb0efb255e88e46c74c7ee729f61de4ab"
+      },
+      "StockAcquisitionVault": {
+        "solc": "0.8.26+commit.8a97fa7a",
+        "optimizer": {
+          "enabled": true,
+          "runs": 200
+        },
+        "evmVersion": "cancun",
+        "creationBytecodeKeccak": "0x03b2876454321182d740a17f18edc61aaaaa8b4405604cec925a2aecd82bd7a0",
+        "runtimeBytecodeKeccak": "0x99a3bd9350c6b72441a74809174e6dd62ebd0989175490f8c4e375356896e9b5",
+        "artifactSha256": "0x195583fd502b2a2e62e33dc3e0ed464e59be685f0fd09c761bb03d78477cf2ad",
+        "sourceListKeccak": "0xa5c0a756b18752ed2afed5890a9c9566d62d518b3c3ca23e353f25062acc8257"
+      },
+      "UniswapV3BPSSwapAdapter": {
+        "solc": "0.8.26+commit.8a97fa7a",
+        "optimizer": {
+          "enabled": true,
+          "runs": 200
+        },
+        "evmVersion": "cancun",
+        "creationBytecodeKeccak": "0x5bdee785d0466b77866a292d4c15535e1adfb93bdb4dd01c32b57ebee0927dc3",
+        "runtimeBytecodeKeccak": "0x316fc719962d31c98866a3dd213cc04ae1f9b4c23e05a80cd043b50ac98cfb25",
+        "artifactSha256": "0x28513f84c11f70efacd61e93fac6e016c2d20120f1781fd50a9eb7be72bd587f",
+        "sourceListKeccak": "0xe453bb329aa05896f4191bb5cc4e15c0feeaff6d50460a5f483ff262a08aa7cd"
+      },
+      "BPSTradeRouter": {
+        "solc": "0.8.26+commit.8a97fa7a",
+        "optimizer": {
+          "enabled": true,
+          "runs": 200
+        },
+        "evmVersion": "cancun",
+        "creationBytecodeKeccak": "0xd642b6d3f962f3d6a0ea6639300aaf1a154fd1125a242bb46cdf30f4f68b302a",
+        "runtimeBytecodeKeccak": "0xcfbfb164181944a557fec103834ee9a1b8e4ac5816dbaf114bf72c10bcd5de61",
+        "artifactSha256": "0xeb611f1cc791036f1fe56b8e6fe8f4fb31198de4618b5cabbc672d9aacf208a4",
+        "sourceListKeccak": "0x9d66a950f503cbc073ababafd69ae8637dee66ed88cd55800d36eb384f36b58c"
+      }
+    }
+  },
+  "capArithmetic": {
+    "capPriceMicroUsd": "1858740000",
+    "realizedGasWei": "1754578810854000",
+    "remainingPrincipalWei": "63818245636427454",
+    "remainingMaxGasWei": "574687900000000",
+    "immediate14to19ReviewedWei": "391681200000000",
+    "immediate14to19CeilingWei": "489601500000000",
+    "nonImmediateReviewedWei": "85086400000000",
+    "aggregateWei": "66147512347281454",
+    "aggregateMicroUsd": "122951027",
+    "aggregateUsd": "122.951027"
+  },
+  "immediateTransactions": [
+    {
+      "originalIndex": 14,
+      "remainingIndex": 0,
+      "seq": 13,
+      "phase": "C-trade",
+      "label": "tester WETH.approve(router)",
+      "signer": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+      "nonce": 2,
+      "txType": "0x2 (EIP-1559 call)",
+      "to": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "predictedCreationAddress": null,
+      "value": "0",
+      "dataOrInitCode": "0x095ea7b30000000000000000000000004847b410d1243ed38b481b89b1d1d59a8c8691e60000000000000000000000000000000000000000000000000003c75f6305c03e",
+      "dataKeccak": "0xbab90a7144755d28eff4c20289eb85dab42127cdcbe73c22e70151b1395bb037",
+      "decodedArgs": {
+        "spender": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6",
+        "amount": "1063637427273790"
+      },
+      "chainId": 4663,
+      "gasLimit": "64545",
+      "maxFeePerGas": "200000000",
+      "maxPriorityFeePerGas": "10000000",
+      "gasCeilings": {
+        "gasLimitCeiling": "129090",
+        "maxFeeCeilingWei": "200000000",
+        "maxPriorityCeilingWei": "50000000",
+        "reviewedMaxGasCostWei": "12909000000000",
+        "maxGasCostCeilingWei": "16136250000000"
+      }
+    },
+    {
+      "originalIndex": 15,
+      "remainingIndex": 1,
+      "seq": 14,
+      "phase": "C-trade",
+      "label": "buyExactWethForBps",
+      "signer": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+      "nonce": 3,
+      "txType": "0x2 (EIP-1559 call)",
+      "to": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6",
+      "predictedCreationAddress": null,
+      "value": "0",
+      "dataOrInitCode": "0xfb67ed990000000000000000000000000000000000000000000000000003c75f6305c03e00000000000000000000000000000000000000000000c7634157c4bc43b602dd0000000000000000000000000000000000000000000002091f4fb684d51f0aa300000000000000000000000078b256a742fa2c0f84ebdaf570fcdc16ee206024000000000000000000000000000000000000000000000000000000006a642cef",
+      "dataKeccak": "0x191da9629afba53c5f245d74dbbf1e6f26dee6cdc7b74c8e8f278a3904930470",
+      "decodedArgs": {
+        "grossWethInput": "1063637427273790",
+        "minimumUserBpsOutput": "941581866202604951175901",
+        "minimumBurnBpsOutput": "9613009885022639819427",
+        "recipient": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+        "deadline": "1784949999"
+      },
+      "chainId": 4663,
+      "gasLimit": "810771",
+      "maxFeePerGas": "200000000",
+      "maxPriorityFeePerGas": "10000000",
+      "gasCeilings": {
+        "gasLimitCeiling": "1621542",
+        "maxFeeCeilingWei": "200000000",
+        "maxPriorityCeilingWei": "50000000",
+        "reviewedMaxGasCostWei": "162154200000000",
+        "maxGasCostCeilingWei": "202692750000000"
+      }
+    },
+    {
+      "originalIndex": 16,
+      "remainingIndex": 2,
+      "seq": 15,
+      "phase": "C-trade",
+      "label": "tester BPSC.approve(router)",
+      "signer": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+      "nonce": 4,
+      "txType": "0x2 (EIP-1559 call)",
+      "to": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+      "predictedCreationAddress": null,
+      "value": "0",
+      "dataOrInitCode": "0x095ea7b30000000000000000000000004847b410d1243ed38b481b89b1d1d59a8c8691e60000000000000000000000000000000000000000000064b36bfdc835b597664b",
+      "dataKeccak": "0x3e6fa277b151ed20a37f093d119cbde9affbd3fd8606dbed1ff09118644ea881",
+      "decodedArgs": {
+        "spender": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6",
+        "amount": "475546397072022702614091"
+      },
+      "chainId": 4663,
+      "gasLimit": "55698",
+      "maxFeePerGas": "200000000",
+      "maxPriorityFeePerGas": "10000000",
+      "gasCeilings": {
+        "gasLimitCeiling": "111396",
+        "maxFeeCeilingWei": "200000000",
+        "maxPriorityCeilingWei": "50000000",
+        "reviewedMaxGasCostWei": "11139600000000",
+        "maxGasCostCeilingWei": "13924500000000"
+      }
+    },
+    {
+      "originalIndex": 17,
+      "remainingIndex": 3,
+      "seq": 16,
+      "phase": "C-trade",
+      "label": "sellExactBpsForWeth",
+      "signer": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+      "nonce": 5,
+      "txType": "0x2 (EIP-1559 call)",
+      "to": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6",
+      "predictedCreationAddress": null,
+      "value": "0",
+      "dataOrInitCode": "0x3e118c910000000000000000000000000000000000000000000064b36bfdc835b597664b0000000000000000000000000000000000000000000000000001c98bbf0fdfe70000000000000000000000000000000000000000000000000001b73e79fac2790000000000000000000000000000000000000000000001f69ff0d632ae6a158f00000000000000000000000078b256a742fa2c0f84ebdaf570fcdc16ee206024000000000000000000000000000000000000000000000000000000006a642cef",
+      "dataKeccak": "0xe9ce65edc83bb88261143da105d0758e9013a7b6e16758bda2e3db4de44edd8e",
+      "decodedArgs": {
+        "grossBpsInput": "475546397072022702614091",
+        "minimumGrossWethOutput": "503077019836391",
+        "minimumUserWethOutput": "482953939042937",
+        "minimumBurnBpsOutput": "9271790471961798907279",
+        "recipient": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+        "deadline": "1784949999"
+      },
+      "chainId": 4663,
+      "gasLimit": "717866",
+      "maxFeePerGas": "200000000",
+      "maxPriorityFeePerGas": "10000000",
+      "gasCeilings": {
+        "gasLimitCeiling": "1435732",
+        "maxFeeCeilingWei": "200000000",
+        "maxPriorityCeilingWei": "50000000",
+        "reviewedMaxGasCostWei": "143573200000000",
+        "maxGasCostCeilingWei": "179466500000000"
+      }
+    },
+    {
+      "originalIndex": 18,
+      "remainingIndex": 4,
+      "seq": 17,
+      "phase": "D-lock",
+      "label": "tester BPSC.approve(vault)",
+      "signer": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+      "nonce": 6,
+      "txType": "0x2 (EIP-1559 call)",
+      "to": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+      "predictedCreationAddress": null,
+      "value": "0",
+      "dataOrInitCode": "0x095ea7b3000000000000000000000000efa9d1c40358e281da21a1bc20a204c849cb8a420000000000000000000000000000000000000000000064b36bfdc835b597664c",
+      "dataKeccak": "0xba66e464472ba77db31b46cf345b9debf1578f3bb98c4bf40e7c0cf4e1186ad2",
+      "decodedArgs": {
+        "spender": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
+        "amount": "475546397072022702614092"
+      },
+      "chainId": 4663,
+      "gasLimit": "55698",
+      "maxFeePerGas": "200000000",
+      "maxPriorityFeePerGas": "10000000",
+      "gasCeilings": {
+        "gasLimitCeiling": "111396",
+        "maxFeeCeilingWei": "200000000",
+        "maxPriorityCeilingWei": "50000000",
+        "reviewedMaxGasCostWei": "11139600000000",
+        "maxGasCostCeilingWei": "13924500000000"
+      }
+    },
+    {
+      "originalIndex": 19,
+      "remainingIndex": 5,
+      "seq": 18,
+      "phase": "D-lock",
+      "label": "createLock(amount,7d)",
+      "signer": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+      "nonce": 7,
+      "txType": "0x2 (EIP-1559 call)",
+      "to": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
+      "predictedCreationAddress": null,
+      "value": "0",
+      "dataOrInitCode": "0xe9540a320000000000000000000000000000000000000000000064b36bfdc835b597664c0000000000000000000000000000000000000000000000000000000000093a80",
+      "dataKeccak": "0xcd8e2ae18d8a18a301ee1997d521297ed946cb2dfa80b3884eb459169c96bf04",
+      "decodedArgs": {
+        "amount": "475546397072022702614092",
+        "duration": 604800
+      },
+      "chainId": 4663,
+      "gasLimit": "253828",
+      "maxFeePerGas": "200000000",
+      "maxPriorityFeePerGas": "10000000",
+      "gasCeilings": {
+        "gasLimitCeiling": "507656",
+        "maxFeeCeilingWei": "200000000",
+        "maxPriorityCeilingWei": "50000000",
+        "reviewedMaxGasCostWei": "50765600000000",
+        "maxGasCostCeilingWei": "63457000000000"
+      }
+    }
+  ],
+  "delayedWithdrawalSubPacket": {
+    "phase": "E-delayed-withdraw",
+    "label": "withdraw(lockId)",
+    "chainId": 4663,
+    "txHash": "0xf5ebf4a2db43fd7ff8b37a4fefbc1ed3e3b66c517f7dc8c4707be1fd865f777e",
+    "blockHash": "0x82f0a4d8c6e06acdc4958a098431a91772085a95827121beb44b94654fb51b7b",
+    "blockNumber": "18134977",
+    "signer": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+    "nonce": 8,
+    "txType": "0x2 (EIP-1559 call)",
+    "to": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
+    "predictedCreationAddress": null,
+    "value": "0",
+    "note": "SEPARATE delayed sub-packet; funded separately ~7 days after createLock",
+    "lockId": "0",
+    "principal": "475546397072022702614092",
+    "unlockTime": "1785499546",
+    "earliestBlockTimestamp": "1785499546",
+    "dataOrInitCode": "0x2e1a7d4d0000000000000000000000000000000000000000000000000000000000000000",
+    "dataKeccak": "0x849142dafc1ad502ba622350cb23109004a281df5a638a73d796ce52f953ba71",
+    "decodedArgs": {
+      "lockId": "0"
+    },
+    "gasEstimate": "89526",
+    "gasUsed": "70145",
+    "effectiveGasPrice": "118890000",
+    "receiptStatus": "success",
+    "gasLimit": "107432",
+    "maxFeePerGas": "200000000",
+    "maxPriorityFeePerGas": "10000000",
+    "maxGasCostWei": "21486400000000",
+    "testerEthFundedForWithdraw": "21486400000000",
+    "testerEthBeforeWithdraw": "21486400000000",
+    "testerEthAfterWithdraw": "13146860950000",
+    "testerBpsBefore": "0",
+    "testerBpsAfter": "475546397072022702614092",
+    "returnedPrincipal": "475546397072022702614092",
+    "returnedEqualsPrincipal": true,
+    "emergencyExitUsed": false,
+    "prerequisite": "createLock confirmed; block.timestamp>=unlockTime",
+    "reconciliation": "LockWithdrawn(principal); tester BPS+=principal",
+    "irreversible": true
+  }
+}

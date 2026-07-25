@@ -1,0 +1,9 @@
+ [PASS] every allowlisted asset returns 200 with correct content-type
+ [PASS] v4 regression: /canonical.mjs and /reviewed-authorization.json are now 200 (were 403)  (canonical=200 reviewed=200)
+ [PASS] non-allowlisted / path-traversal requests are 403
+ [PASS] full module+fetch graph from index.html every asset is 200 (no browser import/fetch error)
+ [PASS] app.js executes over HTTP: canonical binding completes with no error
+ [PASS] Connect is the only enabled initial control; precheck + send disabled until connect + reconcile
+ [PASS] HTML/event-handler text renders only as text (no parsed HTML, no handler executes)
+
+[browser-smoke] 7/7 checks passed

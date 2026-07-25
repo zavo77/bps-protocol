@@ -1,0 +1,11 @@
+EXECUTION-TIME PREFLIGHT
+ [PASS] 1. packet has NOT expired  (now=2026-07-24T06:58:18.520Z expires=2026-07-24T12:51:55.000Z remaining=21216s)
+ [PASS] 2. signer nonces still equal packet nonces  (live deployer=3 (packet 3), tester=2 (packet 2))
+ [PASS] 3. required ETH + WETH balances are sufficient  (funded)
+ [PASS] 4. external dependency code hashes unchanged  (6 dependencies verified)
+ [PASS] 5. no expected deployment address already contains code  (all 8 empty)
+ [PASS] 6. current base fee within packet fee bounds  (baseFee=116550000 + maxPriority=10000000 <= maxFee=200000000 : true)
+ [PASS] 7. aggregate exposure within $130  ($128.211713 <= $130)
+ [PASS] 8. all four authorization flags still false
+
+PREFLIGHT: PASS — gates satisfied (still NOT an authorization to execute)

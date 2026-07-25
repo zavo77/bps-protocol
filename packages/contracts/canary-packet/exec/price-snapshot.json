@@ -1,0 +1,40 @@
+{
+  "asset": "ETH/USD",
+  "kind": "collected price snapshot (fixed-point micro-USD via string/BigInt; raw responses + sha256; separate request/response timestamps)",
+  "mode": "live",
+  "live": true,
+  "executable": false,
+  "capturedAt": "2026-07-24T12:05:41.446Z",
+  "freshnessRuleSeconds": 300,
+  "observationAgesAtCaptureSeconds": {
+    "coinbase": 0.064,
+    "kraken": 0
+  },
+  "sources": [
+    {
+      "name": "coinbase",
+      "endpoint": "https://api.coinbase.com/v2/prices/ETH-USD/spot",
+      "priceUsd": "1880.275",
+      "microUsd": "1880275000",
+      "requestedAt": "2026-07-24T12:05:41.123Z",
+      "respondedAt": "2026-07-24T12:05:41.382Z",
+      "rawResponse": "{\"data\":{\"amount\":\"1880.275\",\"base\":\"ETH\",\"currency\":\"USD\"}}",
+      "rawResponseSha256": "0x70596f7d0ae4ecfc3cf1f474a122bfa77a95a0fcb36a8bf8741cbb966dd4d3f4"
+    },
+    {
+      "name": "kraken",
+      "endpoint": "https://api.kraken.com/0/public/Ticker?pair=ETHUSD",
+      "priceUsd": "1880.34000",
+      "microUsd": "1880340000",
+      "requestedAt": "2026-07-24T12:05:41.383Z",
+      "respondedAt": "2026-07-24T12:05:41.446Z",
+      "rawResponse": "{\"error\":[],\"result\":{\"XETHZUSD\":{\"a\":[\"1879.97000\",\"2\",\"2.000\"],\"b\":[\"1879.84000\",\"1\",\"1.000\"],\"c\":[\"1880.34000\",\"0.05017464\"],\"v\":[\"7714.64075905\",\"21356.87952934\"],\"p\":[\"1876.35312\",\"1883.35170\"],\"t\":[7682,22391],\"l\":[\"1857.72000\",\"1857.72000\"],\"h\":[\"1907.69000\",\"1925.11000\"],\"o\":\"1877.05000\"}}}",
+      "rawResponseSha256": "0xece24fab2e4709a5df64b05e597d255b4c1d0056b3a827579b1c51d2d907ce83"
+    }
+  ],
+  "selectionRule": "higher of the two independent sources",
+  "selected": {
+    "source": "kraken",
+    "microUsd": "1880340000"
+  }
+}

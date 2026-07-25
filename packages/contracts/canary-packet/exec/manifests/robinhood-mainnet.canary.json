@@ -1,0 +1,132 @@
+{
+  "schemaVersion": "1.0.0",
+  "canary": true,
+  "production": false,
+  "chainId": 4663,
+  "sourceCommit": "UNSET_UNTIL_TAGGED",
+  "broadcastReady": false,
+  "liveWritesApproved": false,
+  "isFixture": false,
+  "note": "BPSC-TEST — ROBINHOOD MAINNET CANARY — TEST ONLY. Non-production, no official value. Fail-closed template: every unresolved address, code-hash, and cap is null until a future preflight populates and a founder explicitly authorizes. Never used by the canonical BPS production deployment path.",
+  "token": {
+    "name": "BPS Canary — TEST ONLY",
+    "symbol": "BPSC-TEST",
+    "decimals": 18,
+    "totalSupply": "1000000000000000000000000000",
+    "postDeploymentMint": false
+  },
+  "explorer": {
+    "baseUrl": "https://robinhoodchain.blockscout.com"
+  },
+  "external": {
+    "weth": {
+      "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "runtimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
+      "status": "VERIFIED"
+    },
+    "rialtoRegistry": {
+      "address": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+      "runtimeCodeHash": "0xf8b9b92ca74f49f59f66ece51adb02dbefe254dcf967db586c4dda798268a01e",
+      "status": "VERIFIED"
+    },
+    "swapRouter02": {
+      "address": "0xCaf681a66D020601342297493863E78C959E5cb2",
+      "runtimeCodeHash": "0x6f36c378e272c6324c48f045182bcb54bd8ad654cf9ebd42e8893d52c4cb25dc",
+      "status": "VERIFIED"
+    },
+    "uniswapV3Factory": {
+      "address": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+      "runtimeCodeHash": "0xec72b1abd1f2faee020cfea9c646bd8994f9fb389054f6e574f103a895091739",
+      "status": "VERIFIED"
+    },
+    "quoterV2": {
+      "address": null,
+      "runtimeCodeHash": "0x3db0868d945e9304c9bc6a8b2181948109ea617647142f3c4083e14393496a28",
+      "status": "VERIFIED",
+      "note": "Task 10B-3: on-chain runtime-code hash recorded; independently proven via factory()==uniswapV3Factory and WETH9()==WETH."
+    },
+    "nonfungiblePositionManager": {
+      "address": "0x73991a25c818bf1f1128deaab1492d45638de0d3",
+      "runtimeCodeHash": "0x0a493d1af3d0f25fed8efa205244ebee14114267a08647fc38c515c7cd6ead4f",
+      "status": "VERIFIED",
+      "note": "Task 10B-3: on-chain runtime-code hash recorded; independently proven via factory()==uniswapV3Factory and WETH9()==WETH. Required for pool/LP minting."
+    },
+    "ethUsdOracleFeed": {
+      "address": null,
+      "runtimeCodeHash": null,
+      "status": "NOT_REQUIRED_ONCHAIN",
+      "note": "No frozen contract reads an ETH/USD Chainlink feed on-chain (deploy/pool/buy/sell/lock/withdraw/burn need none). No authoritative Chainlink feed registry for Robinhood Chain was resolvable; left null and NOT invented. Only the untested external Stock-Token acquisition + app oracle display would use it."
+    },
+    "sequencerUptimeFeed": {
+      "address": null,
+      "runtimeCodeHash": null,
+      "status": "NOT_REQUIRED_ONCHAIN",
+      "note": "Not read by any frozen contract; not resolvable to an authoritative address; left null and NOT invented."
+    },
+    "quoterV2Note": "Uniswap QuoterV2 verified; NPM verified; both proven against the verified factory + WETH at runtime."
+  },
+  "deployer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+  "startNonce": 3,
+  "predicted": {
+    "canaryToken": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+    "lockingVault": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
+    "claimManager": "0x5EcbADf1cF050F1B86D44B979416A8e859Fb2574",
+    "rialtoAdapter": "0xbe2C8c6CB7CeeED24708419F5aaEEF8d949866AE",
+    "coordinator": "0xE3Bd9e1D58d16A31912f804f931Cc6bfcD702205",
+    "stockVault": "0x9a5a55361BcFDD6Ded4A6EAa02D997F1108EdeC6",
+    "uniswapAdapter": "0x5891Dcc2BACD1ADC8b5a9C30B365931290d7E5E1",
+    "tradeRouter": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6"
+  },
+  "actual": {
+    "canaryToken": null,
+    "lockingVault": null,
+    "claimManager": null,
+    "rialtoAdapter": null,
+    "coordinator": null,
+    "stockVault": null,
+    "uniswapAdapter": null,
+    "tradeRouter": null
+  },
+  "pool": {
+    "bpscWethPool": null,
+    "feeTier": 10000,
+    "tickSpacing": 200,
+    "sqrtPriceX96": null,
+    "tickLower": null,
+    "tickUpper": null
+  },
+  "roles": {
+    "canaryDeployer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "canaryOwner": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "canaryRecipient": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "reserveRecipient": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "acquisitionOperator": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "rootPublisher": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "claimRecoveryRecipient": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "controlledTester": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024"
+  },
+  "capitalCaps": {
+    "note": "WETH caps are execution-time amounts a future preflight MUST populate from the authoritative oracle. Null => fail closed (the relevant action is disabled). USD ceilings are OPERATIONAL controls, not contract-enforced.",
+    "lpWethMaxWei": null,
+    "lpWethMaxUsd": 100,
+    "individualTradeWethMaxWei": null,
+    "individualTradeMaxUsd": 2,
+    "controlledTradesMaxUsd": 20,
+    "gasMaxUsd": 10,
+    "aggregateMaxUsd": 130
+  },
+  "stockBasket": [
+    {
+      "symbol": "NVDA",
+      "name": "NVIDIA • Robinhood Token",
+      "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "decimals": 18,
+      "runtimeCodeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630",
+      "oraclePaused": false,
+      "uiMultiplier": "1000000000000000000",
+      "status": "VERIFIED",
+      "source": "Rialto public token whitelist (chain_id=4663, category=stock, source=whitelist) — the same authoritative list the manifest used for WETH; corroborated on-chain (symbol/name/decimals, oraclePaused()=false, uiMultiplier()=1e18) and by BPS_LAUNCH_DECISIONS.md. Verified via CanaryForkRehearsal against real mainnet state (removes EmptyBasket)."
+    }
+  ],
+  "startNonceNote": "Predicted addresses recomputed for the CURRENT deployer start nonce 3 (read live; not hardcoded). Bundle copy only; the tracked repo manifest is unchanged."
+}

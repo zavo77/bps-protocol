@@ -1,0 +1,50 @@
+[operator-test] histogram: eth_chainId:72 eth_accounts:72 eth_getTransactionCount:87 eth_getCode:536 eth_getBlockByNumber:44 eth_getBalance:44 eth_call:384 eth_estimateGas:44 eth_sendTransaction:21 eth_getTransactionByHash:212 eth_getTransactionReceipt:224
+ [PASS] bind: digest recomputed + full policy/snapshot binding
+ [PASS] precheck/send refuse before Connect+reconcile
+ [PASS] markConnected succeeds (chain 4663 + account)
+ [PASS] precheck refuses before reconcile
+ [PASS] reconcile (empty journal) sets current=0, reconciled
+ [PASS] all 19 steps executed with receipt-event postconditions + cumulative checkpoints
+ [PASS] successful restart reconciliation after EVERY step 0..18
+ [PASS] restart after mint(step12)/buy(step14)/sell(step16) reconciles (transient allowance/sqrt not required)
+ [PASS] restart after all 19 -> current 19 (done)
+ [PASS] exactly 19 single eth_sendTransaction calls (no batch); no forbidden method
+ [PASS] forged localStorage entry cannot advance (reconcile halts, current stays 0)
+ [PASS] uncertain send: unknown post-invocation error halts + persists uncertain record (digest/step/signer/nonce/signableTxHash)
+ [PASS] reload after uncertain send remains HALTED with sends disabled
+ [PASS] uncertain send without tx hash cannot be retried (precheck/send/reconcile all refuse)
+ [PASS] missing chainId fails (no default/fallback)
+ [PASS] wrong chainId fails
+ [PASS] every altered tx field fails verification (from/nonce/type/to/value/input/gas/fees)
+ [PASS] mutated aggregateUsd/maxExposure/WETH/infra/fee/validity/nonce/snapshot each FAIL binding
+ [PASS] pending nonce drift (latest ok, pending != expected) halts
+ [PASS] canonical baseline binds (packet/policy/packaged anchors agree)
+ [PASS] GENERIC leaf-mutation: all 466 canonical leaves fail binding when individually mutated
+ [PASS] 14 v3-regression mutations each FAIL binding (14 tested)
+ [PASS] mutate value + recompute ONLY the packet anchor still fails (policy+packaged disagree)
+ [PASS] mutate value + recompute packet+policy anchors but not packaged still fails
+ [PASS] missing canonical field (pool) fails binding
+ [PASS] unexpected/unknown canonical field fails binding
+ [PASS] duplicate JSON key (raw) fails binding
+ [PASS] reordered transaction entries fail binding
+ [PASS] duplicate transaction index fails binding
+ [PASS] non-canonical (lowercased) address fails binding
+ [PASS] alternate numeric encoding (hex) fails binding
+ [PASS] alternate numeric encoding (leading zero) fails binding
+ [PASS] failed binding => bound/connected/reconciled all false + precheck & send refuse
+ [PASS] after bind, raw packet/policy/snapshot are discarded (null) — no unbound runtime read possible
+ [PASS] this.steps + maxGasCostWei built from canonical (derived = gasLimit*maxFeePerGas)
+ [PASS] SOURCE-INPUT mutation: 405 security-relevant leaves change the digest; 896 are unused (raw inputs null after bind)  (packet.meta.task | packet.meta.kind | packet.meta.mode | packet.meta.live | packet.meta.executionAuthorized | packet.meta.fundingAuthorized)
+ [PASS] section-2 regressions: bound values fail binding; derived/display values (decodedArgs/maxGasCostWei/reconciliation) are unused (16 tested)
+ [PASS] adversarial events: honest passes; wrong Approval owner FAILS
+ [PASS] adversarial events: wrong buy trader / recipient / adapter each FAIL
+ [PASS] adversarial events: wrong sell trailing stockBudgetRecipient FAILS
+ [PASS] adversarial events: wrong lockId / duration / policyVersion each FAIL
+ [PASS] F1 storage-unavailable-before-send: wallet NOT invoked, no send, not durably halted
+ [PASS] F2 storage-fail-after-hash: durable uncertain halt with tx hash; reload stays halted (no blind retry)
+ [PASS] F3 crash-between-intent-and-response: reload is HALTED (uncertain) at that step, no retry
+ [PASS] F4 clear-rejected-intent failure: halts uncertain (no blind retry)
+ [PASS] F5 journal-write failure: pending retained (no advance); reload re-verifies SAME tx to current=1
+[operator-test] canonical leaves mutation-tested: 466
+
+[operator-test] 46/46 checks passed

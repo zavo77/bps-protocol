@@ -1,0 +1,260 @@
+
+>>> compilation (solc 0.8.26 -> 8 bytecodes)
+[compile] solc 0.8.26+commit.8a97fa7a.Emscripten.clang
+ [PASS] solc is exactly 0.8.26  (0.8.26+commit.8a97fa7a.Emscripten.clang)
+ [PASS] Standard JSON contains the exact OpenZeppelin remapping
+ [PASS] Standard JSON settings: optimizer enabled runs=200, evmVersion=cancun
+ [PASS] Standard JSON contains all 37 bundled sources
+ [PASS] every Standard JSON source == the corresponding bundled source file
+ [PASS] compilation succeeded with no errors
+ [PASS] all EIGHT recompiled creation AND runtime bytecodes == bundled artifacts
+
+[compile] 7/7 checks passed
+
+>>> offline verifier
+[offline] executionPacketDigest:    0xee7b600581d545544fe7fdb0b1614e23bac9ea4453da56ec160d2e0300f13371
+[offline] fullReviewArtifactDigest: 0x7be82342edf10f6da2a5745fd983a863f0ee8342a8fe28d49e246d5d12fe1c05
+ [PASS] execution mode: packet+policy live+executable, canary=true, production=false
+ [PASS] execution mode: all four authorization flags TRUE in packet AND policy
+ [PASS] execution mode: authorization block canary/production/chainId/maxExposure + scope recorded verbatim
+ [PASS] execution mode: signing delegated to Rabby only; delayed tester-nonce-8 withdrawal disabled
+ [PASS] no provider/RPC URL embedded in packet, policy or price snapshot (env-var reference only; public price endpoints allowed)  (env-var reference only)
+ [PASS] packet safetyFlags mirror policy safetyFlags exactly
+ [PASS] deployment manifest broadcastReady=false & liveWritesApproved=false (unchanged)
+ [PASS] price gate: a live packet requires live-mode prices, both observations <=300s at capture and capture <=300s before generation; a fixture price forces executable=false  (requireLive=true priceMode=live live=true freshAtGeneration=true)
+ [PASS] packet records generation + expiry UTC and a validity window matching policy
+ [PASS] price snapshot records separate request/response timestamps and micro-USD parsed from decimal string
+ [PASS] executionPacketDigest over normalized SIGNABLE fields matches  (0xee7b600581d545544fe7fdb0b1614e23bac9ea4453da56ec160d2e0300f13371)
+ [PASS] every immediate + delayed tx carries explicit chainId=4663
+ [PASS] exact sequential nonces for deployer (start 3..)
+ [PASS] exact sequential nonces for tester (start 2..)
+ [PASS] deployer + tester start nonces match packet meta.startNonces (read live, not hardcoded)
+ [PASS] delayed tx nonce continues the tester sequence exactly
+ [PASS] mutation test: changing nonce, signer, chainId or tx type FAILS verification  (all 4 mutations detected)
+ [PASS] canonical reviewed-authorization reconstructs with no leaf/schema errors
+ [PASS] packaged operator/reviewed-authorization.json is strictly valid (no unknown/wrong-type/non-canonical)
+ [PASS] packaged reviewed-authorization has no duplicate JSON keys
+ [PASS] reviewedAuthorizationDigest agrees across packet.meta, review-policy, and packaged operator  (0x4fdfd36b99d6090fef67f21bd3b2027e8dc7e339861ae94eb0f292da2b6ee248)
+ [PASS] reconstruction structurally equals the packaged bound object
+ [PASS] mutation test: expiry/auth/NVDA/pool/snapshot/WETH/gas/aggregate each shift the reviewed digest  (all 8 detected)
+ [PASS] fullReviewArtifactDigest (whole artifact minus itself) matches  (0x7be82342edf10f6da2a5745fd983a863f0ee8342a8fe28d49e246d5d12fe1c05)
+ [PASS] execution digest differs from full digest
+ [PASS] mutation test: any covered field change alters full digest
+ [PASS] chainId=4663 & fork block/hash/ts/baseFee match policy snapshot
+ [PASS] anvilConfig recorded (fork block/chain/baseFee/argv template + env-var reference, NO url) & live cross-check hash matched
+ [PASS] live+fork nonces recorded and equal the packet start nonces (read live, not hardcoded)
+ [PASS] price snapshot embedded == pinned file; 2 distinct sources; higher selected; raw+sha recorded
+ [PASS] all 8 CREATE addresses derive from deployer+nonce (current start nonce)
+ [PASS] bundled canonical manifest predicted addresses (startNonce) agree with CREATE
+ [PASS] provenance: creation/runtime bytecode keccak, artifact sha256, source-list, solc/optimizer(200)/cancun match
+ [PASS] every bundled source file keccak256 == solc metadata (checked 18 files)
+ [PASS] provenance records repoHead(40 hex) & dirtyTrackedTree boolean
+ [PASS] every deploy init code EXACTLY == creationBytecode ++ abi.encode(expected ctor args)
+ [PASS] EVERY immediate+delayed tx verified (type/fees/gasLimit-ceil/maxGasCost/gasUsed/receipt/dataKeccak/value + embedded args incl createPool/initialize/both approvals/vault approval)
+ [PASS] LP/buy/sell minimums NON-ZERO in calldata
+ [PASS] gasLimit == ceil(gasEstimate*120/100) for all txs (integer ceiling)
+ [PASS] every tx target ∈ allow-set (pinned infra + CREATE)
+ [PASS] canonical BPS derived from bundled manifests == [] (no canonical deployment exists) & proven
+ [PASS] canary token symbol is BPSC-TEST (not canonical BPS)
+ [PASS] LP amount0Min/amount1Min == floor(used*995/1000) & used<=desired & before-used==after
+ [PASS] buy 2/1/97 (mulDiv floor) + mins floor(actual*99/100) + vault WETH += stock
+ [PASS] sell 2/2/96 (mulDiv floor) + mins floor(actual*99/100) + tester WETH += user + within $2 cap
+ [PASS] ETH reconciles both signers (start - Σ(gasUsed*effPrice) == end)
+ [PASS] WETH reconciles (deployer: start-LPused; tester: start-buyGross+sellUser) & start==inbound($100/$20 floor)
+ [PASS] BPSC reconciles (deployer 1e9-LPused==end; tester bought-sold-locked==0)
+ [PASS] inbound ETH == Σ per-signer recorded max gas cost; actual spent <= funded
+ [PASS] withdraw returns exactly principal; no emergency exit; earliest==unlockTime
+ [PASS] fundingPlan executable=false & fundingAuthorized=false
+ [PASS] funding plan: all THREE ETH amounts & recipients correct (deployer imm, tester imm, tester delayed)
+ [PASS] funding plan: WETH transfer calldata fully decoded — recipient & amount equal declared fields ($100/$20)
+ [PASS] funding plan: exact gas-limit formulas — ETH 21000, WETH transfer 51000, WETH deposit 50000, each ceil(x*120/100)
+ [PASS] funding plan includes WETH wrapping (deposit) txs with gas in aggregate (no funder WETH assumed)
+ [PASS] every funding tx: chainId=4663 & gasLimit=ceil methodology
+ [PASS] gas totals recomputed: immediate + delayed + funding == all-inclusive
+ [PASS] immediate gas <= $10; LP<=$100; trade<=$20
+ [PASS] aggregate exposure = sum(all principal + all max-gas wei) converted ONCE to micro-USD  (68173548436427454 wei)
+ [PASS] all-inclusive exposure <= $130  ($128.189450)
+ [PASS] no signature/private-material field; meta declares none  (none)
+
+[offline] 61/61 checks passed
+
+>>> manifest integrity
+ [PASS] no duplicate entries in manifest
+ [PASS] no missing files
+ [PASS] no changed files (sha256 matches manifest)
+ [PASS] no unexpected files (every on-disk file is in the manifest)
+ [PASS] manifest lists at least the core artifacts
+
+[manifest-verify] 5/5 checks passed (105 manifest entries, 105 on-disk files)
+
+>>> static safety scan
+ [PASS] no forbidden pattern (key/seed/keystore, raw broadcast, local signer, raw sign, AA/session keys, batching, auto-send)
+ [PASS] operator-core sends via eth_sendTransaction with a single tx (no array/batch)
+ [PASS] operator-core maintains an explicit FORBIDDEN_METHODS denylist including eth_sendRawTransaction
+ [PASS] operator-core never auto-retries (no retry/replacement mechanism)
+ [PASS] operator-core discards raw inputs after bind AND no runtime method reads this.packet/policy/snapshot  (raw read after discard)
+ [PASS] operator app.js has NO HTML/JS injection sink (innerHTML/outerHTML/insertAdjacentHTML/document.write/eval)  (textContent/createElement only)
+ [PASS] no RPC/provider URL or key token anywhere; no non-doc URL in operator/reports (env-var reference only)  (clean)
+
+[static-scan] 7/7 checks passed
+
+>>> independent clean-fork replay (spawns a clean Anvil fork; needs anvil + ROBINHOOD_CHAIN_RPC_URL)
+
+[replay] CHECKLIST:
+ [PASS] replay fork LATEST == pinned block/hash/timestamp/baseFee
+ [PASS] live-RPC hash of pinned block == fork latest hash
+ [PASS] replay fork nonces == packet start nonces (deployer/tester, from pinned block)
+ [PASS] replay starting balances match packet (WETH exact, ETH seed)
+ [PASS] replay: every immediate tx receipt=success & gasUsed & effGasPrice EXACTLY match recorded
+ [PASS] replay: every transaction hash AND block hash match recorded
+ [PASS] replay: on-chain nonce == recorded nonce and type == 0x2 for every tx
+ [PASS] replay: all 8 deployed at predicted CREATE addresses
+ [PASS] replay: deployed runtime code matches compiled template (immutables masked)
+ [PASS] replay minted position: tokenId decoded, ownerOf==deployer, positions() fee/ticks/liquidity match recorded LP  (tokenId=361207)
+ [PASS] replay wiring from state: router/locking/claim owners, coordinator operator+publisher, vault executor/reserve/coordinator, both adapters' immutables, NVDA approved
+ [PASS] replay pool state right after mint == recorded poolSqrtAfter/poolTickAfter/poolLiquidityAfter
+ [PASS] replay OfficialBuy event == recorded buy accounting (gross/stock/burn/user/bought/burned)
+ [PASS] replay OfficialSell event == recorded sell accounting (gross/stock/burn/user/burned)
+ [PASS] replay LockCreated event == recorded lock (principal, unlockTime, lockId)
+ [PASS] replay ending balances (ETH/WETH/BPSC) match packet endingBalancesImmediate
+ [PASS] replay canary token symbol == BPSC-TEST
+ [PASS] replay delayed withdraw: success, returned==principal, gasUsed matches, LockWithdrawn(principal) & not emergency
+ [PASS] replay delayed withdraw: tx hash + block hash match recorded; nonce/type/chainId as recorded
+
+[replay] 19/19 checks passed
+
+>>> operator engine + fault-injection test (spawns a clean Anvil fork; needs anvil + ROBINHOOD_CHAIN_RPC_URL)
+[operator-test] histogram: eth_chainId:72 eth_accounts:72 eth_getTransactionCount:87 eth_getCode:536 eth_getBlockByNumber:44 eth_getBalance:44 eth_call:384 eth_estimateGas:44 eth_sendTransaction:21 eth_getTransactionByHash:212 eth_getTransactionReceipt:224
+ [PASS] bind: digest recomputed + full policy/snapshot binding
+ [PASS] precheck/send refuse before Connect+reconcile
+ [PASS] markConnected succeeds (chain 4663 + account)
+ [PASS] precheck refuses before reconcile
+ [PASS] reconcile (empty journal) sets current=0, reconciled
+ [PASS] all 19 steps executed with receipt-event postconditions + cumulative checkpoints
+ [PASS] successful restart reconciliation after EVERY step 0..18
+ [PASS] restart after mint(step12)/buy(step14)/sell(step16) reconciles (transient allowance/sqrt not required)
+ [PASS] restart after all 19 -> current 19 (done)
+ [PASS] exactly 19 single eth_sendTransaction calls (no batch); no forbidden method
+ [PASS] forged localStorage entry cannot advance (reconcile halts, current stays 0)
+ [PASS] uncertain send: unknown post-invocation error halts + persists uncertain record (digest/step/signer/nonce/signableTxHash)
+ [PASS] reload after uncertain send remains HALTED with sends disabled
+ [PASS] uncertain send without tx hash cannot be retried (precheck/send/reconcile all refuse)
+ [PASS] missing chainId fails (no default/fallback)
+ [PASS] wrong chainId fails
+ [PASS] every altered tx field fails verification (from/nonce/type/to/value/input/gas/fees)
+ [PASS] mutated aggregateUsd/maxExposure/WETH/infra/fee/validity/nonce/snapshot each FAIL binding
+ [PASS] pending nonce drift (latest ok, pending != expected) halts
+ [PASS] canonical baseline binds (packet/policy/packaged anchors agree)
+ [PASS] GENERIC leaf-mutation: all 466 canonical leaves fail binding when individually mutated
+ [PASS] 14 v3-regression mutations each FAIL binding (14 tested)
+ [PASS] mutate value + recompute ONLY the packet anchor still fails (policy+packaged disagree)
+ [PASS] mutate value + recompute packet+policy anchors but not packaged still fails
+ [PASS] missing canonical field (pool) fails binding
+ [PASS] unexpected/unknown canonical field fails binding
+ [PASS] duplicate JSON key (raw) fails binding
+ [PASS] reordered transaction entries fail binding
+ [PASS] duplicate transaction index fails binding
+ [PASS] non-canonical (lowercased) address fails binding
+ [PASS] alternate numeric encoding (hex) fails binding
+ [PASS] alternate numeric encoding (leading zero) fails binding
+ [PASS] failed binding => bound/connected/reconciled all false + precheck & send refuse
+ [PASS] after bind, raw packet/policy/snapshot are discarded (null) — no unbound runtime read possible
+ [PASS] this.steps + maxGasCostWei built from canonical (derived = gasLimit*maxFeePerGas)
+ [PASS] SOURCE-INPUT mutation: 405 security-relevant leaves change the digest; 896 are unused (raw inputs null after bind)  (packet.meta.task | packet.meta.kind | packet.meta.mode | packet.meta.live | packet.meta.executionAuthorized | packet.meta.fundingAuthorized)
+ [PASS] section-2 regressions: bound values fail binding; derived/display values (decodedArgs/maxGasCostWei/reconciliation) are unused (16 tested)
+ [PASS] adversarial events: honest passes; wrong Approval owner FAILS
+ [PASS] adversarial events: wrong buy trader / recipient / adapter each FAIL
+ [PASS] adversarial events: wrong sell trailing stockBudgetRecipient FAILS
+ [PASS] adversarial events: wrong lockId / duration / policyVersion each FAIL
+ [PASS] F1 storage-unavailable-before-send: wallet NOT invoked, no send, not durably halted
+ [PASS] F2 storage-fail-after-hash: durable uncertain halt with tx hash; reload stays halted (no blind retry)
+ [PASS] F3 crash-between-intent-and-response: reload is HALTED (uncertain) at that step, no retry
+ [PASS] F4 clear-rejected-intent failure: halts uncertain (no blind retry)
+ [PASS] F5 journal-write failure: pending retained (no advance); reload re-verifies SAME tx to current=1
+[operator-test] canonical leaves mutation-tested: 466
+
+[operator-test] 46/46 checks passed
+
+>>> real localhost-server browser/HTTP smoke
+ [PASS] every allowlisted asset returns 200 with correct content-type
+ [PASS] v4 regression: /canonical.mjs and /reviewed-authorization.json are now 200 (were 403)  (canonical=200 reviewed=200)
+ [PASS] non-allowlisted / path-traversal requests are 403
+ [PASS] full module+fetch graph from index.html every asset is 200 (no browser import/fetch error)
+ [PASS] app.js executes over HTTP: canonical binding completes with no error
+ [PASS] Connect is the only enabled initial control; precheck + send disabled until connect + reconcile
+ [PASS] HTML/event-handler text renders only as text (no parsed HTML, no handler executes)
+
+[browser-smoke] 7/7 checks passed
+
+>>> v9 RECOVERY replay (steps 1-13 imported + 6/6 tester) + adversarial + mutation suites (spawns a clean Anvil fork; needs anvil + ROBINHOOD_CHAIN_RPC_URL)
+[recovery-test] canonical v9 leaves mutation-tested: 470 | source-input changed: 463 unused: 336
+[recovery-test] histogram: eth_chainId:86 eth_accounts:44 eth_getTransactionByHash:158 eth_getTransactionReceipt:158 eth_getCode:176 eth_call:48 eth_getTransactionCount:32 eth_getBlockByNumber:32 eth_getBalance:16 eth_estimateGas:16 eth_sendTransaction:7
+ [PASS] v9 bind (13 anchors + v5/v6/v7/v8 anchors + corrected deployerStepRange 1-13 + gas policy + deadline refresh + 6 tester signables)
+ [PASS] fork resumes with deployer nonce 16 / tester nonce 2
+ [PASS] steps 1-13 cannot be sent again (no deployer tx, no originalIndex<=13, tester nonces exactly 2-7)
+ [PASS] tester nonce 8 (delayed withdrawal) remains disabled
+ [PASS] deployer-selected CONNECT fails with a non-halting wrongAccount refusal
+ [PASS] tester-selected connect passes
+ [PASS] reconcile imports+verifies ALL 13 anchors + pool/position state; current=0
+ [PASS] deployer-selected PRE-CHECK refuses WITHOUT halting (v7 terminal halt cannot recur)
+ [PASS] tester-selected pre-check passes
+ [PASS] clean-fork recovery replay: steps 1-13 imported + final 6/6 tester txs executed & verified
+ [PASS] successful restart reconciliation after EVERY remaining step (13 anchors re-verified each time)
+ [PASS] exactly 6 single eth_sendTransaction calls; no forbidden method; no deployer send
+ [PASS] new deadline == pinned ts + 21600 == packet expiry; old deadline == bound v8 value 1784949999
+ [PASS] byte-diff: only the single 32-byte deadline word differs in steps 15/17
+ [PASS] the other FOUR remaining calldatas are byte-identical to the reviewed v8 versions
+ [PASS] old/new deadline words + old/new dataKeccak match the recorded refresh metadata
+ [PASS] provider block timestamp at/after packet expiry HALTS the pre-check
+ [PASS] honest returned tx verifies (orig step 14)
+ [PASS] 1.25x policy: cost at ceiling passes; above FAILS
+ [PASS] priority exactly 50,000,000 passes; 50,000,001 FAILS
+ [PASS] maxFee above reviewed ceiling FAILS
+ [PASS] gasLimit above 2x ceiling FAILS
+ [PASS] critical field: wrong sender FAILS
+ [PASS] critical field: wrong nonce FAILS
+ [PASS] critical field: wrong value FAILS
+ [PASS] critical field: wrong calldata FAILS
+ [PASS] critical field: wrong type (legacy) FAILS
+ [PASS] critical field: non-empty access list FAILS
+ [PASS] chainId ABSENT accepted (eth_chainId==4663 independently)
+ [PASS] chainId PRESENT and wrong FAILS
+ [PASS] provider chain != 4663 at verify boundary FAILS
+ [PASS] exposure = realized gas(1-13) + principal + max gas(14-19 at 1.25x) <= $130 (no double count)
+ [PASS] aggregate exposure above $130 at fresh prices FAILS the exposure gate
+ [PASS] v9 uses canaryv9 namespace; v5/v6/v7/v8 halt records untouched and not authoritative
+ [PASS] resolveUncertainSend with failing journal write stays HALTED (no blind retry)
+ [PASS] storage-unavailable-before-send: wallet NOT invoked
+ [PASS] crash-between-intent-and-response: reload HALTED uncertain (no new send for that nonce)
+ [PASS] GENERIC leaf-mutation: all 470 canonical v9 leaves fail binding when mutated
+ [PASS] SOURCE-INPUT mutation: 463 leaves shift the digest; 336 unused (raw inputs null after bind)
+ [PASS] v9 regressions: anchors/realized-gas/deployer-injection/nonce-8/gas-policy/v7+v8-anchors/deployer-range/nonces/exposure/position all FAIL binding (16 tested)
+
+[recovery-test] 40/40 checks passed
+
+>>> v9 RECOVERY localhost browser/HTTP smoke (port 8741)
+ [PASS] every recovery asset returns 200 with correct content-type (port 8741)
+ [PASS] v5 pages + non-allowlisted + traversal are 403 on the v9 origin
+ [PASS] full module+fetch graph from recovery-index.html every asset is 200
+ [PASS] recovery-app.js executes over HTTP: recovery binding completes with no error
+ [PASS] Connect is the only enabled initial control; NO precheck/confirm/send exists (incl. none for step 1)
+ [PASS] step-1 anchor tx hash rendered read-only
+ [PASS] step-2 anchor tx hash rendered read-only
+ [PASS] step-13 (NPM.mint) anchor + 13-anchor count rendered read-only
+ [PASS] v9 page touches ONLY the canaryv9 storage namespace (v5/v6/v7/v8 records untouched)
+ [PASS] HTML/handler text renders only as text on the recovery page
+
+[recovery-browser-smoke] 10/10 checks passed (port 8741)
+
+========================================================
+ PASS  compilation (solc 0.8.26 -> 8 bytecodes)
+ PASS  offline verifier
+ PASS  manifest integrity
+ PASS  static safety scan
+ PASS  independent clean-fork replay
+ PASS  operator engine + fault-injection test
+ PASS  real localhost-server browser/HTTP smoke
+ PASS  v9 RECOVERY replay (steps 1-13 imported + 6/6 tester) + adversarial + mutation suites
+ PASS  v9 RECOVERY localhost browser/HTTP smoke (port 8741)
+ VERIFY-ALL: PASS
+========================================================

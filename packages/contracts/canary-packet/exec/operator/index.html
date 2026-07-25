@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BPSC-TEST Canary Operator</title>
+<style>
+  :root { color-scheme: light dark; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  body { margin: 0; padding: 1rem; max-width: 900px; }
+  .banner { background: #b00020; color: #fff; font-weight: 700; font-size: 1.15rem; letter-spacing: .04em;
+            padding: .8rem 1rem; border-radius: 8px; text-align: center; }
+  .sub { font-size: .85rem; opacity: .85; margin: .4rem 0 1rem; }
+  table { width: 100%; border-collapse: collapse; margin: .5rem 0; }
+  th, td { border: 1px solid #8886; padding: .35rem .5rem; text-align: left; vertical-align: top; font-size: .85rem; }
+  th { width: 34%; white-space: nowrap; opacity: .8; }
+  .mono { word-break: break-all; }
+  .actions { display: flex; gap: .5rem; flex-wrap: wrap; margin: .8rem 0; }
+  button { padding: .5rem .8rem; border-radius: 6px; border: 1px solid #8886; cursor: pointer; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  #log { border-top: 1px solid #8886; margin-top: 1rem; padding-top: .5rem; font-size: .8rem; }
+  #log div { padding: .15rem 0; }
+  .ok { color: #0a7d20; } .fail { color: #b00020; font-weight: 700; } .warn { color: #a56a00; }
+  .meta { font-size: .78rem; opacity: .8; }
+</style>
+</head>
+<body>
+  <div class="banner">BPSC-TEST — CANARY — NOT PRODUCTION</div>
+  <div class="sub">Robinhood Chain mainnet (chainId 4663). Signing happens only in your Rabby extension, one transaction at a time, after you click. This page never sees a key and never broadcasts on its own.</div>
+  <div class="meta">Scope: <span id="scope"></span></div>
+  <div class="meta">Execution digest: <span id="digest" class="mono"></span></div>
+  <div class="meta">Packet expires: <span id="expiry"></span></div>
+  <p><button id="connect">Connect Rabby (approve connection only — no signing)</button> <span id="progress"></span></p>
+  <div id="panel"></div>
+  <div id="log"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

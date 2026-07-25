@@ -1,0 +1,17 @@
+{
+  "name": "canary-rabby-execution-review",
+  "version": "10.8.0",
+  "private": true,
+  "type": "module",
+  "description": "BPSC-TEST canary RECOVERY v9 bundle (Task 10D-8): PURE TIME REFRESH of the reviewed v8. Original steps 1-13 verified complete on chain; final SIX tester transactions only (tester nonces 2-7); accepted gas policy and USD 130 cap unchanged; refreshed buy/sell deadlines; corrected deployerStepRange 1-13. Robinhood Chain mainnet (chainId 4663); localhost-only Rabby operator; NO key handling.",
+  "scripts": {
+    "verify": "node verify-all.mjs"
+  },
+  "dependencies": {
+    "viem": "2.55.8",
+    "solc": "0.8.26"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

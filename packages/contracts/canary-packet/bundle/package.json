@@ -1,0 +1,16 @@
+{
+  "name": "canary-packet-review-v8",
+  "version": "8.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-contained, replayable canary review bundle (Task 10B-8). HISTORICAL FIXTURE — non-live, non-executable.",
+  "scripts": {
+    "verify": "node run-verification.mjs"
+  },
+  "dependencies": {
+    "viem": "2.55.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

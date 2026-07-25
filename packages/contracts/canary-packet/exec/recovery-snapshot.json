@@ -1,0 +1,109 @@
+{
+  "kind": "fresh live recovery snapshot (post original steps 1-13); URL read from env, never recorded",
+  "capturedAtUtc": "2026-07-25T05:24:06.621Z",
+  "chainId": 4663,
+  "head": "18756468",
+  "pinnedBlock": {
+    "number": "18756465",
+    "hash": "0xc497285527bd976b1f52d261ce7b28f19aff51cf7c78d0514d7179c05fd87741",
+    "parentHash": "0xfff87e724bee608246507329fa85de1ee8cf19ba80a289dc700d5dd8651fedcf",
+    "timestamp": "1784957040",
+    "baseFeePerGasWei": "95296000",
+    "gasLimit": "1125899906842624"
+  },
+  "wallets": {
+    "deployer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+    "tester": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024"
+  },
+  "nonces": {
+    "deployer": 16,
+    "tester": 2
+  },
+  "pendingNonces": {
+    "deployer": 16,
+    "tester": 2
+  },
+  "expectedNonces": {
+    "deployer": 16,
+    "tester": 2
+  },
+  "completedContracts": {
+    "canaryToken": {
+      "address": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+      "runtimeCodeHash": "0xca16cad61af5b3cbcfd27b76aa33eba77d33419ce6f7b5cc9d55fcecf3974379"
+    },
+    "lockingVault": {
+      "address": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
+      "runtimeCodeHash": "0xb378d3ede6f9daeeccbed21871b27cde96c58b4a879ab15ae4dde22f5fafcfbc"
+    },
+    "claimManager": {
+      "address": "0x5EcbADf1cF050F1B86D44B979416A8e859Fb2574",
+      "runtimeCodeHash": "0x8da296360640c8a2f9b762d760de644ac23b794ab1149545d0722c28804a1fb6"
+    },
+    "rialtoAdapter": {
+      "address": "0xbe2C8c6CB7CeeED24708419F5aaEEF8d949866AE",
+      "runtimeCodeHash": "0x9e6e6db3405b9b5f0eb3503474469205cc4c10af691f5e5eae8f55c6b6cc724e"
+    },
+    "coordinator": {
+      "address": "0xE3Bd9e1D58d16A31912f804f931Cc6bfcD702205",
+      "runtimeCodeHash": "0x3886aa4ce0a4c38c5823ae7a04464928df322e47f00946fffd63c1a7236d1377"
+    },
+    "stockVault": {
+      "address": "0x9a5a55361BcFDD6Ded4A6EAa02D997F1108EdeC6",
+      "runtimeCodeHash": "0xd3a283ff652b7be9477fc6a0f16303e068c112a6ab72918e575b555a7fb112ea"
+    },
+    "uniswapAdapter": {
+      "address": "0x5891Dcc2BACD1ADC8b5a9C30B365931290d7E5E1",
+      "runtimeCodeHash": "0xb8a2faf72e3f734a0e288fa15076682d48741904e10d6a61d816bbbba842684a"
+    },
+    "tradeRouter": {
+      "address": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6",
+      "runtimeCodeHash": "0x5791a715dfdff519c57ebdfd3638dbbc5c1073142e0a67a563d6008860d3af12"
+    }
+  },
+  "poolAddress": "0x4A429194dC4E4A1f3b1cD24bBaf7754f65ABc5EF",
+  "positionTokenId": "371728",
+  "positionLiquidity": "3235182407869072596640",
+  "externalCodeHashes": {
+    "weth": {
+      "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "runtimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
+      "codeBytes": 2202
+    },
+    "uniswapV3Factory": {
+      "address": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+      "runtimeCodeHash": "0xec72b1abd1f2faee020cfea9c646bd8994f9fb389054f6e574f103a895091739",
+      "codeBytes": 24535
+    },
+    "nonfungiblePositionManager": {
+      "address": "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
+      "runtimeCodeHash": "0x0a493d1af3d0f25fed8efa205244ebee14114267a08647fc38c515c7cd6ead4f",
+      "codeBytes": 24384
+    },
+    "swapRouter02": {
+      "address": "0xCaf681a66D020601342297493863E78C959E5cb2",
+      "runtimeCodeHash": "0x6f36c378e272c6324c48f045182bcb54bd8ad654cf9ebd42e8893d52c4cb25dc",
+      "codeBytes": 24497
+    },
+    "rialtoRegistry": {
+      "address": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+      "runtimeCodeHash": "0xf8b9b92ca74f49f59f66ece51adb02dbefe254dcf967db586c4dda798268a01e",
+      "codeBytes": 4968
+    },
+    "nvdaStockToken": {
+      "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "runtimeCodeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630",
+      "codeBytes": 283
+    }
+  },
+  "balances": {
+    "eth": {
+      "deployer": "2966115952402154",
+      "tester": "409934390560031"
+    },
+    "weth": {
+      "deployer": "710132572995220",
+      "tester": "10645659232447969"
+    }
+  }
+}

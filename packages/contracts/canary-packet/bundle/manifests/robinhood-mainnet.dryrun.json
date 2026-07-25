@@ -1,0 +1,239 @@
+{
+  "schemaVersion": "1.0.0",
+  "chainId": 4663,
+  "sourceCommit": "UNSET_UNTIL_TAGGED",
+  "compiler": { "solc": "0.8.26", "optimizer": true, "runs": 200, "evmVersion": "cancun" },
+  "broadcastReady": false,
+  "deployBlock": null,
+  "deployer": null,
+  "startNonce": null,
+  "external": {
+    "weth": {
+      "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "runtimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
+      "decimals": 18,
+      "sourceUrl": "https://rialto-trade-api.rialto.xyz/tokens (symbol WETH, chain_id 4663); read-only RPC eth_call decimals()=18, symbol()=WETH; SwapRouter02.WETH9()",
+      "observedBlock": 16726801,
+      "status": "VERIFIED"
+    },
+    "rialtoRegistry": {
+      "address": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+      "runtimeCodeHash": "0xf8b9b92ca74f49f59f66ece51adb02dbefe254dcf967db586c4dda798268a01e",
+      "sourceUrl": "https://docs.rialto.xyz/developers/router-registries",
+      "observedBlock": 16726801,
+      "status": "VERIFIED"
+    },
+    "swapRouter02": {
+      "address": "0xCaf681a66D020601342297493863E78C959E5cb2",
+      "runtimeCodeHash": "0x6f36c378e272c6324c48f045182bcb54bd8ad654cf9ebd42e8893d52c4cb25dc",
+      "sourceUrl": "on-chain: SwapRouter02.WETH9()==WETH and SwapRouter02.factory()==uniswapV3Factory",
+      "observedBlock": 16726801,
+      "status": "VERIFIED"
+    },
+    "uniswapV3Factory": {
+      "address": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+      "runtimeCodeHash": "0xec72b1abd1f2faee020cfea9c646bd8994f9fb389054f6e574f103a895091739",
+      "sourceUrl": "on-chain: read from SwapRouter02.factory()",
+      "observedBlock": 16726801,
+      "status": "VERIFIED"
+    },
+    "feature2Router": {
+      "address": "0xC94135b63772b91D79d0A2DaAb2a8801f32359bD",
+      "runtimeCodeHash": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611",
+      "sourceUrl": "on-chain: rialtoRegistry.ownerOf(2); getFeature(2)=(prev=0x0, current=this, next=0x0, paused=false)",
+      "observedBlock": 16726801,
+      "status": "VERIFIED"
+    }
+  },
+  "predicted": {
+    "bpsToken": null,
+    "lockingVault": null,
+    "claimManager": null,
+    "rialtoAdapter": null,
+    "coordinator": null,
+    "stockVault": null,
+    "uniswapAdapter": null,
+    "tradeRouter": null
+  },
+  "actual": {
+    "bpsToken": null,
+    "lockingVault": null,
+    "claimManager": null,
+    "rialtoAdapter": null,
+    "coordinator": null,
+    "stockVault": null,
+    "uniswapAdapter": null,
+    "tradeRouter": null
+  },
+  "roles": {
+    "bpsTreasury": null,
+    "protocolOwner": null,
+    "reserveRecipient": null,
+    "acquisitionOperator": null,
+    "rootPublisher": null,
+    "claimRecoveryRecipient": null
+  },
+  "stockBasket": [],
+  "stockBasketCandidates": [
+    {
+      "symbol": "AAPL",
+      "address": "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9",
+      "decimals": 18,
+      "verified": true
+    },
+    {
+      "symbol": "AMD",
+      "address": "0x86923f96303D656E4aa86D9d42D1e57ad2023fdC",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "AMZN",
+      "address": "0x12f190a9F9d7D37a250758b26824B97CE941bF54",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "BE",
+      "address": "0x822CC93fFD030293E9842c30BBD678F530701867",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "COIN",
+      "address": "0x6330D8C3178a418788dF01a47479c0ce7CCF450b",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "CRWV",
+      "address": "0x5f10A1C971B69e47e059e1dC91901B59b3fB49C3",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "GOOGL",
+      "address": "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "INTC",
+      "address": "0xc72b96e0E48ecd4DC75E1e45396e26300BC39681",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "META",
+      "address": "0xc0D6457C16Cc70d6790Dd43521C899C87ce02f35",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "MSFT",
+      "address": "0xe93237C50D904957Cf27E7B1133b510C669c2e74",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "MU",
+      "address": "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "NVDA",
+      "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "decimals": 18,
+      "verified": true
+    },
+    {
+      "symbol": "ORCL",
+      "address": "0xb0992820E760d836549ba69BC7598b4af75dEE03",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "PLTR",
+      "address": "0x894E1EC2D74FFE5AEF8Dc8A9e84686acCB964F2A",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "SKHY",
+      "address": "0x84CAb63bc87912E71ad199ff14A0bA45de68FeF8",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "SNDK",
+      "address": "0xB90A19fF0Af67f7779afF50A882A9CfF42446400",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "SPCX",
+      "address": "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "TSLA",
+      "address": "0x322F0929c4625eD5bAd873c95208D54E1c003b2d",
+      "decimals": 18,
+      "verified": false
+    },
+    {
+      "symbol": "USAR",
+      "address": "0xd917B029C761D264c6A312BBbcDA868658eF86a6",
+      "decimals": 18,
+      "verified": false
+    }
+  ],
+  "economics": {
+    "version": "BPS-ECON-2.0",
+    "buyStockBps": 200,
+    "buyBurnBps": 100,
+    "sellStockBps": 200,
+    "sellBurnBps": 200,
+    "denominator": 10000,
+    "distributionPercent": 80,
+    "splitDenominator": 100
+  },
+  "transactions": {
+    "bpsToken": null,
+    "lockingVault": null,
+    "claimManager": null,
+    "rialtoAdapter": null,
+    "coordinator": null,
+    "stockVault": null,
+    "uniswapAdapter": null,
+    "tradeRouter": null
+  },
+  "verificationStatus": {
+    "chainId": "VERIFIED",
+    "weth": "VERIFIED",
+    "rialtoRegistry": "VERIFIED",
+    "registryAbiAndFailClosed": "VERIFIED",
+    "feature2Router": "VERIFIED",
+    "swapRouter02": "VERIFIED",
+    "uniswapV3Factory": "VERIFIED",
+    "stockBasketCandidates": "VERIFIED",
+    "deploymentOrder": "VERIFIED",
+    "bpsWethPoolAndFeeTier": "BLOCKED",
+    "deployerAndRoles": "USER_INPUT_REQUIRED",
+    "stockBasketSelection": "USER_INPUT_REQUIRED",
+    "slippageOracle": "BLOCKED",
+    "rialtoQuoteService": "USER_INPUT_REQUIRED",
+    "legalEligibility": "EXTERNAL_REVIEW_REQUIRED"
+  },
+  "blockers": [
+    "No BPS/WETH Uniswap v3 pool exists yet; BPS token is not deployed and no pool/fee-tier/liquidity is verified. poolFee and the pool are a hard deployment gate.",
+    "Deployer EOA/Safe and every role address (treasury, protocolOwner, reserveRecipient, acquisitionOperator, rootPublisher, claimRecoveryRecipient) are user-supplied and must be finalized; predicted addresses cannot be computed until deployer + startNonce are set.",
+    "The restricted-beta stock basket selection is a product/legal decision; only AAPL and NVDA are fully re-verified on-chain (code + decimals). The remaining candidates are sourced from the public Rialto /tokens list and must be re-verified before inclusion.",
+    "No on-chain price/oracle slippage guard exists; safe minimum-price enforcement depends on the trusted acquisitionOperator supplying minStockOut. Permissionless/public flow is blocked until an oracle guard is added.",
+    "The Rialto quote service is a centralized, protected, bearer-key API; the acquisition path is not decentralized. RIALTO_API_KEY handling is server-only and out of scope for on-chain deployment.",
+    "Robinhood Stock Tokens carry jurisdiction and eligibility restrictions; external legal/eligibility review is required before any live beta."
+  ],
+  "generatedAt": "2026-07-22"
+}
