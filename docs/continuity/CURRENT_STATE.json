@@ -1,32 +1,30 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-25T23:10:00Z",
+  "updatedUtc": "2026-07-26T02:30:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "851a816311d60f0a08ceeae6894b5af128667eef",
+  "head": "46c9855b8950ff0152c9f8281b1ba210ddbb974a",
   "workingTree": {
     "dirty": true,
-    "note": "TASK 10K-1A checkpoint 851a816 committed. TASK 10K-2 (QEX-1 evidence + offline structural replay + live CLI retirement) changes uncommitted at capture.",
+    "note": "TASK 10K-2 checkpoint 46c9855 committed. TASK 10K-3 (guarded-settlement core, disabled) changes uncommitted at capture.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
       "docs/continuity/CHANGELOG.md",
       "docs/audit/BPS_FOUNDER_DECISION_REGISTER_2026-07-25.md",
-      "packages/rialto/src/quote-eval-cli.ts",
-      "packages/rialto/src/quote-eval-cli.test.ts",
       "packages/rialto/src/server.ts"
     ],
     "untracked": [
-      "docs/audit/BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.md",
-      "docs/audit/BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.evidence.json",
-      "packages/rialto/src/registry-structural.ts",
-      "packages/rialto/src/registry-structural.test.ts"
+      "docs/audit/BPS_RIALTO_GUARDED_SETTLEMENT_2026-07-25.md",
+      "packages/rialto/src/guarded-settlement.ts",
+      "packages/rialto/src/guarded-settlement.test.ts",
+      "packages/contracts/src/interfaces/IGuardedSettlementExecutor.sol"
     ]
   },
   "phase": "post-canary",
-  "latestCompletedMilestone": "TASK 10K-2 — recorded QEX-1 quote evidence + pure offline registry-structural replay; QEX-1 CONSUMED/COMPLETE; live CLI retired (QEX1_CONSUMED) (2026-07-25)",
-  "currentTask": "none — QEX-1 evidence persisted (rialto vitest 150/150, zero network); live CLI retired; no further quote/acquisition authorized",
-  "nextTask": "Founder/security decision on D-6 (production pin of the feature-2 router + selector): requires a DATED registry re-confirmation, an explicitly approved selector allow-list, and the final taker — not suppliable by one observed quote. Not implemented/authorized here. D-24 stands — no acquisition/execution",
+  "latestCompletedMilestone": "TASK 10K-3 — guarded-settlement core (production-shaped, deliberately DISABLED; offline pure guards + sanitized plan + READY_OFFLINE_ONLY); Solidity executor deferred (forge-std absent), interface added (2026-07-25)",
+  "currentTask": "none — guarded core implemented offline + verified (rialto vitest 201/201, zero network); live trading NOT enabled; D-24 stands",
+  "nextTask": "Resolve the production gates for a private controlled canary, in order: (1) approved selector proven from a repo-owned/vendored router ABI (D-6); (2) final guarded-executor/Safe taker (D-6); (3) dated runtime ownerOf(2) strategy (D-6); (4) trusted price source + age (D-22B); (5) per-token sell cap (D-8); (6) vendored forge-std -> concrete IGuardedSettlementExecutor + Foundry tests (D-21/D-5). D-24 stands",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,
@@ -410,5 +408,26 @@
     "d3": "COUNSEL-PENDING — production possession/use of the broader-scope (swap:create/swap:integrator) key; must stay isolated from any signing key or on-chain allowance",
     "openDecisions": "D-5, D-6, D-8, D-21, D-22B remain open; D-23 counsel-pending; D-24 stands; QEX-1 closes none of them; ballot D-17 untouched",
     "d24": "stands — no acquisition/execution authorized"
+  },
+  "guardedSettlement": {
+    "date": "2026-07-25",
+    "task": "TASK 10K-3",
+    "state": "production-shaped but DELIBERATELY DISABLED; offline-only; live trading NOT enabled",
+    "core": "packages/rialto/src/guarded-settlement.ts (pure, deterministic, integer-safe; no env/network/fs/exit; DI for registry/price/replay/clock)",
+    "tests": "packages/rialto/src/guarded-settlement.test.ts (fail-closed matrix, QEX-1 replay non-production, happy path READY_OFFLINE_ONLY, network tripwire)",
+    "doc": "docs/audit/BPS_RIALTO_GUARDED_SETTLEMENT_2026-07-25.md",
+    "candidatePolicy": "chain 4663; feature 2; WETH->NVDA only; no integrator fee; platform fee <=5 bps; slippage 50/100 bps; deviation <=100 bps; lifetime <=300s; selector allow-list EMPTY (0x77963966 evidence-only); taker/caps/ages/price-source UNRESOLVED (fail closed)",
+    "readyStatus": "READY_OFFLINE_ONLY is NEVER execution authorization; production candidate policy is not ready",
+    "solidity": "DEFERRED — forge-std not vendored (packages/contracts/lib gitignored/absent) so the Foundry test runner cannot run offline; OZ + IRialtoRouterRegistry ABI present; contract-ready interface added: packages/contracts/src/interfaces/IGuardedSettlementExecutor.sol",
+    "verification": "OFFLINE only — @bps/rialto typecheck + build + eslint clean, vitest 201/201; zero network requests; no signing/funding/approval/simulation/deployment/broadcast",
+    "decisionStates": "D-5 candidate (approval required); D-6 open; D-8 candidate (approval-pending); D-21 candidate (executor verification open); D-22B interface+offline enforcement (trusted source unresolved); D-3 counsel-pending; D-23 counsel-pending; D-24 stands; D-17 unchanged",
+    "remainingGatesForCanary": [
+      "approved selector proven from a repo-owned/vendored router ABI (D-6)",
+      "final guarded-executor/Safe taker address (D-6)",
+      "dated runtime ownerOf(2) registry strategy (D-6)",
+      "trusted production price source + age limit (D-22B)",
+      "per-token sell cap (D-8)",
+      "vendored forge-std -> concrete executor + Foundry tests (D-21/D-5)"
+    ]
   }
 }

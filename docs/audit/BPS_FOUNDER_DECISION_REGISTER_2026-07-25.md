@@ -102,6 +102,20 @@ unresolved — one observed quote cannot close it); **D-8** open (50 bps was a t
 **D-22B** open; **D-23** counsel-pending; **D-24** stands (no acquisition/execution). Ballot **D-17**
 untouched.
 
+### Guarded settlement core (2026-07-25, TASK 10K-3)
+
+A production-shaped but **deliberately disabled** guarded-settlement core was implemented **offline** in
+`packages/rialto/src/guarded-settlement.ts` (see `docs/audit/BPS_RIALTO_GUARDED_SETTLEMENT_2026-07-25.md`).
+It records **candidate** safeguards without closing any unresolved decision: **D-5** candidate
+exact-allowance settlement (founder/security approval still required); **D-6** remains open (selector
+unproven/unapproved, final taker unknown, dated runtime registry strategy unapproved); **D-8** candidate
+50-bps default / 100-bps ceiling (production policy approval-pending); **D-21** replay + exact-allowance
+mitigations offline (on-chain executor verification open); **D-22B** price-guard interface + offline
+enforcement (trusted production source unresolved); **D-3** and **D-23** counsel-pending; **D-24 stands**
+(no acquisition/execution). Ballot **D-17 unchanged**. The Solidity executor is deferred (forge-std absent
+offline); a contract-ready interface `packages/contracts/src/interfaces/IGuardedSettlementExecutor.sol`
+records the invariants. `READY_OFFLINE_ONLY` is never execution authorization.
+
 ## Restricted Rialto access request (DRAFT — NOT SENT)
 
 The exact text is preserved in the ballot §5 and the decision pack. Decision: `SEND MANUALLY`.

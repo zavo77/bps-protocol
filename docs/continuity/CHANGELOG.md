@@ -7,6 +7,36 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-25 — TASK 10K-3: guarded-settlement core (production-shaped, deliberately DISABLED)
+
+- **Type:** offline code + tests + concise docs. NO Rialto request, API key use/read, RPC/website/
+  registry/external API, network client, signing/funding/approval/simulation/deployment/submission/
+  broadcast, enabled execution path, QEX-1 re-enable, or push/PR. Zero network requests (network tripwire
+  in every test). Continuity gate followed; commit `46c9855` (10K-2) preserved.
+- **Core:** `packages/rialto/src/guarded-settlement.ts` — pure, deterministic, integer-safe (bigint;
+  floor deviation rounding), no import-time side effects, DI for registry/price/replay/clock. Typed
+  `SettlementPolicy`, domain-separated `computeIntentDigest`, and `evaluateGuardedSettlement` with
+  registry/selector/taker/token/amount/fee/value/price(D-22B)/replay+expiry guards and a full non-generic
+  `GuardStatus` set. Returns a sanitized immutable settlement plan (reverify → exact-approve → verified
+  router call → min-return → clear allowance → consume → record) ONLY as `READY_OFFLINE_ONLY`, which is
+  never execution authorization. Deliberately disabled: empty production selector list, unresolved
+  taker/caps/ages/price source ⇒ fail closed.
+- **Replay demo:** `replayQex1Evidence` shows the sanitized QEX-1 evidence is NOT production-ready
+  (SELECTOR_UNAPPROVED, TAKER_UNRESOLVED, AMOUNT_LIMIT_UNRESOLVED, PRICE_SOURCE_UNRESOLVED,
+  REGISTRY_OBSERVATION_STALE, …) and lists the remaining gates. No calldata/credentials printed.
+- **Solidity:** DEFERRED — `forge-std` is not vendored (`packages/contracts/lib/` gitignored/absent) so
+  the Foundry test runner cannot run offline and installing it needs a forbidden network download. Added
+  the contract-ready interface `packages/contracts/src/interfaces/IGuardedSettlementExecutor.sol` mirroring
+  the TS invariants. Missing prerequisite: vendored forge-std + confirmed offline `forge build`/`forge test`.
+- **Governance (candidates only; nothing closed):** D-5 candidate exact-allowance (approval required);
+  D-6 open (selector/taker/dated-registry unresolved); D-8 candidate 50/100 bps (approval-pending); D-21
+  replay+exact-allowance offline (executor verification open); D-22B price interface+offline enforcement
+  (trusted source unresolved); D-3 counsel-pending; D-23 counsel-pending; **D-24 stands**; D-17 unchanged.
+  QEX-1 remains CONSUMED.
+- **Verification:** OFFLINE only — `@bps/rialto` typecheck + build + eslint clean, vitest **201/201**;
+  format:check + JSON validation clean; no `rialto_live_` key body in tracked files. Commit
+  `feat(rialto): add guarded settlement core`.
+
 ## 2026-07-25 — TASK 10K-2: record QEX-1 quote evidence + offline structural replay
 
 - **Type:** offline evidence recording + validation only. NO Rialto request, NO API key use/read, NO

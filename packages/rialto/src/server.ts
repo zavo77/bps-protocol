@@ -11,3 +11,4 @@ export * from "./price-guard.js";
 export * from "./boundary-status.js";
 export * from "./quote-eval-cli.js";
 export * from "./registry-structural.js";
+export * from "./guarded-settlement.js";
