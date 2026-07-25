@@ -278,24 +278,72 @@ const USAGE = [
   "This harness performs GET /quote ONLY. It never signs, funds, approves, or broadcasts.",
 ].join("\n");
 
-async function main(): Promise<void> {
+// ---------------------------------------------------------------------------------------------------
+// QEX-1 CONSUMED GUARD (TASK 10K-2).
+// QEX-1 authorized EXACTLY ONE authenticated GET /quote, which succeeded on 2026-07-25 and is COMPLETE.
+// The live CLI is now RETIRED: it must fail with `QEX1_CONSUMED` BEFORE reading any environment variable
+// or invoking any network code. This is a hard-coded SOURCE constant — no environment variable can
+// re-enable it. Any future live quote requires a separately reviewed source change AND a new founder
+// authorization (and, per D-24, that still authorizes no acquisition/execution). The reviewed quote
+// client (quote-client.ts) and the offline harness function (runQuoteEval) are intentionally NOT deleted.
+// ---------------------------------------------------------------------------------------------------
+export const QEX1_CONSUMED: boolean = true;
+export const QEX1_CONSUMED_STATUS = "QEX1_CONSUMED";
+
+export function evaluateLiveCliAuthorization(): {
+  readonly allowed: boolean;
+  readonly status: string;
+} {
+  if (QEX1_CONSUMED) return { allowed: false, status: QEX1_CONSUMED_STATUS };
+  return { allowed: true, status: "OK" };
+}
+
+/**
+ * Live CLI entry (testable). Checks the QEX-1 consumed guard FIRST — before any environment read or any
+ * network activity — and refuses when consumed. `env` and `deps` are only touched on the (currently
+ * unreachable) allowed path, so an accidental rerun never reads a credential or reaches the network.
+ */
+export async function runLiveQex1Cli(
+  env: Record<string, string | undefined>,
+  deps: RialtoQuoteDeps,
+  out: (s: string) => void,
+  errOut: (s: string) => void,
+): Promise<{ readonly status: string; readonly exitCode: number }> {
+  const auth = evaluateLiveCliAuthorization();
+  if (!auth.allowed) {
+    errOut(
+      `${auth.status}: QEX-1 is consumed (exactly one GET /quote succeeded on 2026-07-25). ` +
+        "A new live quote requires a separately reviewed source change and a new founder authorization. " +
+        "No environment variable can bypass this guard.\n",
+    );
+    return { status: auth.status, exitCode: 3 };
+  }
+  // NOTE: unreachable while QEX1_CONSUMED is true. Retained (not deleted) as the reviewed harness path.
   let built;
   try {
-    built = configFromEnv(process.env);
+    built = configFromEnv(env);
   } catch (err) {
-    process.stderr.write(`${err instanceof Error ? err.message : "invalid configuration"}\n\n`);
-    process.stderr.write(`${USAGE}\n`);
-    process.exitCode = 2;
-    return;
+    errOut(`${err instanceof Error ? err.message : "invalid configuration"}\n\n${USAGE}\n`);
+    return { status: "BAD_CONFIG", exitCode: 2 };
   }
-  const report = await runQuoteEval(
-    built.config,
-    built.request,
+  const report = await runQuoteEval(built.config, built.request, deps, {
+    resolvedRouter: built.resolvedRouter,
+  });
+  out(`${JSON.stringify(report, null, 2)}\n`);
+  return {
+    status: report.ok ? "OK" : (report.fetchErrorCode ?? "ERROR"),
+    exitCode: report.ok ? 0 : 1,
+  };
+}
+
+async function main(): Promise<void> {
+  const result = await runLiveQex1Cli(
+    process.env,
     {},
-    { resolvedRouter: built.resolvedRouter },
+    (s) => process.stdout.write(s),
+    (s) => process.stderr.write(s),
   );
-  // Emit ONLY the sanitized report. No key, no headers, no environment values are ever written.
-  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  process.exitCode = result.exitCode;
 }
 
 // Direct-run guard: main() executes only when this file is run as a script, never on import.

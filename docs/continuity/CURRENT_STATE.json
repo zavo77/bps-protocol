@@ -1,29 +1,32 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-25T21:30:00Z",
+  "updatedUtc": "2026-07-25T23:10:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "1d580e332f572d75f480bbc54921c1e8dfd76ac5",
+  "head": "851a816311d60f0a08ceeae6894b5af128667eef",
   "workingTree": {
     "dirty": true,
-    "note": "TASK 10K-1 checkpoint 1d580e3 committed. TASK 10K-1A (quote-eval units + origin + governance correction) changes uncommitted at capture.",
+    "note": "TASK 10K-1A checkpoint 851a816 committed. TASK 10K-2 (QEX-1 evidence + offline structural replay + live CLI retirement) changes uncommitted at capture.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
       "docs/continuity/CHANGELOG.md",
       "docs/audit/BPS_FOUNDER_DECISION_REGISTER_2026-07-25.md",
-      "packages/rialto/src/quote-client.ts",
-      "packages/rialto/src/quote-client.test.ts",
       "packages/rialto/src/quote-eval-cli.ts",
       "packages/rialto/src/quote-eval-cli.test.ts",
-      "packages/rialto/src/quote-structural.test.ts"
+      "packages/rialto/src/server.ts"
     ],
-    "untracked": []
+    "untracked": [
+      "docs/audit/BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.md",
+      "docs/audit/BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.evidence.json",
+      "packages/rialto/src/registry-structural.ts",
+      "packages/rialto/src/registry-structural.test.ts"
+    ]
   },
   "phase": "post-canary",
-  "latestCompletedMilestone": "TASK 10K-1A — corrected quote-eval units (human-decimal sell_amount), enforced official origin, expanded sanitized report, renamed exception QEX-1 (D-2 read-only preference preserved) (2026-07-25)",
-  "currentTask": "TASK 10K-1A corrected + verified offline (rialto vitest 129/129); no live GET /quote run — blocked on runtime inputs (taker, RIALTO_SELL_AMOUNT_DECIMAL, slippage) and a rotated key; official origin is the built-in default",
-  "nextTask": "Founder revokes the exposed key + issues a fresh bundled key, runs the harness locally via the masked secret-entry method (HANDOVER §P) with real inputs, returns the sanitized report; then reconcile tx.to against the official router registry before any D-6 pinning. D-24 stands — no acquisition/execution",
+  "latestCompletedMilestone": "TASK 10K-2 — recorded QEX-1 quote evidence + pure offline registry-structural replay; QEX-1 CONSUMED/COMPLETE; live CLI retired (QEX1_CONSUMED) (2026-07-25)",
+  "currentTask": "none — QEX-1 evidence persisted (rialto vitest 150/150, zero network); live CLI retired; no further quote/acquisition authorized",
+  "nextTask": "Founder/security decision on D-6 (production pin of the feature-2 router + selector): requires a DATED registry re-confirmation, an explicitly approved selector allow-list, and the final taker — not suppliable by one observed quote. Not implemented/authorized here. D-24 stands — no acquisition/execution",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,
@@ -389,23 +392,23 @@
   "quoteEvaluation": {
     "date": "2026-07-25",
     "decision": "QEX-1 — Isolated Rialto Quote-Evaluation Exception",
+    "qex1Status": "CONSUMED / COMPLETE — exactly one authenticated GET /quote on 2026-07-25; no retry or additional quote authorized",
     "d2Status": "PRESERVED — founder read-only-key preference; currently unavailable via Rialto dashboard. QEX-1 is a bounded exception, NOT an erasure of D-2",
-    "venueConstraint": "Rialto issues no read-only key; every key bundles quote:read + swap:create + swap:integrator",
     "exceptionVerbatim": "D-2 is superseded by the confirmed venue constraint. A mandatory bundled Rialto key may be used solely in an isolated, non-executing quote-evaluation environment with no signing key, funded wallet, allowance, Permit2 signature or swap-submission route. This exception authorizes GET /quote testing only. It does not authorize acquisition or execution under D-24.",
     "officialOrigin": "https://rialto-trade-api.rialto.xyz (enforced; BAD_ORIGIN fail-closed on any other protocol/host/credentials/port/path/fragment/query)",
-    "sellAmountUnits": "GET /quote sell_amount is HUMAN-DECIMAL (RIALTO_SELL_AMOUNT_DECIMAL); returned raw validated against decimal * 10^18 (WETH)",
-    "harness": "packages/rialto/src/quote-eval-cli.ts",
-    "harnessProperties": "GET /quote only; key from RIALTO_API_KEY (never logged/returned); no signer/wallet/allowance/Permit2/submission path; fail-closed structural validation; prints only sanitized fields (selector + byte length, never full calldata; SHA-256 of quote_id, never raw)",
-    "verification": "OFFLINE only — @bps/rialto typecheck + build clean, eslint clean, vitest 129/129; NO live GET /quote run",
-    "liveRunBlockedOn": [
-      "taker address (RIALTO_TAKER, unfunded validation/canary adapter)",
-      "RIALTO_SELL_AMOUNT_DECIMAL (D-7 records no exact usable quantity; operator must supply) and RIALTO_SLIPPAGE_BPS (D-8 deferred)",
-      "a rotated key (the key pasted into chat is exposed/compromised and should be revoked)"
+    "liveCliRetired": "packages/rialto/src/quote-eval-cli.ts now fails with QEX1_CONSUMED before any env read or network call; no env override bypasses it; reviewed quote client not deleted; future live quote requires a separately reviewed source change + new founder authorization",
+    "evidence": [
+      "docs/audit/BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.md",
+      "docs/audit/BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.evidence.json"
     ],
-    "keyExposure": "the bundled key value was pasted into the working chat; treat as compromised — revoke and reissue; store only in a secret manager (D-4); never in repo/files/logs",
-    "routerSelector": "tx.to and observed selector are CANDIDATES only — not approved, pinned, or production-configured; reconcile against official registry 0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E (feature 2 taker-submitted; feature 3 gasless)",
+    "offlineEvaluator": "packages/rialto/src/registry-structural.ts (pure; no network/env/key); reconciles a quote target against a SEPARATE undated registry observation independently of selector approval; fail-closed on malformed/zero/paused/mismatch/prev-next-only/missing/wrong-chain",
+    "registryObservation": "conversation-supplied, read-only, UNDATED (block/time unavailable): registry 0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E feature 2 (taker-submitted); currentRouter 0xc94135b63772b91d79d0a2daab2a8801f32359bd; previous/next zero; paused false; NOT permanent authority; feature 3 = gasless",
+    "derivedReplay": "SELECTOR_UNAPPROVED — router matched the reported current feature-2 router for that undated snapshot only; selector 0x77963966 evidence-only (not approved/pinned); productionStructuralApproved=false; D-6 OPEN",
+    "originalStructuralResultPreserved": "passed=false, ROUTER_UNRESOLVED, boundary QUOTE_OBSERVED (unchanged in the evidence artifact)",
+    "securityOmissions": "no API key/credential; raw quote_id NOT stored (SHA-256 only); complete calldata NOT stored (selector + byte length only); no PowerShell secret material; NVDA human-decimal not derived (raw buy amounts retained as authoritative)",
+    "verification": "OFFLINE only — @bps/rialto typecheck + build clean, eslint clean, vitest 150/150; zero network requests; NO live GET /quote",
     "d3": "COUNSEL-PENDING — production possession/use of the broader-scope (swap:create/swap:integrator) key; must stay isolated from any signing key or on-chain allowance",
-    "openDecisions": "D-5, D-6, D-8, D-21, D-22B, D-23, D-24 remain open; QEX-1 closes none of them",
+    "openDecisions": "D-5, D-6, D-8, D-21, D-22B remain open; D-23 counsel-pending; D-24 stands; QEX-1 closes none of them; ballot D-17 untouched",
     "d24": "stands — no acquisition/execution authorized"
   }
 }

@@ -4,6 +4,9 @@ import { createHash } from "node:crypto";
 import {
   runQuoteEval,
   configFromEnv,
+  runLiveQex1Cli,
+  evaluateLiveCliAuthorization,
+  QEX1_CONSUMED_STATUS,
   OFFICIAL_RIALTO_ORIGIN,
   OFFICIAL_RIALTO_ROUTER_REGISTRY,
   type RialtoQuoteConfig,
@@ -222,6 +225,60 @@ describe("runQuoteEval — isolated non-executing GET /quote harness", () => {
       { resolvedRouter: ROUTER, nowSec: 1_700_000_000 },
     );
     expect(resolved.structural.errorCode).toBe("SELECTOR_POLICY_MISSING");
+  });
+});
+
+describe("QEX-1 consumed guard (live CLI retired)", () => {
+  it("evaluateLiveCliAuthorization reports QEX1_CONSUMED", () => {
+    const a = evaluateLiveCliAuthorization();
+    expect(a.allowed).toBe(false);
+    expect(a.status).toBe(QEX1_CONSUMED_STATUS);
+    expect(a.status).toBe("QEX1_CONSUMED");
+  });
+
+  it("stops with QEX1_CONSUMED BEFORE reading env or invoking network", async () => {
+    const tripEnv = new Proxy({} as Record<string, string | undefined>, {
+      get(_t, prop) {
+        throw new Error(`env read attempted: ${String(prop)}`);
+      },
+      has() {
+        throw new Error("env membership test attempted");
+      },
+    });
+    const tripFetch = (() => {
+      throw new Error("network attempted");
+    }) as unknown as typeof fetch;
+    const outs: string[] = [];
+    const errs: string[] = [];
+    const result = await runLiveQex1Cli(
+      tripEnv,
+      { fetchImpl: tripFetch, env: tripEnv },
+      (s) => outs.push(s),
+      (s) => errs.push(s),
+    );
+    expect(result.status).toBe("QEX1_CONSUMED");
+    expect(result.exitCode).toBe(3);
+    expect(errs.join("")).toContain("QEX1_CONSUMED");
+    expect(outs).toEqual([]); // no report emitted; env/network never touched
+  });
+
+  it("no environment variable can bypass the consumed guard", async () => {
+    const bypassEnv: Record<string, string | undefined> = {
+      RIALTO_API_KEY: "should-be-ignored",
+      RIALTO_QEX1_OVERRIDE: "1",
+      QEX1_CONSUMED: "false",
+    };
+    const tripFetch = (() => {
+      throw new Error("network attempted");
+    }) as unknown as typeof fetch;
+    const result = await runLiveQex1Cli(
+      bypassEnv,
+      { fetchImpl: tripFetch },
+      () => {},
+      () => {},
+    );
+    expect(result.status).toBe("QEX1_CONSUMED");
+    expect(result.exitCode).toBe(3);
   });
 });
 

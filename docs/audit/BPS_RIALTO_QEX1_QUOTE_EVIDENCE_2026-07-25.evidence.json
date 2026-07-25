@@ -1,0 +1,119 @@
+{
+  "task": "TASK 10K-2",
+  "artifact": "BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.evidence.json",
+  "generated": "2026-07-25",
+  "exception": "QEX-1 — Isolated Rialto Quote-Evaluation Exception",
+  "qex1Status": "CONSUMED / COMPLETE",
+  "quotesAuthorized": 1,
+  "quotesExecuted": 1,
+  "retryOrAdditionalQuoteAuthorized": false,
+  "isTradeAcquisitionApprovalSimulationOrProductionConfig": false,
+  "notes": "Founder-supplied sanitized result of exactly one authenticated Rialto GET /quote on 2026-07-25. This is a quote evaluation only — NOT a trade, acquisition, approval, simulation, or production configuration.",
+  "request": {
+    "chainId": 4663,
+    "origin": "https://rialto-trade-api.rialto.xyz",
+    "sellToken": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "buyToken": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "taker": "0x000000000000000000000000000000000000dEaD",
+    "sellAmountDecimal": "0.01",
+    "slippageBpsUsedForEvaluation": 50,
+    "settlementModeRequested": "allowance",
+    "integratorFeeRequested": false
+  },
+  "originalQuoteResponse": {
+    "sellAmountRaw": "10000000000000000",
+    "buyAmountRaw": "89851839610797975",
+    "minBuyAmountRaw": "89402580412743985",
+    "settlementMode": "allowance",
+    "platformFeeTotalBps": 5,
+    "networkFeeEstimate": null,
+    "issues": {
+      "balance": "none",
+      "simulationIncomplete": false,
+      "allowanceSpender": "0xc94135b63772b91d79d0a2daab2a8801f32359bd"
+    },
+    "routeLegs": [{ "pool": null, "feeTier": null, "tokenIn": null, "tokenOut": null }],
+    "txTarget": "0xc94135b63772b91d79d0a2daab2a8801f32359bd",
+    "selector": "0x77963966",
+    "callDataBytes": 804,
+    "txValue": "0",
+    "quoteCreatedAtSec": null,
+    "quoteExpirySec": null,
+    "quoteIdSha256": "dec2c2aed9f126c70bd7d0a0a783e933667640cc9514f004128963443fa367f0"
+  },
+  "originalStructuralResult": {
+    "passed": false,
+    "errorCode": "ROUTER_UNRESOLVED",
+    "boundaryStatus": "QUOTE_OBSERVED",
+    "note": "Captured unchanged. At evaluation time no live-resolved router was supplied to the structural validator, so it failed closed with ROUTER_UNRESOLVED."
+  },
+  "evaluatorRun": {
+    "exitCode": 0,
+    "apiKeyRemovedAfterExecution": true,
+    "allRialtoEnvVarsCleared": true
+  },
+  "registryObservation": {
+    "source": "conversation-supplied, read-only",
+    "registry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+    "feature": 2,
+    "featureMeaning": "taker-submitted route",
+    "currentRouter": "0xc94135b63772b91d79d0a2daab2a8801f32359bd",
+    "previousRouter": "0x0000000000000000000000000000000000000000",
+    "nextRouter": "0x0000000000000000000000000000000000000000",
+    "paused": false,
+    "blockNumber": null,
+    "observationTimeUtc": null,
+    "observedTargetMatchesCurrentRouter": true,
+    "feature3": "gasless route",
+    "authority": "UNDATED SNAPSHOT — NOT permanent authority; recorded separately from the quote response"
+  },
+  "derivedOfflineReplayResult": {
+    "computedBy": "packages/rialto/src/registry-structural.ts deriveStructuralReplay (pure offline; no network/env)",
+    "derivedStatus": "SELECTOR_UNAPPROVED",
+    "routerReconciled": true,
+    "registryPaused": false,
+    "snapshotDated": false,
+    "selector": "0x77963966",
+    "selectorApproved": false,
+    "selectorFunctionName": null,
+    "productionStructuralApproved": false,
+    "d6": "OPEN",
+    "registryReconciliation": {
+      "code": "OK",
+      "routerReconciled": true,
+      "matchedCurrent": true,
+      "matchedPreviousOnly": false,
+      "matchedNextOnly": false,
+      "snapshotDated": false
+    },
+    "statements": [
+      "Router target matched the reported current feature-2 router.",
+      "Registry snapshot reported paused=false.",
+      "Router reconciliation succeeded only for that undated snapshot.",
+      "Selector 0x77963966 remains evidence-only.",
+      "Selector is not approved or pinned.",
+      "Overall production structural approval remains false.",
+      "D-6 remains open."
+    ]
+  },
+  "governanceLimitations": {
+    "qex1": "CONSUMED / COMPLETE — exactly one successful GET /quote; no retry or additional quote authorized",
+    "d2": "read-only-key preference PRESERVED (currently unavailable via Rialto dashboard); QEX-1 was a bounded exception, not an erasure",
+    "d3": "COUNSEL-PENDING — production possession/use of the broader-scope bundled credential",
+    "d5": "OPEN — 'allowance' was a quote-evaluation input only, NOT D-5 production approval",
+    "d6": "OPEN — router matched the reported feature-2 snapshot, but the selector, final taker, and production pinning remain unresolved",
+    "d8": "OPEN — 50 bps was a test value, not production policy",
+    "d21": "OPEN — allowance-mode replay / obligation-on-retrieval unresolved",
+    "d22b": "OPEN — price-guard trust model / guarded executor not implemented",
+    "d23": "COUNSEL-PENDING — legal eligibility",
+    "d24": "STANDS — no acquisition, funding, allowance, simulation, deployment, or execution authorized",
+    "ballotD17": "UNTOUCHED — per-acquisition cap USD 250 (unchanged)"
+  },
+  "fieldsOmittedForSecurity": [
+    "API key and any credential fragment",
+    "raw quote_id (only its SHA-256 digest is retained)",
+    "complete calldata (only the 4-byte selector and byte length are retained)",
+    "PowerShell secret-entry material",
+    "human-decimal NVDA buy amount (raw buy amounts are retained as authoritative; NVDA human-decimal deliberately not derived here)"
+  ]
+}

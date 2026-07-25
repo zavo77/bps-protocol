@@ -7,6 +7,39 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-25 — TASK 10K-2: record QEX-1 quote evidence + offline structural replay
+
+- **Type:** offline evidence recording + validation only. NO Rialto request, NO API key use/read, NO
+  RPC/website/external API, NO network client, NO signing/simulation/approval/funding/deploy/submit/
+  broadcast, NO transaction-execution path, NO change to any production approval or acquisition boundary,
+  NO push/PR. Zero network requests (tests carry a network tripwire). Continuity gate followed. Commit
+  `851a816` (10K-1A) preserved (not amended).
+- **QEX-1:** CONSUMED / COMPLETE — exactly one authenticated GET /quote on 2026-07-25; no retry or
+  additional quote authorized.
+- **Evidence artifact:** `docs/audit/BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.{md,evidence.json}`
+  (flat `docs/audit/BPS_RIALTO_*` convention; no `docs/audit/rialto/` subtree). Records the sanitized
+  quote response (raw sell/buy/min-buy, settlement `allowance`, platform fee 5 bps, tx.to
+  `0xc94135b63772b91d79d0a2daab2a8801f32359bd`, selector `0x77963966`, calldata byte length 804, tx.value
+  0, one all-null route leg, SHA-256 of quote_id only), the original structural result
+  (`ROUTER_UNRESOLVED`, preserved unchanged), a SEPARATE read-only UNDATED registry observation, the
+  derived offline replay, governance limitations, and fields omitted for security.
+- **Offline evaluator:** `packages/rialto/src/registry-structural.ts` assesses the registry observation
+  SEPARATELY from selector approval; fails closed on malformed addr/selector, zero current router, paused
+  feature, target != current, previous/next-only match, missing fields, wrong chain. Derived result for
+  this evidence: router reconciled against the undated snapshot only -> `SELECTOR_UNAPPROVED`; selector
+  evidence-only (not approved/pinned); production structural approval false; D-6 open. One observed
+  selector cannot self-approve or close D-6.
+- **QEX-1 retired:** the live CLI now stops with `QEX1_CONSUMED` before any env read or network call; no
+  environment variable bypasses the guard; the reviewed quote client is not deleted; a future live quote
+  needs a separately reviewed source change + new founder authorization.
+- **Governance (unchanged by this evidence):** D-2 read-only preference preserved; D-3 counsel-pending;
+  D-5 open (`allowance` was evaluation input only); D-6 open (selector/final taker/production pinning
+  unresolved); D-8 open (50 bps was a test value); D-21 open; D-22B open; D-23 counsel-pending; D-24
+  stands; ballot D-17 untouched.
+- **Verification:** OFFLINE only — `@bps/rialto` typecheck + build + eslint clean, vitest **150/150**;
+  format:check + JSON validation clean; no `rialto_live_` key body in tracked files. Commit
+  `chore(rialto): record QEX-1 quote evidence`.
+
 ## 2026-07-25 — TASK 10K-1A: correct quote-eval units, official origin, and governance
 
 - **Type:** corrective code + documentation. NO live GET /quote, NO credential used, NO acquisition,

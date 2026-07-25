@@ -86,6 +86,22 @@ transmits `sell_amount` as a **human-decimal** amount (not raw base units); (g) 
 isolated, non-executing harness `packages/rialto/src/quote-eval-cli.ts`. Recorded in HANDOVER §M as
 **QEX-1**.
 
+### QEX-1 consumption (2026-07-25, TASK 10K-2)
+
+QEX-1 is **CONSUMED / COMPLETE**: exactly one authenticated `GET /quote` succeeded on 2026-07-25. **No
+retry or additional quote is authorized.** The sanitized evidence is recorded in
+[`BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.evidence.json`](./BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.evidence.json)
+(and its `.md`), and the live CLI is retired (fails `QEX1_CONSUMED` before any env read or network call).
+Derived offline replay against the SEPARATE, undated registry observation: the target matched the
+reported current feature-2 router and the snapshot reported `paused=false`, so router reconciliation
+succeeded **for that undated snapshot only**; the selector `0x77963966` remains **evidence-only** (not
+approved or pinned); overall production structural approval remains **false**. Decision states are
+unchanged by this evidence: **D-2** read-only preference preserved; **D-3** counsel-pending; **D-5** open
+(`allowance` was evaluation input only); **D-6** open (selector, final taker, and production pinning
+unresolved — one observed quote cannot close it); **D-8** open (50 bps was a test value); **D-21**,
+**D-22B** open; **D-23** counsel-pending; **D-24** stands (no acquisition/execution). Ballot **D-17**
+untouched.
+
 ## Restricted Rialto access request (DRAFT — NOT SENT)
 
 The exact text is preserved in the ballot §5 and the decision pack. Decision: `SEND MANUALLY`.
