@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 // Import through the public server entry ("@bps/rialto/server" maps to ./server.js) to exercise the
 // same boundary consumers must use — never the client-reachable main barrel.
 import {
   fetchRialtoAllowanceQuote,
   RialtoQuoteError,
+  OFFICIAL_RIALTO_ORIGIN,
+  assertOfficialRialtoOrigin,
+  decimalToBaseUnits,
   type RialtoQuoteConfig,
   type RialtoQuoteRequest,
 } from "./server.js";
@@ -15,14 +18,14 @@ const ROUTER = "0x71a120cbbf3ce7cd910a3c50ff77afc62735687e";
 const PLACEHOLDER_KEY = "test-placeholder-key-not-a-real-credential";
 
 const CONFIG: RialtoQuoteConfig = {
-  apiBaseUrl: "https://quote.example.test",
+  apiBaseUrl: OFFICIAL_RIALTO_ORIGIN,
   chainId: 4663,
   wethAddress: WETH,
   adapterAddress: ADAPTER,
   slippageBps: 50,
 };
 
-const REQUEST: RialtoQuoteRequest = { buyToken: STOCK, sellAmountRaw: 20_000000000000000000n };
+const REQUEST: RialtoQuoteRequest = { buyToken: STOCK, sellAmountDecimal: "20" };
 
 /** A fully valid allowance quote response body. */
 function validBody(): Record<string, unknown> {
@@ -90,9 +93,15 @@ describe("fetchRialtoAllowanceQuote", () => {
     expect(result.target).toBe(ROUTER);
     expect(result.callData).toBe("0x12345678abcdef");
     expect(result.sellAmountRaw).toBe(20_000000000000000000n);
+    expect(result.sellAmountDecimal).toBe("20");
     expect(result.minBuyAmountRaw).toBe(1_980_000000000000000000n);
     expect(result.buyToken).toBe(STOCK);
     expect(result.quoteExpiry).toBe(1893456000);
+    expect(result.meta.returnedSellAmountRaw).toBe("20000000000000000000");
+    expect(result.meta.requestedSellAmountDecimal).toBe("20");
+    expect(result.meta.integratorFeeRequested).toBe(false);
+    expect(result.meta.selector).toBe("0x12345678");
+    expect(result.meta.callDataBytes).toBe(7);
   });
 
   it("forces the required query parameters and bearer auth", async () => {
@@ -108,7 +117,8 @@ describe("fetchRialtoAllowanceQuote", () => {
     expect(seenUrl).toContain("settlement=allowance");
     expect(seenUrl).toContain(`sell_token=${WETH.toLowerCase()}`);
     expect(seenUrl).toContain(`buy_token=${STOCK.toLowerCase()}`);
-    expect(seenUrl).toContain("sell_amount=20000000000000000000");
+    expect(seenUrl).toContain("sell_amount=20");
+    expect(seenUrl).not.toContain("sell_amount=20000000000000000000"); // decimal, not raw base units
     expect(seenUrl).toContain(`taker=${ADAPTER.toLowerCase()}`);
     expect(seenUrl).not.toContain("swap_fee_bps"); // no integrator fee
     expect(seenUrl).not.toContain("permit2");
@@ -258,5 +268,87 @@ describe("fetchRialtoAllowanceQuote", () => {
       }),
       "MISSING_API_KEY",
     );
+  });
+
+  it("transmits sell_amount as a human-decimal value, not raw base units", async () => {
+    let seenUrl = "";
+    const spy: typeof fetch = (async (url: string) => {
+      seenUrl = url;
+      const b = validBody();
+      b.sell_amount = "10000000000000000"; // 0.01 WETH in raw base units
+      return { ok: true, status: 200, text: async () => JSON.stringify(b) } as Response;
+    }) as unknown as typeof fetch;
+    await fetchRialtoAllowanceQuote(
+      CONFIG,
+      { buyToken: STOCK, sellAmountDecimal: "0.01" },
+      { fetchImpl: spy, env: ENV },
+    );
+    expect(seenUrl).toContain("sell_amount=0.01");
+    expect(seenUrl).not.toContain("10000000000000000");
+  });
+});
+
+describe("official-origin enforcement (fail closed before any network)", () => {
+  const badOrigins: Array<[string, string]> = [
+    ["http://rialto-trade-api.rialto.xyz", "wrong protocol"],
+    ["https://evil.example.com", "wrong host"],
+    ["https://rialto-trade-api.rialto.xyz.evil.com", "look-alike host"],
+    ["https://user:pass@rialto-trade-api.rialto.xyz", "embedded credentials"],
+    ["https://rialto-trade-api.rialto.xyz:8443", "explicit port"],
+    ["https://rialto-trade-api.rialto.xyz/v2", "unexpected path"],
+    ["https://rialto-trade-api.rialto.xyz/#frag", "fragment"],
+    ["https://rialto-trade-api.rialto.xyz/?x=1", "query string"],
+    ["not a url", "unparseable"],
+  ];
+
+  it.each(badOrigins)("rejects %s (%s) with BAD_ORIGIN and performs no request", async (origin) => {
+    const spy = vi.fn((async () => {
+      throw new Error("network must not be called");
+    }) as unknown as typeof fetch);
+    await expectCode(
+      fetchRialtoAllowanceQuote({ ...CONFIG, apiBaseUrl: origin }, REQUEST, {
+        fetchImpl: spy,
+        env: ENV,
+      }),
+      "BAD_ORIGIN",
+    );
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("accepts the official origin", () => {
+    expect(() => assertOfficialRialtoOrigin(OFFICIAL_RIALTO_ORIGIN)).not.toThrow();
+    expect(() => assertOfficialRialtoOrigin(`${OFFICIAL_RIALTO_ORIGIN}/`)).not.toThrow();
+  });
+});
+
+describe("decimal sell-amount validation (fail closed before any network)", () => {
+  it.each(["0", "-1", "1.2.3", "abc", "", "1e3", "0.0000000000000000001"])(
+    "rejects invalid decimal %o with BAD_SELL_AMOUNT and no request",
+    async (amount) => {
+      const spy = vi.fn((async () => {
+        throw new Error("network must not be called");
+      }) as unknown as typeof fetch);
+      await expectCode(
+        fetchRialtoAllowanceQuote(
+          CONFIG,
+          { buyToken: STOCK, sellAmountDecimal: amount },
+          {
+            fetchImpl: spy,
+            env: ENV,
+          },
+        ),
+        "BAD_SELL_AMOUNT",
+      );
+      expect(spy).not.toHaveBeenCalled();
+    },
+  );
+
+  it("decimalToBaseUnits converts at 18 decimals and rejects non-positive/over-precise", () => {
+    expect(decimalToBaseUnits("0.01", 18)).toBe(10_000000000000000n);
+    expect(decimalToBaseUnits("20", 18)).toBe(20_000000000000000000n);
+    expect(decimalToBaseUnits("1.5", 18)).toBe(1_500000000000000000n);
+    expect(decimalToBaseUnits("0", 18)).toBeNull();
+    expect(decimalToBaseUnits("0.0000000000000000001", 18)).toBeNull(); // 19 fractional digits
+    expect(decimalToBaseUnits("nope", 18)).toBeNull();
   });
 });

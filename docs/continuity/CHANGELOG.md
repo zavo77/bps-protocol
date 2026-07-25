@@ -7,6 +7,34 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-25 — TASK 10K-1A: correct quote-eval units, official origin, and governance
+
+- **Type:** corrective code + documentation. NO live GET /quote, NO credential used, NO acquisition,
+  execution, signing, funding, allowance, Permit2 signature, or submission. The TASK 10K-1 commit
+  (`1d580e3`) is preserved (not amended/reset). Continuity gate followed.
+- **Units:** `GET /quote` `sell_amount` is a HUMAN-DECIMAL token amount, not raw base units. Runtime input
+  renamed to `RIALTO_SELL_AMOUNT_DECIMAL` (validated positive decimal, <=18 fractional digits); the
+  request transmits the decimal (e.g. `0.01`), and the returned RAW sell amount is validated against the
+  decimal converted at WETH's 18 decimals. **D-7 records no exact usable quantity** ("minimum
+  venue-accepted amount" only) so NO default amount was invented — the operator must supply one.
+- **Origin:** official origin `https://rialto-trade-api.rialto.xyz` enforced; any other
+  protocol/host/credentials/port/path/fragment/query fails closed (BAD_ORIGIN) before any network I/O.
+- **Report:** expanded sanitized report — chain id, tokens, requested decimal, returned raw sell/buy/
+  min-buy, settlement mode, platform-fee breakdown, integrator-fee-not-requested, network-fee estimate,
+  issues, route legs, tx target, selector + byte length (never full calldata), tx value, quote created/
+  expiry, and a SHA-256 digest of `quote_id` (never the raw id).
+- **Governance:** decision renamed **QEX-1 — Isolated Rialto Quote-Evaluation Exception** (the label
+  `D-017` was ambiguous with ballot D-17, which is unchanged). **D-2's read-only preference is restored/
+  preserved**, recorded as currently unavailable via Rialto's dashboard with QEX-1 as a bounded exception
+  (NOT an erasure). D-3 counsel-pending; **D-5, D-6, D-8, D-21, D-22B, D-23, D-24 remain open**; the
+  observed router/selector are candidates only (reconcile against official registry
+  `0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E`).
+- **Run docs:** replaced the unsafe PowerShell example with a masked `Read-Host -AsSecureString` method
+  that clears `RIALTO_API_KEY` after the process exits (HANDOVER §P).
+- **Verification:** OFFLINE only — `@bps/rialto` typecheck + build + eslint clean, vitest **129/129**;
+  repo format:check + JSON validation clean; no `rialto_live_` value in tracked files. Commit
+  `fix(rialto): correct quote-eval units and governance`.
+
 ## 2026-07-25 — TASK 10K-1: isolated non-executing GET /quote eval harness + Quote-Evaluation Exception
 
 - **Type:** code (test harness) + governance decision. NO live GET /quote, NO acquisition, execution,
