@@ -7,6 +7,32 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-25 — TASK 10K-1: isolated non-executing GET /quote eval harness + Quote-Evaluation Exception
+
+- **Type:** code (test harness) + governance decision. NO live GET /quote, NO acquisition, execution,
+  signing, funding, allowance, Permit2 signature, or swap submission. Continuity gate followed.
+- **Governance (decision D-017):** founder issued a **Quote-Evaluation Exception** superseding ballot
+  **D-2**. Rialto confirmed it issues **no** `quote:read`-only key (every key bundles `quote:read` +
+  `swap:create` + `swap:integrator`), so the mandatory bundled key may be used **only** in an isolated,
+  non-executing quote-evaluation environment (no signing key, funded wallet, allowance, Permit2 signature,
+  or swap-submission route); it authorizes **GET /quote testing only** and does **not** authorize
+  acquisition/execution (**D-24 stands**). Verbatim wording recorded in the audit decision-register
+  amendment and `CURRENT_STATE.json.quoteEvaluation.exceptionVerbatim`.
+- **Security:** the bundled key carries execution-capable scopes broader than D-2 requested; **D-3**
+  (never a broader-scope key outside a reviewed settlement runbook) remains **COUNSEL-PENDING** and the key
+  must stay isolated from any signing key / on-chain allowance. The key value pasted into the working chat
+  is treated as **exposed/compromised** — revoke and reissue; store only in a secret manager (D-4).
+- **Code:** new `packages/rialto/src/quote-eval-cli.ts` (exported via `@bps/rialto/server`) reuses the
+  hardened `fetchRialtoAllowanceQuote` (key from `RIALTO_API_KEY`, never logged/returned; no signer,
+  wallet, allowance, or submission path), runs fail-closed `validateQuoteExecution` + `classifyBoundary`,
+  and prints only sanitized fields (target, selector = calldata[0:10], min-buy, expiry). New
+  `quote-eval-cli.test.ts` (+18 tests). Barrel updated in `server.ts`.
+- **Verification:** OFFLINE only — `@bps/rialto` typecheck + build clean, eslint clean, vitest
+  **107/107**. **No live GET /quote executed** (blocked on Rialto API base URL, taker, sell amount,
+  slippage, and a rotated key). Commit `feat(rialto): isolated non-executing quote-eval harness`.
+- **Next:** founder rotates the exposed key + provides runtime inputs, runs the harness locally, returns
+  the sanitized report; then pin the venue selector (D-6) from the observed calldata.
+
 ## 2026-07-25 — TASK 10J-3: persist oracle/feed evidence + founder decision register
 
 - **Type:** documentation/evidence persistence only. NO oracle/contract implementation, feed/risk

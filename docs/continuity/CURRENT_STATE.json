@@ -1,23 +1,28 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-25T18:35:00Z",
+  "updatedUtc": "2026-07-25T20:05:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "535e75347c25bb4f253ab7449cd512761f22d74e",
+  "head": "5029cff72b90887ffe447b09ec6aefe65a98e80d",
   "workingTree": {
     "dirty": true,
-    "note": "Oracle+decision-review checkpoint 535e7534 committed (11 reviewed paths). Only these post-checkpoint continuity updates remain uncommitted.",
+    "note": "TASK 10J-3 checkpoint 5029cff committed. TASK 10K-1 (quote-eval harness + Quote-Evaluation Exception) changes uncommitted at capture.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
-      "docs/continuity/CHANGELOG.md"
+      "docs/continuity/CHANGELOG.md",
+      "docs/audit/BPS_FOUNDER_DECISION_REGISTER_2026-07-25.md",
+      "packages/rialto/src/server.ts"
     ],
-    "untracked": []
+    "untracked": [
+      "packages/rialto/src/quote-eval-cli.ts",
+      "packages/rialto/src/quote-eval-cli.test.ts"
+    ]
   },
   "phase": "post-canary",
-  "latestCompletedMilestone": "TASK 10J-3 — persist oracle/feed metadata evidence + normalized founder D-1..D-24 decision register (2026-07-25)",
-  "currentTask": "none — TASK 10J-3 evidence + decision register persisted; founder ballot decisions recorded",
-  "nextTask": "Founder manually sends the drafted quote:read access request (SEND MANUALLY) and returns Rialto's response; security/engineering + counsel gates remain; no selection activated",
+  "latestCompletedMilestone": "TASK 10K-1 — isolated non-executing Rialto GET /quote evaluation harness (packages/rialto/src/quote-eval-cli.ts) + recorded founder Quote-Evaluation Exception (ballot D-2 superseded) (2026-07-25)",
+  "currentTask": "TASK 10K-1 harness built + verified offline (rialto vitest 107/107); no live GET /quote run — blocked on runtime inputs (Rialto API base URL, taker, sell amount, slippage) and a rotated key",
+  "nextTask": "Founder revokes the exposed key + issues a fresh bundled key, runs the harness locally (key stays in the founder env) with real inputs, returns the sanitized report; then pin the venue selector (D-6). D-24 stands — no acquisition/execution",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,
@@ -379,5 +384,24 @@
     "d22bBoundary": "founder-selected architectural direction ONLY; implementation NOT authorized",
     "d23": "COUNSEL-PENDING",
     "d24": "no acquisition/funding/allowance/quote/simulation/deployment/activation authorized"
+  },
+  "quoteEvaluation": {
+    "date": "2026-07-25",
+    "decision": "D-017 Quote-Evaluation Exception",
+    "supersedes": "ballot D-2 (quote:read-only key)",
+    "venueConstraint": "Rialto issues no read-only key; every key bundles quote:read + swap:create + swap:integrator",
+    "exceptionVerbatim": "D-2 is superseded by the confirmed venue constraint. A mandatory bundled Rialto key may be used solely in an isolated, non-executing quote-evaluation environment with no signing key, funded wallet, allowance, Permit2 signature or swap-submission route. This exception authorizes GET /quote testing only. It does not authorize acquisition or execution under D-24.",
+    "harness": "packages/rialto/src/quote-eval-cli.ts",
+    "harnessProperties": "GET /quote only; key from RIALTO_API_KEY (never logged/returned); no signer/wallet/allowance/Permit2/submission path; fail-closed structural validation; prints only sanitized fields",
+    "verification": "OFFLINE only — @bps/rialto typecheck + build clean, eslint clean, vitest 107/107; NO live GET /quote run",
+    "liveRunBlockedOn": [
+      "Rialto API base URL (RIALTO_API_BASE_URL)",
+      "taker address (RIALTO_TAKER, unfunded validation/canary adapter)",
+      "sell amount (RIALTO_SELL_AMOUNT, D-7 minimum) and slippage (RIALTO_SLIPPAGE_BPS, D-8 deferred)",
+      "a rotated key (the key pasted into chat is exposed/compromised and should be revoked)"
+    ],
+    "keyExposure": "the bundled key value was pasted into the working chat; treat as compromised — revoke and reissue; store only in a secret manager (D-4); never in repo/files/logs",
+    "d3": "COUNSEL-PENDING — broader-scope (swap:create/swap:integrator) key must stay isolated from any signing key or on-chain allowance",
+    "d24": "stands — no acquisition/execution authorized"
   }
 }

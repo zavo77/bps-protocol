@@ -9,3 +9,4 @@ export * from "./quote-client.js";
 export * from "./quote-structural.js";
 export * from "./price-guard.js";
 export * from "./boundary-status.js";
+export * from "./quote-eval-cli.js";
