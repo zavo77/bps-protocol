@@ -1,0 +1,262 @@
+{
+  "schemaVersion": "bps.rehearsal.fork-lifecycle/1",
+  "generatedUtc": "2026-07-25T08:55:00Z",
+  "task": "TASK 10F-1 — fork-only distribution-lifecycle rehearsal",
+  "classification": "REHEARSAL PASS",
+  "meaning": "The currently implemented lifecycle was demonstrated on a pinned local fork, with the external RWA settlement boundary explicitly mocked.",
+  "prominentStatements": {
+    "noRealRwaAcquisitionOccurred": true,
+    "externalSettlementAdapterMocked": "MockRialtoRouter (test/mocks/MockRialtoRouter.sol, development-only) substituted for the Rialto feature-2 venue via fork-local vm.mockCall of the real registry ownerOf(2); the real RialtoStockAcquisitionAdapter code executed",
+    "doesNotEstablishLegalEligibility": true,
+    "doesNotEstablishProductionReadiness": true,
+    "doesNotAuthorizeDeployment": true,
+    "doesNotConvertBpscIntoCanonicalBps": true
+  },
+  "repository": {
+    "branch": "master",
+    "startingHead": "6ace4803b5b637a58c122e2c89d5216a76dfe48d",
+    "dirtyTreeExplanation": "Pre-existing intentional post-checkpoint continuity metadata in HANDOVER.md + docs/continuity/* (preserved), plus the TASK 10F-1 files listed in filesChanged."
+  },
+  "fork": {
+    "upstreamChainId": 4663,
+    "pinnedBlockNumber": 18791290,
+    "pinnedBlockHash": "0x2d332bb08395b53f571015af9959d1a0e9c68baec300265b08fe77b38ef1516f",
+    "pinnedBlockHashSource": "docs/audit/BPS_CANARY_MAINNET_COMPLETION_2026-07-25.evidence.json (step-19 tx blockHash) AND re-fetched upstream eth_getBlockByNumber — exact match",
+    "localExecution": "Foundry in-process fork (forge test), Windows Server 2022; no standalone node; no signing key; no broadcast path",
+    "localChainId": 4663,
+    "chainIdNote": "The in-process fork preserves chainid 4663, which the deployed adapter chain gate and the claim-leaf domain binding require; isolation is provided by the in-process fork itself (mutations cannot reach upstream). A conspicuous _assertForkLocal() (activeFork + chainid) runs before every mutating stage."
+  },
+  "contractsExercised": {
+    "note": "All are the REAL deployed BPSC-TEST canary instances, interacted with only inside the fork.",
+    "bpscToken": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+    "lockingVault": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
+    "claimManager": "0x5EcbADf1cF050F1B86D44B979416A8e859Fb2574",
+    "coordinator": "0xE3Bd9e1D58d16A31912f804f931Cc6bfcD702205",
+    "stockVault": "0x9a5a55361BcFDD6Ded4A6EAa02D997F1108EdeC6",
+    "tradeRouter": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6",
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "rialtoRegistry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+    "nvdaStockToken": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC (real Robinhood Token; proxy impl 0xb35490d6f9163DE4F80d88dc75c3516eb64C5aE2 observed)",
+    "realRialtoAdapterExecuted": "0xbe2C8c6CB7CeeED24708419F5aaEEF8d949866AE (real adapter code ran; only its venue target was the mock)"
+  },
+  "localOnlyMockAddresses": {
+    "mockRialtoRouterVenue": "LOCAL_FORK_ONLY 0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f (deployed inside the fork by the test; dev-only test/mocks/MockRialtoRouter.sol, rate=1000)",
+    "fundingTechnique": "participant WETH + venue NVDA inventory seeded by fork-local storage writes (vm.store; NVDA balances at the OZ ERC-7201 namespaced ERC20 slot; WETH at an OZ-upgradeable slot layout)"
+  },
+  "forkLocalParticipants": {
+    "alice": "0x6CDb06a854168727343032DB47cc0b2757c6d023",
+    "bob": "0x8B8545380496c521EE7C45a3eF3F6c684FE02bA0",
+    "carol": "0x0D13A5e426BA32fdD77A09f3F365FBed06C39E02",
+    "testerLiveLockClaimant": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024 (fork-local prank as CLAIMANT only; its live lock is a genuine snapshot participant)"
+  },
+  "documentedImpersonations": "vm.prank of the canary role holder 0xD9Eec97DEDafe1451b7f201E416A502b93c1e203 (acquisitionOperator/rootPublisher/router owner) and of the tester as claimant — required because the roles are immutable on the deployed contracts; fork-local, no key, no signature, no broadcast.",
+  "lifecycleStagesExercised": [
+    "official-route buy (x3)",
+    "official-route sell",
+    "buy fee accounting (2% stock + 1% burn)",
+    "sell fee accounting (2% + 2% of realized proceeds)",
+    "acquisition-vault funding (accrued + new custody)",
+    "acquisition request via coordinator (authorized operator path)",
+    "simulated RWA settlement (mock venue)",
+    "80/20 distribution/reserve split + reserve delivery",
+    "participant locking (7d/14d/21d) incl. the live canary lock",
+    "deterministic snapshot (positionWeightAt at recorded timestamp)",
+    "canonical Merkle tree + root",
+    "root publication via coordinator.fundRecordedAcquisition (authorized path)",
+    "participant claims (4/4 exact amounts)",
+    "duplicate/replay + proof/authorization negatives",
+    "expired-window recovery (dust to recoveryRecipient)",
+    "proof-of-distribution reconciliation (exact conservation)"
+  ],
+  "feeParametersReadFromCode": {
+    "BUY_STOCK_BPS": 200,
+    "BUY_BURN_BPS": 100,
+    "SELL_STOCK_BPS": 200,
+    "SELL_BURN_BPS": 200,
+    "BPS_DENOMINATOR": 10000,
+    "DISTRIBUTION_PERCENT": 80,
+    "SPLIT_DENOMINATOR": 100,
+    "lockMultipliersBps": {
+      "d7": 11000,
+      "d14": 12500,
+      "d21": 15000,
+      "d30": 17500
+    },
+    "claimLeaf": "keccak256(bytes.concat(keccak256(abi.encode(block.chainid, manager, cycleId, claimant, asset, amount)))) with sorted-pair commutative nodes (OZ StandardMerkleTree)"
+  },
+  "measured": {
+    "forkBlock": "18791290",
+    "chainId": "4663",
+    "snapshotTimestamp": "1784960546",
+    "buyGrossWethInAlice": "5000000000000000",
+    "buyGrossWethInBob": "4000000000000000",
+    "buyGrossWethInCarol": "2000000000000000",
+    "buyStockBudgetAlice": "100000000000000",
+    "buyBurnBudgetAlice": "50000000000000",
+    "buyUserBpsOutAliceLocked": "2850207613595350811167890",
+    "buyBpsBurnedAlice": "42147344162508061507146",
+    "sellBpsIn": "1425103806797675405583945",
+    "sellGrossWethOut": "1807878180682483",
+    "sellUserWethOut": "1735563053455185",
+    "sellBpsBurned": "28365553006108628825208",
+    "weightAlice": "3135228374954885892284679",
+    "weightBob": "3949658936145492460083161",
+    "weightCarol": "2251207608740811898024131",
+    "weightTesterLiveLock": "523101036779224972875501",
+    "totalEffectiveWeight": "9859195956620415223267472",
+    "acquisitionWethIn": "287593484277030",
+    "acquiredStockNvda": "287593484277030000",
+    "distribution80": "230074787421624000",
+    "reserve20": "57518696855406000",
+    "entitlementAlice": "73163877161972197",
+    "entitlementBob": "92169477523305697",
+    "entitlementCarol": "52534315607672429",
+    "entitlementTester": "12207117128673674",
+    "distributionDust": "3",
+    "claimStart": "1784960606",
+    "claimDeadline": "1784964146",
+    "merkleRoot": "0xefcc033c554bb10ce9a5ad3a04162520b8874093f6e79fdf7b2b25170cb42cee"
+  },
+  "accountingInvariants": {
+    "vaultCustodyConservation": "287593484277030 (spent) == 31435920663381 (canary accrual) + 220000000000000 (buy 2% x3) + 36157563613649 (sell 2%) — exact",
+    "splitConservation": "287593484277030000 acquired == 230074787421624000 (80% distribution) + 57518696855406000 (20% reserve) — exact",
+    "claimConservation": "230074787421624000 funded == 73163877161972197 + 92169477523305697 + 52534315607672429 + 12207117128673674 (claims) + 3 (dust, recovered) — exact",
+    "globalConservation": "acquired == reserve + claims + dust — asserted on-fork",
+    "burnConservation": "buy and sell burns verified as true totalSupply reductions",
+    "failedAcquisitionNoLoss": "under-delivery negative left custody + acquisitionCount unchanged (atomic revert)"
+  },
+  "positiveTests": {
+    "focusedLifecycleAssertions": "~60 staged _eq/_true assertions in one deterministic scenario",
+    "forgeSuiteWithForkEnv": {
+      "passed": 418,
+      "failed": 0,
+      "suites": 47
+    }
+  },
+  "negativeTests": {
+    "count": 14,
+    "list": [
+      "expired trade deadline",
+      "paused official route",
+      "unauthorized settlement (coordinator layer)",
+      "unauthorized settlement (vault layer)",
+      "expired quote deadline",
+      "unsupported/unapproved asset",
+      "adapter under-delivery (atomic rollback proven)",
+      "claim before cycle exists",
+      "unauthorized root publication (coordinator layer)",
+      "unauthorized root publication (manager layer)",
+      "claim before claimStart",
+      "duplicate claim / replay",
+      "wrong claimant with valid other-party proof",
+      "wrong amount under own proof + wrong cycle + unregistered asset"
+    ]
+  },
+  "skippedOrInapplicable": [
+    "adapter over-delivery negative — by frozen design the vault credits the full observed delta (no cap above minStockOut); over-delivery-with-residue and reporting-mismatch paths are covered by existing unit suites (RialtoAdapterHostile/StockVaultHostile)",
+    "zero-budget minimum rule — covered by existing RouterBuy/RouterSell unit tests",
+    "claimBatch duplicate — covered by existing Claims.t.sol unit tests",
+    "30d lock tier — 7d/14d/21d exercised on fork; all tiers covered by LockingVault unit suites"
+  ],
+  "limitations": [
+    "The Rialto venue settlement was SIMULATED (dev-only mock at the registry-resolved target); the real venue quote format, settlement selector, and eligibility controls remain unverified (known config blocker).",
+    "Snapshot weights were computed in-test from positionWeightAt over known participants; production needs event-indexed wallet enumeration (indexer not implemented).",
+    "allocationsContentHash/manifestEnvelopeHash were rehearsal placeholders (keccak of fixed strings), not TS-pipeline artifacts.",
+    "Participant WETH balances were synthesized fork-locally (storage writes).",
+    "The claim window used a short rehearsal window (start +60s, deadline +3600s), not the 90-day production policy value."
+  ],
+  "mainnetNonMutation": {
+    "primaryControl": "No signing or broadcast-capable command was used at any point (in-process forge fork only; no cast send, no forge script --broadcast, no wallet).",
+    "before": {
+      "utc": "2026-07-25T08:32:10.654Z",
+      "chainId": 4663,
+      "block": "18868696",
+      "deployerNonceLatest": 16,
+      "deployerNoncePending": 16,
+      "testerNonceLatest": 8,
+      "testerNoncePending": 8,
+      "stockVaultWeth": "31435920663381",
+      "bpscTotalSupply": "999980924444083854102296256",
+      "testerLockedPrincipal": "475546397072022702614092",
+      "testerWethAllowanceRouter": "0",
+      "testerBpscAllowanceRouter": "0",
+      "testerBpscAllowanceVault": "0",
+      "deployerWethAllowanceNpm": "663707774444919",
+      "poolLiquidity": "3235182407869072596640",
+      "lpOwner371728": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203"
+    },
+    "after": {
+      "utc": "2026-07-25T08:49:48.790Z",
+      "chainId": 4663,
+      "block": "18879209",
+      "deployerNonceLatest": 16,
+      "deployerNoncePending": 16,
+      "testerNonceLatest": 8,
+      "testerNoncePending": 8,
+      "stockVaultWeth": "31435920663381",
+      "bpscTotalSupply": "999980924444083854102296256",
+      "testerLockedPrincipal": "475546397072022702614092",
+      "testerWethAllowanceRouter": "0",
+      "testerBpscAllowanceRouter": "0",
+      "testerBpscAllowanceVault": "0",
+      "deployerWethAllowanceNpm": "663707774444919",
+      "poolLiquidity": "3235182407869072596640",
+      "lpOwner371728": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203"
+    },
+    "comparison": "All fields identical (excluding utc/block-height of the read itself): deployer nonce 16/16, tester nonce 8/8 (NO nonce-8 tx), vault WETH, totalSupply, lock principal, allowances, pool liquidity, LP owner — unchanged."
+  },
+  "commandsExecuted": [
+    "git status / git rev-parse (inspection)",
+    "node packages/contracts/canary-packet/mainnet-snapshot-check.mjs (read-only, before + after; RPC from env, redacted)",
+    "node eth_getBlockByNumber 18791290 pin verification (read-only; RPC redacted)",
+    "forge test --match-contract ForkLifecycleProbe (fork-only)",
+    "ROBINHOOD_FORK_RPC=<redacted> forge test --match-contract ForkDistributionLifecycle (fork-only)",
+    "ROBINHOOD_FORK_RPC=<redacted> forge test (full suite, 418/418)",
+    "npm run check (offline full gate, PASS)",
+    "forge fmt (new test files only)"
+  ],
+  "canonicalArtifactsReverified": {
+    "v9ZipSha256": "0c958a58b8684878c4dfce4a15cdba3b2fc0e39680d46902430ab6e78a09b74d",
+    "v9ZipBytes": 578871,
+    "recoveryAuthorizationDigest": "0xc50d97d780c48308667d17366e383be0b70556e0d0bfbab69225222e228d8314",
+    "canaryEvidenceManifestSha256": "d6005083b20e5188ce783cde5b30159b56228398d5bf204746b536e9e36b8ec3"
+  },
+  "filesChanged": [
+    "packages/contracts/test/ForkDistributionLifecycle.t.sol (new fork test)",
+    "packages/contracts/test/ForkLifecycleProbe.t.sol (new fork discovery probe)",
+    "packages/contracts/foundry.toml (fs_permissions += ./rehearsal-evidence)",
+    "packages/contracts/rehearsal-evidence/fork-rehearsal-raw.json (generated raw evidence)",
+    "packages/contracts/canary-packet/mainnet-snapshot-check.mjs (read-only snapshot helper)",
+    ".prettierignore (exclude rehearsal-evidence output)",
+    "docs/audit/BPS_DISTRIBUTION_LIFECYCLE_FORK_REHEARSAL_2026-07-25.md",
+    "docs/audit/BPS_DISTRIBUTION_LIFECYCLE_FORK_REHEARSAL_2026-07-25.evidence.json",
+    "HANDOVER.md + docs/continuity/* (continuity gate)"
+  ],
+  "negativeCoverageMap": {
+    "note": "One-to-one mapping of every required negative/boundary condition (TASK 10F-1 section 7) to the exact fork-test assertion or the named existing unit test. No condition is left as a vague reference. No required implemented control is UNPROVEN.",
+    "invalidMerkleProof": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage12 expectRevert(InvalidProof) [wrong-claimant + wrong-amount variants]; UNIT RialtoEndToEnd.testInvalidProofCannotClaim",
+    "wrongClaimant": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage12 expectRevert(InvalidProof) — BOB submits ALICE's valid proof",
+    "wrongAmount": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage12 expectRevert(InvalidProof) — BOB claims eB+1 under his own proof",
+    "duplicateClaim": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage12 expectRevert(AlreadyClaimed(cycle,ALICE,NVDA)); UNIT RialtoEndToEnd.testDuplicateClaimCannotClaim",
+    "replayAttempt": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage12 — identical claim calldata resubmitted, rejected by the claimed-flag (same AlreadyClaimed assertion; effects-before-interaction)",
+    "claimWrongRootOrEpoch": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage12 expectRevert(CycleNotFound(CYCLE_ID+1)) — claim against a non-existent cycle/epoch",
+    "claimBeforeRootPublication": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage10 expectRevert(CycleNotFound) pre-publication AND stage11 expectRevert(ClaimNotStarted) post-publication/pre-start",
+    "unauthorizedRootPublication": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage10 expectRevert(NotRootPublisher) [coordinator layer] + expectRevert(OwnableUnauthorizedAccount(ALICE)) [manager layer]",
+    "unauthorizedAcquisitionSettlement": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage8 expectRevert(NotAcquisitionOperator) [coordinator] + expectRevert(NotAuthorizedExecutor) [vault]",
+    "adapterUnderDelivery": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage8 expectRevert(MinimumStockOutNotMet(expectStock+1, expectStock)); UNIT RialtoAdapterHostile.testUnderDeliver + StockVaultHostile.testUnderMinReverts",
+    "adapterOverDeliveryOrUnexpectedAsset": "INAPPLICABLE on-fork for honest over-delivery: frozen vault semantics credit the full observed delta (no cap above minStockOut) and the fixed-rate mock venue cannot over-deliver; hostile variants UNIT-covered: RialtoAdapterHostile.testWrongTokenDelivery/.testOutputToAttacker/.testExcessPull + StockVaultHostile.testLieOverReverts/.testWrongTokenDeliveryReverts/.testRetainStockReverts",
+    "failedAcquisitionNoSilentLoss": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage8 post-revert asserts: availableWethCustody unchanged + acquisitionCount==0 (atomic rollback); UNIT RialtoEndToEnd.testHostileRialtoRollsBackAcquisition",
+    "zeroValueOrDustBoundary": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stages 12-14: dust==3 units tracked exactly through claims, remaining, outstanding, and recovery to zero residue; zero-budget trade minimums UNIT-covered: RouterBuy.testZeroBurnBudgetSkipsSwap/.testZeroBurnBudgetNonzeroMinFails + RouterSell.testZeroBudgetSell/.testZeroBurnBudgetNonzeroMinFails",
+    "feeTotalConservation": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage2/stage4 exact 2%/1% and 2%/2% splits + stage5 assertion 'fees: vault accrual == sum of 2% stock budgets'",
+    "reserveBalanceConservation": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage9 'split: reserve delivered to reserveRecipient' (exact) + stage13 global conservation 'acquired == reserve + claims + dust'",
+    "snapshotTotalVsClaimableTotal": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage10 'snapshot total <= distributable' + stage13 'remaining == dust exactly' / 'outstanding == dust'",
+    "lockEffectiveWeightBoundary": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage7 exact multiplier assertions for 7d/14d/21d + the live tester lock (x1.10 at snapshot ts); UNIT LockingVaultWeight.testWeightBoundariesUnwithdrawn/.testCanonicalWeights/.testFractionalMultiplierFloorsOnce (incl. 30d tier)",
+    "unsupportedOrIncorrectAsset": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage8 expectRevert(StockNotApproved(WETH)) [acquisition] + stage12 expectRevert(AssetNotRegistered(cycle,WETH)) [claim]",
+    "incorrectChainOrForkSafetyAssertion": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle _assertForkLocal() (activeFork + chainid==4663) invoked before EVERY mutating stage + stage0 pinned block/chainid/state-anchor assertions",
+    "expiredDeadline": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage1 expectRevert(ExpiredDeadline) [trade] + stage8 expectRevert(ExpiredQuote) [settlement quote]",
+    "pausedOrDisabledPath": "FORK ForkDistributionLifecycle.testForkDistributionLifecycle stage1 pause() -> expectRevert(EnforcedPause) -> unpause() (the router's only implemented pause control)",
+    "claimBatchDuplicate": "UNIT Claims.testDuplicateBatchEntitlementReverts (+ testInvalidBatchItemRevertsWholeBatch, testEmptyBatchFails) — claimBatch not re-exercised on fork",
+    "unprovenGaps": "NONE among required implemented controls. Interfaces that do not exist (partial-fill/refund path, root update/cancel, claim-manager pause) are absent by frozen design and were not invented."
+  },
+  "retainedProbeJustification": "test/ForkLifecycleProbe.t.sol is intentionally RETAINED (not an abandoned diagnostic): it independently re-validates the two empirical assumptions the lifecycle test depends on — the NVDA Robinhood Token balance mapping location (OZ ERC-7201 namespaced ERC20 slot) and fork-local transferability. If a future NVDA implementation upgrade changes storage layout or transfer gating, the probe fails first with a precise diagnosis. Skip-gated on ROBINHOOD_FORK_RPC; fork-only."
+}

@@ -12,8 +12,12 @@ solc_version = "0.8.26"
 optimizer = true
 optimizer_runs = 200
 # Scoped write access so the operator deployment preflight (DeployBPS.s.sol) can emit its sanitized
-# manifest under ./deploy only. No broadcast, no key material is ever written.
-fs_permissions = [{access = "read-write", path = "./deploy"}]
+# manifest under ./deploy only, and so the TASK 10F-1 fork-only lifecycle rehearsal test can emit its
+# raw evidence JSON under ./rehearsal-evidence only. No broadcast, no key material is ever written.
+fs_permissions = [
+    {access = "read-write", path = "./deploy"},
+    {access = "read-write", path = "./rehearsal-evidence"},
+]
 
 [fmt]
 line_length = 100

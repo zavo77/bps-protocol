@@ -15,3 +15,4 @@ packages/contracts/broadcast/
 apps/web/test-results/
 apps/web/playwright-report/
 packages/contracts/canary-packet/
+packages/contracts/rehearsal-evidence/
