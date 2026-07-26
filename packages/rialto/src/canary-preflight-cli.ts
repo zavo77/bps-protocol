@@ -1,4 +1,4 @@
-// TASK 10K-6 — Read-only CLI for the guarded-settlement canary preflight.
+// TASK 10K-6 / 10K-7 — Read-only CLI for the guarded-settlement canary preflight.
 //
 // SCOPE / SAFETY:
 // - READ-ONLY. Builds a viem public client that issues ONLY eth_chainId / eth_getCode / eth_call. There is
@@ -6,7 +6,11 @@
 // - It REFUSES to run if ANY key/secret-bearing environment variable is present (private key, mnemonic,
 //   seed phrase, or Rialto API key) — the preflight must never see key material.
 // - It prints a secret-free report and the single status token `CANARY_BUILD_READY_EXECUTION_LOCKED`
-//   or `CANARY_NOT_READY`. It never prints RPC credentials, calldata, or quote IDs.
+//   or `CANARY_NOT_READY`. It never prints RPC credentials, calldata, or quote IDs. Every RPC-layer error
+//   is passed through `redactRpc` before it can reach a log/report, so an authenticated endpoint URL (or
+//   its host/credential path) can never appear in output.
+// - Missing controller is reported as CONTROLLER_REQUIRED (one explicit failure) — the live oracle/router/
+//   token checks still run; the CLI never invents a controller and never falsely returns ready.
 // - D-24 stands: a passing report authorizes no deployment, funding, approval, acquisition, or execution.
 //
 // Local run (user-executed; requires a read-only Robinhood Chain RPC in a gitignored .env):
@@ -53,7 +57,28 @@ export interface CliOutcome {
   readonly exitCode: number;
 }
 
-/** Default reader: a viem public client bound to Robinhood Chain, read methods only. */
+/**
+ * Strip an RPC endpoint (its full URL, host, and credential path) plus any other absolute URL from a
+ * string, so an authenticated endpoint can never surface through an error message, log, or report.
+ */
+export function redactRpc(url: string, s: string): string {
+  let out = s;
+  if (url) {
+    out = out.split(url).join("[REDACTED_RPC_URL]");
+    try {
+      const u = new URL(url);
+      if (u.host) out = out.split(u.host).join("[REDACTED_RPC_HOST]");
+      if (u.pathname && u.pathname !== "/")
+        out = out.split(u.pathname).join("/[REDACTED_RPC_PATH]");
+    } catch {
+      /* not a parseable URL; the generic sweep below still applies */
+    }
+  }
+  return out.replace(/https?:\/\/[^\s"')]+/g, "[REDACTED_URL]");
+}
+
+/** Default reader: a viem public client bound to Robinhood Chain, read methods only. Every RPC error is
+ *  re-thrown with the endpoint redacted, so the endpoint URL never escapes this function. */
 export function makeRpcReader(rpcUrl: string): ChainReader {
   const chain = defineChain({
     id: ROBINHOOD_CHAIN_ID,
@@ -62,10 +87,17 @@ export function makeRpcReader(rpcUrl: string): ChainReader {
     rpcUrls: { default: { http: [rpcUrl] } },
   });
   const client = createPublicClient({ chain, transport: http(rpcUrl) });
+  const guard = async <T>(fn: () => Promise<T>): Promise<T> => {
+    try {
+      return await fn();
+    } catch (e) {
+      throw new Error(redactRpc(rpcUrl, e instanceof Error ? e.message : String(e)));
+    }
+  };
   return {
-    getChainId: () => client.getChainId(),
-    getCode: async (address: Hex) => (await client.getBytecode({ address })) ?? "0x",
-    call: async (to: Hex, data: Hex) => (await client.call({ to, data })).data ?? "0x",
+    getChainId: () => guard(() => client.getChainId()),
+    getCode: (address: Hex) => guard(async () => (await client.getBytecode({ address })) ?? "0x"),
+    call: (to: Hex, data: Hex) => guard(async () => (await client.call({ to, data })).data ?? "0x"),
   };
 }
 
@@ -93,7 +125,9 @@ export async function runCanaryPreflightCli(deps: CliDeps): Promise<CliOutcome> 
     return { status: "CANARY_NOT_READY", exitCode: 1 };
   }
 
-  const controller = parseAddress(env.GS_CONTROLLER, ZERO_ADDRESS as Hex)!;
+  // Missing controller => null (reported as CONTROLLER_REQUIRED); never invented, never defaulted to a real
+  // or sentinel address.
+  const controller = parseAddress(env.GS_CONTROLLER, null);
   const executor = parseAddress(env.CANARY_EXECUTOR_ADDRESS, null);
   const sequencerFeed = parseAddress(env.GS_SEQUENCER_FEED, ZERO_ADDRESS as Hex)!;
   const config: CanaryPreflightConfig = {
@@ -113,9 +147,9 @@ export async function runCanaryPreflightCli(deps: CliDeps): Promise<CliOutcome> 
     const reader = deps.makeReader(rpcUrl);
     report = await evaluateCanaryReadiness(reader, config);
   } catch (e) {
-    log(
-      `CANARY_NOT_READY: preflight aborted: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`,
-    );
+    // Defence in depth: redact the endpoint here too, in case an error originated before the reader wrap.
+    const msg = redactRpc(rpcUrl, e instanceof Error ? e.message.split("\n")[0]! : String(e));
+    log(`CANARY_NOT_READY: preflight aborted: ${msg}`);
     return { status: "CANARY_NOT_READY", exitCode: 1 };
   }
 

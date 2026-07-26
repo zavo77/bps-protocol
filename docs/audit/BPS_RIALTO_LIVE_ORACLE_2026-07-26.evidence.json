@@ -1,0 +1,280 @@
+{
+  "schemaVersion": "1.0.0",
+  "task": "TASK 10K-7",
+  "title": "BPS guarded-settlement — live oracle, Safe, and read-only preflight acceptance evidence",
+  "dateUtc": "2026-07-26",
+  "buildReadiness": "CANARY_BUILD_READY_EXECUTION_LOCKED",
+  "runtimeReadiness": "CANARY_NOT_READY",
+  "network": { "name": "Robinhood Chain Mainnet", "chainId": 4663 },
+  "safetyAttestation": {
+    "rialtoQuoteRequested": false,
+    "rialtoApiKeyRead": false,
+    "privateKeyOrMnemonicRead": false,
+    "signed": false,
+    "broadcast": false,
+    "funded": false,
+    "approved": false,
+    "deployed": false,
+    "mainnetStateChange": false,
+    "readOnlyCallsOnly": true,
+    "authenticatedRpcUrlCommitted": false,
+    "qex1Consumed": true,
+    "d24InForce": true
+  },
+  "feedResolution": {
+    "primaryAuthority": "Chainlink reference-data directory (feeds-robinhood-mainnet.json), consumed by docs.chain.link addresses page",
+    "officialSources": [
+      "https://docs.robinhood.com/chain/oracles-and-price-feeds/",
+      "https://docs.chain.link/data-feeds/price-feeds/addresses?network=robinhood",
+      "https://docs.chain.link/data-feeds/tokenized-equity-feeds/robinhood",
+      "https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json"
+    ],
+    "ethUsd": {
+      "directoryName": "ETH / USD",
+      "onchainDescription": "ETH / USD",
+      "proxy": "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9",
+      "assetName": "Ethereum",
+      "feedCategory": "low",
+      "feedType": "Crypto",
+      "decimals": 8,
+      "heartbeatSec": 86400,
+      "deviationThresholdPct": 0.5,
+      "marketHours": "Crypto (24/7)",
+      "separateWethUsdFeedExists": false,
+      "wethPricingRationale": "No WETH/USD feed is published on Robinhood Chain; only ETH/USD exists. Canonical WETH (0x0Bd7...AD73) is 1:1 wrapped native ETH, so ETH/USD prices one WETH directly. No multiplier is applied."
+    },
+    "nvdaUsd": {
+      "directoryName": "Robinhood NVDA / USD",
+      "onchainDescription": "RHNVDA / USD",
+      "proxy": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
+      "assetName": "Nvidia (Robinhood Tokenized Equity)",
+      "feedCategory": "custom",
+      "feedType": "Crypto",
+      "decimals": 8,
+      "heartbeatSec": 86400,
+      "deviationThresholdPct": 0.5,
+      "marketHours": "us_equities_24/5",
+      "note": "Directory display name is 'Robinhood NVDA / USD'; on-chain description() is 'RHNVDA / USD'. The feed already represents the multiplier-adjusted Robinhood Stock Token Total Return Value; the price guard must NOT re-apply uiMultiplier."
+    },
+    "codeVsConfig": "MATCH — every production-facing feed address, on-chain description, and decimals in TASK 10K-6 (Solidity GuardedSettlementConfig, ChainlinkSettlementPriceGuard, deploy template, TS preflight constants, runbook, evidence) equals the officially resolved + live-verified value. No placeholder, zero, test-only, inferred, wrong-feed, or identity-mismatch value was found in a production path. No address/description/decimals fix was required."
+  },
+  "pinnedObservation": {
+    "blockNumber": 19761208,
+    "blockHash": "0x71d860751bfd22692441a8e3d53603a4738f0d5fe7f700c3e9a4d6ee40cf2d08",
+    "timestamp": 1785057923,
+    "utc": "2026-07-26T09:25:23Z",
+    "chainId": 4663,
+    "rpcProviderCategory": "primary private Robinhood Chain relay (authenticated; URL redacted)",
+    "primaryServedBlockTaggedState": true,
+    "maxFeedAgeSec": 900
+  },
+  "feeds": {
+    "ethUsd": {
+      "address": "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9",
+      "runtimeCodeLength": 9571,
+      "runtimeCodeHash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "description": "ETH / USD",
+      "decimals": 8,
+      "version": "6",
+      "currentAggregatorImpl": "0x6091E64eb7138EEF066a80FD3A0d7427B91f2721",
+      "proxyImplementationConclusion": "EACAggregatorProxy (shares proxy bytecode with the NVDA feed proxy); reads route to the current aggregator implementation.",
+      "latestRoundData": {
+        "roundId": "18446744073709552854",
+        "answer": "188500086357",
+        "answerUsd": "1885.00086357",
+        "startedAt": 1785041088,
+        "updatedAt": 1785041100,
+        "answeredInRound": "18446744073709552854"
+      },
+      "positiveAnswer": true,
+      "updatedAtValidNonFuture": true,
+      "observationAgeSec": 16823,
+      "staleUnder900": true,
+      "staleClassification": "ETH_USD_FEED_STALE (crypto 24/7 feed; within its 86400s heartbeat but beyond the strict 900s window at this quiet-Sunday observation; not market-closure)"
+    },
+    "nvdaUsd": {
+      "address": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
+      "runtimeCodeLength": 9571,
+      "runtimeCodeHash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "description": "RHNVDA / USD",
+      "decimals": 8,
+      "version": "6",
+      "currentAggregatorImpl": "0xC9d16E4f2569b9E3ea0468fD85844953713DC2a2",
+      "proxyImplementationConclusion": "EACAggregatorProxy (same proxy bytecode as ETH/USD); distinct aggregator implementation.",
+      "latestRoundData": {
+        "roundId": "18446744073709552076",
+        "answer": "20637470000",
+        "answerUsd": "206.3747",
+        "startedAt": 1784923024,
+        "updatedAt": 1784923036,
+        "answeredInRound": "18446744073709552076"
+      },
+      "positiveAnswer": true,
+      "updatedAtValidNonFuture": true,
+      "observationAgeSec": 134887,
+      "staleUnder900": true,
+      "staleClassification": "NVDA_FEED_STALE_MARKET_CLOSED (us_equities_24/5 feed observed on Sunday 2026-07-26; expected off-hours staleness; guard correctly rejects; NOT a design defect)"
+    }
+  },
+  "weth": {
+    "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "runtimeCodeLength": 2202,
+    "runtimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
+    "symbol": "WETH",
+    "decimals": 18,
+    "pricingAssumption": "1 canonical WETH == 1 native ETH unit; priced by ETH/USD with no multiplier."
+  },
+  "nvdaToken": {
+    "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "runtimeCodeLength": 283,
+    "runtimeCodeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630",
+    "symbol": "NVDA",
+    "decimals": 18,
+    "oraclePaused": false,
+    "uiMultiplier": "1000000000000000000",
+    "newUIMultiplier": "1000000000000000000",
+    "effectiveAt": "0",
+    "multiplierConclusion": "uiMultiplier == 1e18 (no active adjustment). The Chainlink feed already reflects the multiplier-adjusted Total Return Value, so the price guard MUST NOT re-apply uiMultiplier. Implementation does not."
+  },
+  "router": {
+    "registry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+    "registryRuntimeCodeLength": 4968,
+    "ownerOfFeature2": "0xC94135b63772b91D79d0A2DaAb2a8801f32359bD",
+    "routerRuntimeCodeLength": 24232,
+    "routerRuntimeCodeHash": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611",
+    "conclusion": "ownerOf(2) returns the expected router; its live runtime code hash equals the pinned 0xa7041268...27611. Feature 2 is active/unpaused (a successful non-zero ownerOf(2)). Selector 0x77963966 is approvable ONLY paired with this code hash."
+  },
+  "sequencerFeed": {
+    "conclusion": "NO official Chainlink L2 Sequencer Uptime Feed is published for Robinhood Chain",
+    "evidence": "The official reference-data directory lists 56 Robinhood-chain feeds; none is a sequencer uptime feed.",
+    "mitigation": "Strict dual-feed freshness (900s max age on both ETH/USD and NVDA/USD) is retained. Robinhood's WebSocket 'Sequencer Feed' RPC endpoint is NOT a Chainlink on-chain L2 Sequencer Uptime Feed and is not used. No address invented; no other chain's sequencer feed used.",
+    "configuredSequencerFeed": "0x0000000000000000000000000000000000000000"
+  },
+  "safeInfrastructure": {
+    "conclusion": "CANONICAL_SAFE_STACK_AVAILABLE",
+    "recommendedVersion": "1.4.1",
+    "components": {
+      "SafeL2Singleton_v1_4_1": {
+        "address": "0x29fcB43b46531BcA003ddC8FCB67FFE91900C762",
+        "chain4663Listed": true,
+        "liveCodeLength": 24421,
+        "liveCodeHash": "0xb1f926978a0f44a2c0ec8fe822418ae969bd8c3f18d61e5103100339894f81ff",
+        "codeHashMatchesManifest": true
+      },
+      "SafeSingleton_v1_4_1": {
+        "address": "0x41675C099F32341bf84BFc5382aF534df5C7461a",
+        "chain4663Listed": true,
+        "liveCodeLength": 23579,
+        "liveCodeHash": "0x1fe2df852ba3299d6534ef416eefa406e56ced995bca886ab7a553e6d0c5e1c4",
+        "codeHashMatchesManifest": true
+      },
+      "SafeProxyFactory_v1_4_1": {
+        "address": "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+        "chain4663Listed": true,
+        "liveCodeLength": 3054,
+        "liveCodeHash": "0x50c3cdc4074750a7a974204a716c999edd37482f907608d960b2b025ee0b3317",
+        "codeHashMatchesManifest": true
+      },
+      "CompatibilityFallbackHandler_v1_4_1": {
+        "address": "0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99",
+        "chain4663Listed": true,
+        "liveCodeLength": 5637,
+        "liveCodeHash": "0x7c6007a5d711cea8dfd5d91f5940ec29c7f200fe511eb1fc1397b367af3c42f9",
+        "codeHashMatchesManifest": true
+      },
+      "MultiSend_v1_4_1": {
+        "address": "0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526",
+        "chain4663Listed": true,
+        "liveCodeLength": 629,
+        "liveCodeHash": "0x0e4f7fc66550a322d1e7688e181b75e217e662a4f3f4d6a29b22bc61217c4b77",
+        "codeHashMatchesManifest": true
+      },
+      "MultiSendCallOnly_v1_4_1": {
+        "address": "0x9641d764fc13c8B624c04430C7356C1C7C8102e2",
+        "chain4663Listed": true,
+        "liveCodeLength": 410,
+        "liveCodeHash": "0xecd5bd14a08c5d2122379900b2f272bdf107a7e92423c10dd5fe3254386c9939",
+        "codeHashMatchesManifest": true
+      }
+    },
+    "v130Note": "Safe v1.3.0 canonical addresses also carry matching live code on chain 4663 but are NOT explicitly listed for it in the manifest; v1.4.1 is chain-listed and recommended.",
+    "creationPacket": "packages/contracts/deploy/SAFE_CONTROLLER_SETUP.md (sanitized, non-broadcast; owners + threshold remain unresolved founder inputs)",
+    "safeDeployed": false
+  },
+  "realPreflight": {
+    "label": "NETWORKED READ-ONLY PREFLIGHT",
+    "command": "node packages/rialto/dist/canary-preflight-cli.js (missing-controller mode, live primary RPC)",
+    "status": "CANARY_NOT_READY",
+    "exitCode": 1,
+    "failed": ["eth-usd-feed-fresh", "nvda-usd-feed-fresh", "controller"],
+    "flags": ["ETH_USD_FEED_STALE", "NVDA_FEED_STALE_MARKET_CLOSED", "CONTROLLER_REQUIRED"],
+    "controllerIndependentChecksAllPassed": true,
+    "passedChecks": [
+      "chain-id",
+      "settlement-selector",
+      "registry-code",
+      "router-owner",
+      "router-code-hash",
+      "selector-codehash-pairing",
+      "weth-token-decimals",
+      "weth-token-symbol",
+      "nvda-token-decimals",
+      "nvda-token-symbol",
+      "eth-usd-feed-decimals",
+      "eth-usd-feed-description",
+      "eth-usd-feed-answer",
+      "eth-usd-feed-round",
+      "nvda-usd-feed-decimals",
+      "nvda-usd-feed-description",
+      "nvda-usd-feed-answer",
+      "nvda-usd-feed-round",
+      "nvda-oracle-not-paused",
+      "sequencer-policy",
+      "canary-cap",
+      "feed-age-policy",
+      "execution-locked",
+      "qex1-consumed"
+    ],
+    "note": "The controller is missing and both feeds exceed the strict 900s window at this observation (NVDA market-closed Sunday; ETH low-volatility within its heartbeat). Both are runtime-availability states, not code/config defects. The guard/preflight correctly reject them. Max feed age was NOT increased and freshness was NOT weakened."
+  },
+  "configurationAudit": {
+    "productionFeedAddressesVerified": true,
+    "descriptionsAndDecimalsMatchLive": true,
+    "testOnlyOverridesUnreachableFromProductionCli": "expectedRouterCodeHash is a CliDeps-only test hook; production main() never sets it and there is no env path.",
+    "cliCannotReadKeysOrMnemonics": true,
+    "cliCannotSignOrConstructOrBroadcast": true,
+    "missingControllerDoesNotSkipLiveChecks": true,
+    "missingControllerReportedAsSingleFailure": "CONTROLLER_REQUIRED",
+    "routerCodeHashUsesRealRuntimeHash": true,
+    "selectorPairedOnlyWithApprovedCodeHash": true,
+    "priceGuardRunsBeforeApproval": true,
+    "priceGuardFailureLeavesAllowanceZero": true,
+    "priceGuardFailureLeavesNonceUnconsumed": true,
+    "deploymentsStartPaused": true,
+    "unpauseRequiresController": true,
+    "noAutomaticBroadcastCommand": true,
+    "noArbitraryCallApprovalOrDelegatecallPathAdded": true,
+    "rawCalldataAndQuoteIdsAbsentFromEventsAndEvidence": true,
+    "rpcUrlRedactedFromAllErrorOutput": true
+  },
+  "decisionStates": {
+    "D-5": "exact temporary allowance enforcement implemented; activation approval remains",
+    "D-6": "router + selector + code-hash envelope implemented and live-verified; final deployed-contract controller + formal activation remain (Safe stack now confirmed available on 4663)",
+    "D-8": "candidate config remains 50-bps default quote slippage, 100-bps max quote slippage, 100-bps oracle deviation, 0.001-WETH canary cap",
+    "D-21": "executor replay + allowance mitigations implemented and tested",
+    "D-22B": "ENGINEERING-COMPLETE — official feed identities, addresses, decimals, on-chain descriptions and live behavior match the implementation (verified at block 19761208). Current staleness is runtime availability (market closure / low volatility), not an unresolved price-source design.",
+    "D-3": "external security review pending",
+    "D-23": "counsel pending",
+    "D-24": "UNCHANGED — prohibits deployment and execution; a new bounded authorization is required before any live step",
+    "D-17": "untouched",
+    "QEX-1": "consumed",
+    "rpcBlockerEliminated": "The supplied read-only RPC access eliminates 'no RPC configured' as a blocker."
+  },
+  "remainingExternalInputs": [
+    "Final Safe owners + threshold (or another audited deployed-contract controller) — the only Safe-side unresolved inputs; the canonical Safe v1.4.1 factory/singletons are verified available on 4663",
+    "Independent security review of the guard + executor (D-3)",
+    "Legal counsel sign-off (D-23)",
+    "Explicit deployment authorization",
+    "Explicit execution authorization replacing D-24"
+  ]
+}

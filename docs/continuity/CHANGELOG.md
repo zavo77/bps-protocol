@@ -7,6 +7,58 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-26 — TASK 10K-7: close the live oracle, Safe, and preflight evidence gaps
+
+- **Type:** Read-only live-chain verification + TS preflight hardening + evidence + continuity. NO Rialto
+  request, NO API key read, NO private key/mnemonic read, NO signing/funding/approval/deployment/broadcast,
+  NO mainnet state change — read-only JSON-RPC only. Authenticated RPC endpoints were used only via ephemeral
+  process env and were NEVER written to the repository, evidence, docs, or this changelog. QEX-1 remains
+  consumed. Start HEAD 5181f1b (10K-6).
+- **Feed resolution (official directory):** Chainlink reference-data directory `feeds-robinhood-mainnet.json`
+  (56 feeds) resolved ETH/USD `0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9` (8dp, heartbeat 86400s, 0.5% dev,
+  crypto 24/7) and NVDA/USD `0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15` (8dp, us_equities_24/5; directory
+  name 'Robinhood NVDA / USD'). Sources: docs.robinhood.com/chain/oracles-and-price-feeds,
+  docs.chain.link/data-feeds/price-feeds/addresses?network=robinhood,
+  docs.chain.link/data-feeds/tokenized-equity-feeds/robinhood.
+- **Live pinned observation:** block 19761208, hash 0x71d860...cf2d08, ts 1785057923 (2026-07-26T09:25:23Z),
+  chain 4663, primary private relay served block-tagged state (no fallback). ETH/USD on-chain description
+  'ETH / USD', 8dp, version 6, answer 188500086357 (~$1885), age 16823s (STALE<900s). NVDA/USD on-chain
+  description **'RHNVDA / USD'** (NOT the directory label), 8dp, version 6, answer 20637470000 (~$206.37),
+  age 134887s (STALE<900s, market-closed). WETH 0x0Bd7...AD73 symbol 'WETH' 18dp. NVDA token 0xd060...9EEC
+  symbol 'NVDA' 18dp, oraclePaused=false, uiMultiplier=newUIMultiplier=1e18, effectiveAt=0. Router ownerOf(2)
+  =0xC94135b6...359bD, code hash 0xa7041268...27611 (matches pin).
+- **Config-vs-live: MATCH.** Every production-facing feed/token/router identity, on-chain description, and
+  decimals already equaled the officially resolved + live-verified value. No placeholder/zero/test-only/
+  inferred/wrong-feed/identity-mismatch value in a production path; NO address/description/decimals fix was
+  required (the 10K-6 'RHNVDA / USD' pin was correct; the directory display name simply differs).
+- **Sequencer:** NO official Chainlink L2 Sequencer Uptime Feed for Robinhood Chain (none among 56 feeds).
+  Strict dual-feed 900s freshness retained; Robinhood's WebSocket 'Sequencer Feed' RPC is not a Chainlink
+  on-chain feed and is not used. Absence does not block the guard.
+- **Preflight hardening** (packages/rialto/src/canary-preflight.ts + canary-preflight-cli.ts): missing
+  controller reported as one CONTROLLER_REQUIRED failure while all controller-independent live checks still
+  run (never invents a controller); stale classifications NVDA_FEED_STALE_MARKET_CLOSED / ETH_USD_FEED_STALE;
+  token-symbol + selector/code-hash-pairing checks; and full RPC-URL redaction (redactRpc) so no endpoint URL
+  can leak through any error/log/report. Controller type is now Hex|null.
+- **Real read-only preflight** (NETWORKED READ-ONLY PREFLIGHT, missing-controller mode) = CANARY_NOT_READY;
+  failed eth-usd-feed-fresh, nvda-usd-feed-fresh, controller; flags ETH_USD_FEED_STALE,
+  NVDA_FEED_STALE_MARKET_CLOSED, CONTROLLER_REQUIRED; every controller-independent check passed; no RPC leak.
+- **Safe investigation** (safe-deployments manifests + live eth_getCode): CANONICAL_SAFE_STACK_AVAILABLE —
+  Safe v1.4.1 SafeL2 0x29fcB4...C762, ProxyFactory 0x4e1DCf...ec67, FallbackHandler 0xfd0732...Ec99, MultiSend
+  0x38869b...B526, MultiSendCallOnly 0x9641d7...02e2 all listed for 4663 with live code hashes matching the
+  official manifest. Sanitized non-broadcast creation packet added (deploy/SAFE_CONTROLLER_SETUP.md; owners/
+  threshold unresolved). No Safe deployed.
+- **Tests:** Foundry unchanged (513/513, no Solidity change). Rialto vitest 252/252 (canary-preflight core
+  +7: CONTROLLER_REQUIRED, stale-classification flags, symbol/pairing, live-identity regression pin;
+  canary-preflight-cli +redactRpc + missing-controller + endpoint-redaction). typecheck/lint/build clean;
+  forge fmt + prettier clean; secret scan + RPC-hostname scan of tracked and generated files clean.
+- **Decision states:** D-22B ENGINEERING-COMPLETE (identities/addresses/decimals/descriptions/live behavior
+  match); RPC 'not configured' blocker eliminated; D-5/D-8/D-21 unchanged; D-6 only final controller +
+  activation remain (Safe stack confirmed available); D-3/D-23 counsel/audit-pending; D-24 stands; D-17
+  untouched; QEX-1 consumed. Register row D-018 added.
+- Two independent conclusions: technical build = CANARY_BUILD_READY_EXECUTION_LOCKED; live runtime =
+  CANARY_NOT_READY. Evidence docs/audit/BPS_RIALTO_LIVE_ORACLE_2026-07-26.{md,evidence.json}. Commit
+  `fix(settlement): verify live oracle and canary preflight`.
+
 ## 2026-07-26 — TASK 10K-6: final canary-ready build (Chainlink price guard, controller gate, rehearsal)
 
 - **Type:** Solidity (price guard + executor gate) + broadcast-free deploy tooling + tracked forge-std

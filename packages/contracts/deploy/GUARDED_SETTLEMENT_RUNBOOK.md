@@ -14,13 +14,13 @@ a **deployed-contract controller (Safe)** via a two-step transfer.
 
 ## 0. Prerequisites (blockers to clear first)
 
-| #   | Prerequisite                                                        | Status                                         |
-| --- | ------------------------------------------------------------------- | ---------------------------------------------- |
-| 1   | Final **controller/Safe** address (deployed contract on chain 4663) | **BLOCKED** — not yet provided                 |
-| 2   | External **audit** of the guard + executor                          | **BLOCKED** — counsel/audit pending (D-3/D-23) |
-| 3   | New bounded **founder authorization** replacing the expired D-24    | **BLOCKED** — required before any live step    |
-| 4   | Read-only Robinhood Chain **RPC URL** for the TS preflight          | operator-supplied (gitignored `.env`)          |
-| 5   | Trusted **price-source** confirmation (D-22B)                       | separate decision                              |
+| #   | Prerequisite                                                        | Status                                                                                                                       |
+| --- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Final **controller/Safe** address (deployed contract on chain 4663) | **BLOCKED** — owners/threshold unresolved. Safe v1.4.1 stack **verified available** on 4663 (see `SAFE_CONTROLLER_SETUP.md`) |
+| 2   | External **audit** of the guard + executor                          | **BLOCKED** — counsel/audit pending (D-3/D-23)                                                                               |
+| 3   | New bounded **founder authorization** replacing the expired D-24    | **BLOCKED** — required before any live step                                                                                  |
+| 4   | Read-only Robinhood Chain **RPC URL** for the preflight             | **RESOLVED** — read-only preflight run 2026-07-26 (TASK 10K-7); operator supplies own `.env`                                 |
+| 5   | Trusted **price-source** confirmation (D-22B)                       | **ENGINEERING-COMPLETE** — feed identities/live behavior verified (TASK 10K-7)                                               |
 
 Until #1–#3 clear, the offline verification, broadcast-free preflight, and read-only canary preflight below
 are the only runnable steps.
@@ -93,9 +93,16 @@ deployed **and** paused); and `QEX1_CONSUMED==true`. Emits exactly **`CANARY_BUI
 (exit 0) or **`CANARY_NOT_READY`** (exit ≥ 1). Set `CANARY_EXECUTOR_ADDRESS` after deployment to assert the
 deployed executor is paused.
 
-> **One labelled read-only live run (operator step):** run the command above once against the real read-only
-> RPC and archive the printed report as the preflight receipt. Not performed in this build — blocked on
-> prerequisite #4 (RPC URL) and #1 (controller address). No network call is made by this repository.
+Missing `GS_CONTROLLER` is reported as one explicit `CONTROLLER_REQUIRED` failure — the live oracle/router/
+token checks still run. A stale NVDA feed is flagged `NVDA_FEED_STALE_MARKET_CLOSED` (off-hours), a stale
+ETH feed `ETH_USD_FEED_STALE`. Every RPC error is redacted so no endpoint URL can appear in output.
+
+> **Read-only live run — DONE (TASK 10K-7, 2026-07-26):** executed against a live Robinhood Chain read-only
+> RPC in missing-controller mode → `CANARY_NOT_READY` (failed: `eth-usd-feed-fresh`, `nvda-usd-feed-fresh`,
+> `controller`; flags: `ETH_USD_FEED_STALE`, `NVDA_FEED_STALE_MARKET_CLOSED`, `CONTROLLER_REQUIRED`); every
+> controller-independent check passed. Receipt:
+> [`docs/audit/BPS_RIALTO_LIVE_ORACLE_2026-07-26.md`](../../../docs/audit/BPS_RIALTO_LIVE_ORACLE_2026-07-26.md).
+> The repository itself makes no network call; the operator supplies a read-only RPC in a gitignored `.env`.
 
 ---
 

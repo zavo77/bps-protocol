@@ -5,6 +5,9 @@ import {
   type ChainReader,
   ETH_USD_FEED,
   ETH_USD_FEED_DESCRIPTION,
+  FLAG_CONTROLLER_REQUIRED,
+  FLAG_ETH_FEED_STALE,
+  FLAG_NVDA_STALE_MARKET_CLOSED,
   NVDA_USD_FEED,
   NVDA_USD_FEED_DESCRIPTION,
   ROBINHOOD_CHAIN_ID,
@@ -15,6 +18,7 @@ import { NVDA, OFFICIAL_REGISTRY, WETH } from "./guarded-settlement.js";
 
 const SEL = {
   decimals: toFunctionSelector("decimals()"),
+  symbol: toFunctionSelector("symbol()"),
   description: toFunctionSelector("description()"),
   latestRoundData: toFunctionSelector("latestRoundData()"),
   ownerOf: toFunctionSelector("ownerOf(uint256)"),
@@ -79,8 +83,10 @@ function healthyChain(): FakeChain {
   c.setCode(ROUTER, ROUTER_CODE);
   c.setCode(WETH, "0xbb");
   c.setCall(WETH, SEL.decimals, enc.uint8(18));
+  c.setCall(WETH, SEL.symbol, enc.string("WETH"));
   c.setCode(NVDA, "0xcc");
   c.setCall(NVDA, SEL.decimals, enc.uint8(18));
+  c.setCall(NVDA, SEL.symbol, enc.string("NVDA"));
   c.setCall(NVDA, SEL.oraclePaused, enc.bool(false));
   for (const [feed, desc] of [
     [ETH_USD_FEED, ETH_USD_FEED_DESCRIPTION],
@@ -115,6 +121,15 @@ describe("evaluateCanaryReadiness — happy path", () => {
     expect(r.failed, JSON.stringify(r.checks, null, 2)).toEqual([]);
     expect(r.status).toBe("CANARY_BUILD_READY_EXECUTION_LOCKED");
     expect(r.executionLocked).toBe(true);
+    expect(r.flags).toEqual([]);
+  });
+
+  it("verifies token symbols and the selector/code-hash pairing", async () => {
+    const r = await evaluateCanaryReadiness(healthyChain(), healthyConfig());
+    const ids = r.checks.filter((c) => c.ok).map((c) => c.id);
+    expect(ids).toContain("weth-token-symbol");
+    expect(ids).toContain("nvda-token-symbol");
+    expect(ids).toContain("selector-codehash-pairing");
   });
 
   it("stays READY when a deployed executor is paused", async () => {
@@ -142,13 +157,14 @@ describe("evaluateCanaryReadiness — fail-closed on each defect", () => {
     expect(r.failed).toContain("registry-code");
   });
 
-  it("router code hash mismatch", async () => {
+  it("router code hash mismatch also fails the pairing check", async () => {
     const r = await evaluateCanaryReadiness(healthyChain(), {
       ...healthyConfig(),
       expectedRouterCodeHash: keccak256("0xbeef" as Hex),
     });
     expect(r.status).toBe("CANARY_NOT_READY");
     expect(r.failed).toContain("router-code-hash");
+    expect(r.failed).toContain("selector-codehash-pairing");
   });
 
   it("router owner zero", async () => {
@@ -164,10 +180,16 @@ describe("evaluateCanaryReadiness — fail-closed on each defect", () => {
   it("wrong WETH decimals", async () => {
     const chain = healthyChain().setCall(WETH, SEL.decimals, enc.uint8(6));
     const r = await evaluateCanaryReadiness(chain, healthyConfig());
-    expect(r.failed).toContain("weth-token");
+    expect(r.failed).toContain("weth-token-decimals");
   });
 
-  it("stale feed", async () => {
+  it("wrong NVDA symbol", async () => {
+    const chain = healthyChain().setCall(NVDA, SEL.symbol, enc.string("WRONG"));
+    const r = await evaluateCanaryReadiness(chain, healthyConfig());
+    expect(r.failed).toContain("nvda-token-symbol");
+  });
+
+  it("stale NVDA feed => market-closed classification flag", async () => {
     const chain = healthyChain().setCall(
       NVDA_USD_FEED,
       SEL.latestRoundData,
@@ -175,6 +197,19 @@ describe("evaluateCanaryReadiness — fail-closed on each defect", () => {
     );
     const r = await evaluateCanaryReadiness(chain, healthyConfig());
     expect(r.failed).toContain("nvda-usd-feed-fresh");
+    expect(r.flags).toContain(FLAG_NVDA_STALE_MARKET_CLOSED);
+  });
+
+  it("stale ETH feed => ETH stale flag (not market-closed)", async () => {
+    const chain = healthyChain().setCall(
+      ETH_USD_FEED,
+      SEL.latestRoundData,
+      enc.round(10n, 200_000_000_000n, BigInt(NOW - 20000), 10n),
+    );
+    const r = await evaluateCanaryReadiness(chain, healthyConfig());
+    expect(r.failed).toContain("eth-usd-feed-fresh");
+    expect(r.flags).toContain(FLAG_ETH_FEED_STALE);
+    expect(r.flags).not.toContain(FLAG_NVDA_STALE_MARKET_CLOSED);
   });
 
   it("non-positive feed answer", async () => {
@@ -213,6 +248,23 @@ describe("evaluateCanaryReadiness — fail-closed on each defect", () => {
     const chain = healthyChain().setCode(CONTROLLER, "0x");
     const r = await evaluateCanaryReadiness(chain, healthyConfig());
     expect(r.failed).toContain("controller");
+    expect(r.flags).not.toContain(FLAG_CONTROLLER_REQUIRED); // supplied-but-EOA is not "required"
+  });
+
+  it("missing controller => CONTROLLER_REQUIRED while all controller-independent checks still run", async () => {
+    const r = await evaluateCanaryReadiness(healthyChain(), {
+      ...healthyConfig(),
+      controller: null,
+    });
+    expect(r.status).toBe("CANARY_NOT_READY");
+    expect(r.failed).toContain("controller");
+    expect(r.flags).toContain(FLAG_CONTROLLER_REQUIRED);
+    // The live checks were NOT skipped: everything else passed.
+    expect(r.failed).toEqual(["controller"]);
+    const ok = r.checks.filter((c) => c.ok).map((c) => c.id);
+    expect(ok).toContain("eth-usd-feed-fresh");
+    expect(ok).toContain("nvda-usd-feed-fresh");
+    expect(ok).toContain("router-code-hash");
   });
 
   it("cap above the canary ceiling", async () => {
@@ -251,6 +303,16 @@ describe("evaluateCanaryReadiness — fail-closed on each defect", () => {
   });
 });
 
+describe("verified live identities (regression pin — LIVE-confirmed at block 19761208, 2026-07-26)", () => {
+  it("pins the exact official feed proxies, on-chain descriptions and decimals", () => {
+    expect(ETH_USD_FEED).toBe("0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9");
+    expect(NVDA_USD_FEED).toBe("0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15");
+    // On-chain description() strings (NOT the directory display name "Robinhood NVDA / USD").
+    expect(ETH_USD_FEED_DESCRIPTION).toBe("ETH / USD");
+    expect(NVDA_USD_FEED_DESCRIPTION).toBe("RHNVDA / USD");
+  });
+});
+
 describe("network tripwire — the core touches no network of its own", () => {
   const original = globalThis.fetch;
   afterEach(() => {
@@ -267,10 +329,14 @@ describe("network tripwire — the core touches no network of its own", () => {
 });
 
 describe("formatCanaryReport", () => {
-  it("renders a secret-free report ending in the status token", async () => {
-    const r = await evaluateCanaryReadiness(healthyChain(), healthyConfig());
+  it("renders a secret-free report ending in the status token, showing flags", async () => {
+    const r = await evaluateCanaryReadiness(healthyChain(), {
+      ...healthyConfig(),
+      controller: null,
+    });
     const text = formatCanaryReport(r);
-    expect(text).toContain("STATUS: CANARY_BUILD_READY_EXECUTION_LOCKED");
+    expect(text).toContain("STATUS: CANARY_NOT_READY");
+    expect(text).toContain(`flags: ${FLAG_CONTROLLER_REQUIRED}`);
     expect(text).not.toMatch(/0x[0-9a-fA-F]{64,}/); // no long hex blobs / calldata
   });
 });

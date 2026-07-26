@@ -7,6 +7,10 @@
   "executionLocked": true,
   "deployed": false,
   "network": { "name": "Robinhood Chain Mainnet", "chainId": 4663 },
+  "task10K7Update": {
+    "note": "TASK 10K-7 completed the live-chain acceptance evidence. Feed identities/addresses/decimals/on-chain descriptions and router code hash were verified against live Robinhood Chain state at block 19761208 (all MATCH; no config fix required). The 'read-only RPC URL' blocker below is RESOLVED (RPC access supplied; real read-only preflight run) and D-22B is now ENGINEERING-COMPLETE. The real runtime preflight is CANARY_NOT_READY (missing controller + market-closed/low-volatility stale feeds) — runtime availability, not a design defect.",
+    "supersededBy": "docs/audit/BPS_RIALTO_LIVE_ORACLE_2026-07-26.{md,evidence.json}"
+  },
   "safetyAttestation": {
     "rialtoQuoteRequested": false,
     "rialtoApiKeyRead": false,

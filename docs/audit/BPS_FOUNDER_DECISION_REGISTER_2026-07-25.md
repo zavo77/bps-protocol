@@ -163,6 +163,31 @@ configure, unpause, or execute step. Ballot **D-17 unchanged**. Evidence:
 `packages/contracts/deploy/GUARDED_SETTLEMENT_RUNBOOK.md`. No Rialto request, no key, no signing, no
 broadcast, no deployment were performed.
 
+### Live oracle + Safe + preflight acceptance (2026-07-26, TASK 10K-7)
+
+Read-only live-chain verification at pinned block 19761208 closed the acceptance gaps. **No decision was
+overridden.** **D-22B is now ENGINEERING-COMPLETE:** the official Chainlink feed identities, addresses,
+decimals, and on-chain descriptions match the implementation and were confirmed live — ETH/USD
+`0x78F3…d3A9` "ETH / USD" 8dp, NVDA/USD `0x379E…9F15` on-chain description "RHNVDA / USD" 8dp (the directory
+display name "Robinhood NVDA / USD" differs from the on-chain string; the implementation correctly pins the
+on-chain string). No separate WETH/USD feed exists; ETH/USD prices canonical WETH 1:1 with no multiplier;
+NVDA `uiMultiplier`=1e18 and the feed already reflects the Total Return Value (guard does not re-apply it).
+Current staleness (NVDA market-closed Sunday; ETH low-volatility within its 86400s heartbeat) is **runtime
+availability, not an unresolved price-source design.** **No official Chainlink L2 Sequencer Uptime Feed** is
+published for Robinhood Chain (56 directory feeds, none sequencer); the strict dual-feed 900s freshness
+mitigation is retained. The **supplied RPC access eliminates "no RPC configured" as a blocker.** **D-6:**
+the router/selector/code-hash envelope is live-verified (`ownerOf(2)`=`0xC94135b6…`, code hash
+`0xa7041268…27611`) and the **canonical Safe v1.4.1 stack is verified available on chain 4663**
+(singletons/proxy-factory/fallback-handler/MultiSend/MultiSendCallOnly, live code hashes match the official
+manifest) — only the final Safe owners/threshold (or another audited deployed-contract controller) and
+formal activation remain. **D-5/D-8/D-21** unchanged (candidate/tested; activation-pending). The real
+read-only preflight returns `CANARY_NOT_READY` (CONTROLLER_REQUIRED + NVDA_FEED_STALE_MARKET_CLOSED +
+ETH_USD_FEED_STALE). **D-3/D-23** counsel/audit-pending; **D-24 stands** (a new bounded authorization is
+required before any live step); ballot **D-17 unchanged**; **QEX-1 consumed.** Evidence:
+`docs/audit/BPS_RIALTO_LIVE_ORACLE_2026-07-26.*`; Safe packet
+`packages/contracts/deploy/SAFE_CONTROLLER_SETUP.md`. No Rialto request, no key read, no signing, no
+broadcast, no deployment occurred; authenticated RPC URLs were never written to the repository.
+
 ## Restricted Rialto access request (DRAFT — NOT SENT)
 
 The exact text is preserved in the ballot §5 and the decision pack. Decision: `SEND MANUALLY`.
