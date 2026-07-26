@@ -1,30 +1,37 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-26T02:30:00Z",
+  "updatedUtc": "2026-07-26T06:45:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "46c9855b8950ff0152c9f8281b1ba210ddbb974a",
+  "head": "ac701181e61bf8a99c4ba26f0ffbf328ab61e0f4",
   "workingTree": {
     "dirty": true,
-    "note": "TASK 10K-2 checkpoint 46c9855 committed. TASK 10K-3 (guarded-settlement core, disabled) changes uncommitted at capture.",
+    "note": "TASK 10K-3 checkpoint ac70118 committed. TASK 10K-4 (Solidity GuardedSettlementExecutor + Foundry tests) changes uncommitted at capture. forge-std v1.9.7 cloned into gitignored packages/contracts/lib (not tracked).",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
       "docs/continuity/CHANGELOG.md",
       "docs/audit/BPS_FOUNDER_DECISION_REGISTER_2026-07-25.md",
-      "packages/rialto/src/server.ts"
-    ],
-    "untracked": [
       "docs/audit/BPS_RIALTO_GUARDED_SETTLEMENT_2026-07-25.md",
       "packages/rialto/src/guarded-settlement.ts",
       "packages/rialto/src/guarded-settlement.test.ts",
       "packages/contracts/src/interfaces/IGuardedSettlementExecutor.sol"
+    ],
+    "untracked": [
+      "packages/contracts/src/GuardedSettlementExecutor.sol",
+      "packages/contracts/src/interfaces/ISettlementPriceGuard.sol",
+      "packages/contracts/src/interfaces/ISettlementCalldataValidator.sol",
+      "packages/contracts/test/GuardedSettlementExecutor.t.sol",
+      "packages/contracts/test/mocks/MockGuardedRouter.sol",
+      "packages/contracts/test/mocks/MockGuardedCalldataValidator.sol",
+      "packages/contracts/test/mocks/MockSettlementPriceGuard.sol",
+      "packages/contracts/test/mocks/ReentrantGuardedRouter.sol"
     ]
   },
   "phase": "post-canary",
-  "latestCompletedMilestone": "TASK 10K-3 — guarded-settlement core (production-shaped, deliberately DISABLED; offline pure guards + sanitized plan + READY_OFFLINE_ONLY); Solidity executor deferred (forge-std absent), interface added (2026-07-25)",
-  "currentTask": "none — guarded core implemented offline + verified (rialto vitest 201/201, zero network); live trading NOT enabled; D-24 stands",
-  "nextTask": "Resolve the production gates for a private controlled canary, in order: (1) approved selector proven from a repo-owned/vendored router ABI (D-6); (2) final guarded-executor/Safe taker (D-6); (3) dated runtime ownerOf(2) strategy (D-6); (4) trusted price source + age (D-22B); (5) per-token sell cap (D-8); (6) vendored forge-std -> concrete IGuardedSettlementExecutor + Foundry tests (D-21/D-5). D-24 stands",
+  "latestCompletedMilestone": "TASK 10K-4 — Solidity GuardedSettlementExecutor.sol (undeployed, paused/disabled) + 50 offline Foundry tests (unit/fuzz/invariant) + TS<->Solidity digest parity; forge-std v1.9.7 pinned (2026-07-25)",
+  "currentTask": "none — Solidity executor implemented + tested locally (offline, no fork/RPC); UNDEPLOYED; live trading NOT enabled; D-24 stands",
+  "nextTask": "First-controlled-canary gates in order: (1) authoritative selector proof for 0x77963966 from a repo-owned/vendored router ABI (D-6; hard-blocked until proven) + its validator; (2) trusted price source + freshness (D-22B); (3) production Safe controller; (4) dated runtime ownerOf(2) strategy (D-6); (5) per-token cap approval (D-8); (6) deployment script + counsel (D-3/D-23) + a new bounded founder authorization (D-24)",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,
@@ -418,16 +425,18 @@
     "doc": "docs/audit/BPS_RIALTO_GUARDED_SETTLEMENT_2026-07-25.md",
     "candidatePolicy": "chain 4663; feature 2; WETH->NVDA only; no integrator fee; platform fee <=5 bps; slippage 50/100 bps; deviation <=100 bps; lifetime <=300s; selector allow-list EMPTY (0x77963966 evidence-only); taker/caps/ages/price-source UNRESOLVED (fail closed)",
     "readyStatus": "READY_OFFLINE_ONLY is NEVER execution authorization; production candidate policy is not ready",
-    "solidity": "DEFERRED — forge-std not vendored (packages/contracts/lib gitignored/absent) so the Foundry test runner cannot run offline; OZ + IRialtoRouterRegistry ABI present; contract-ready interface added: packages/contracts/src/interfaces/IGuardedSettlementExecutor.sol",
-    "verification": "OFFLINE only — @bps/rialto typecheck + build + eslint clean, vitest 201/201; zero network requests; no signing/funding/approval/simulation/deployment/broadcast",
-    "decisionStates": "D-5 candidate (approval required); D-6 open; D-8 candidate (approval-pending); D-21 candidate (executor verification open); D-22B interface+offline enforcement (trusted source unresolved); D-3 counsel-pending; D-23 counsel-pending; D-24 stands; D-17 unchanged",
+    "solidity": "IMPLEMENTED (TASK 10K-4) — packages/contracts/src/GuardedSettlementExecutor.sol (UNDEPLOYED; Ownable2Step Safe controller; executor-as-taker; Pausable start-paused; ReentrancyGuard; registry ownerOf(2) lock; per-selector calldata validator; required price guard; 0.01 WETH cap; exact-allowance + min-delta + allowance-reset; domain digest + replay; recover own-balance-only). Interfaces: IGuardedSettlementExecutor/ISettlementPriceGuard/ISettlementCalldataValidator. forge-std v1.9.7 (commit 77041d2ce690e692d6e03cc812b57d1ddaa4d505) in gitignored lib; OZ 5.6.1",
+    "selectorProof": "NOT PROVEN — no repo-owned/vendored Rialto router ABI proves 0x77963966; it is hard-blocked on-chain (EvidenceOnlySelectorDisabled) and remains disabled; FIRST canary blocker",
+    "digestParity": "TS<->Solidity byte-identical for a shared vector (0x99edf1c907908d0d6f278d7e04c0a6624ba35f59ca6b7b74800b220fdd8e8c06); asserted in both computeOnchainIntentDigest (TS) and test_digestParityVector (Solidity)",
+    "verification": "OFFLINE only — Foundry build + 50 tests (unit/fuzz/invariant, no fork/RPC), forge fmt clean; @bps/rialto typecheck + build + eslint clean, vitest 202/202; zero network requests; no signing/funding/approval/simulation/deployment/broadcast; QEX-1 remains consumed",
+    "decisionStates": "D-5 exact-allowance implemented locally (approval/deployment-pending); D-6 executor-as-taker implemented but OPEN (selector proof, Safe, dated registry strategy); D-8 0.01/100bps candidate (no production authorization); D-21 replay+allowance implemented/tested (deployment-review pending); D-22B price-guard implemented with mocks (trusted source unresolved); D-3 counsel-pending; D-23 counsel-pending; D-24 stands; D-17 unchanged",
     "remainingGatesForCanary": [
-      "approved selector proven from a repo-owned/vendored router ABI (D-6)",
-      "final guarded-executor/Safe taker address (D-6)",
+      "authoritative selector proof for 0x77963966 + specific validator (D-6; hard-blocked until proven)",
+      "trusted production price source + freshness (D-22B)",
+      "production Safe controller address",
       "dated runtime ownerOf(2) registry strategy (D-6)",
-      "trusted production price source + age limit (D-22B)",
-      "per-token sell cap (D-8)",
-      "vendored forge-std -> concrete executor + Foundry tests (D-21/D-5)"
+      "per-token sell cap approval (D-8)",
+      "deployment script/procedure + counsel (D-3/D-23) + new bounded founder authorization (D-24)"
     ]
   }
 }

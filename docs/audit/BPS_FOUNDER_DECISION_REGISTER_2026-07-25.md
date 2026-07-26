@@ -116,6 +116,18 @@ enforcement (trusted production source unresolved); **D-3** and **D-23** counsel
 offline); a contract-ready interface `packages/contracts/src/interfaces/IGuardedSettlementExecutor.sol`
 records the invariants. `READY_OFFLINE_ONLY` is never execution authorization.
 
+**TASK 10K-4 update:** the Solidity `GuardedSettlementExecutor` is now implemented and locally tested
+(offline Foundry, no fork/RPC; forge-std v1.9.7 pinned) — UNDEPLOYED and paused/disabled by default.
+This records **candidate** safeguards only and closes no decision. **D-5** exact temporary allowance
+implemented locally (approval/deployment-pending). **D-6** executor-as-taker + registry `ownerOf(2)` lock
+implemented but remains open: the observed selector `0x77963966` is **NOT authoritatively proven** (no
+repo-owned/vendored router ABI) and is hard-blocked on-chain, the production Safe is unknown, and a dated
+runtime registry strategy is unapproved. **D-8** 0.01 WETH cap + 100-bps ceiling implemented as candidate
+policy (no production authorization). **D-21** replay + exact-allowance protections implemented/tested
+locally (deployment-review pending). **D-22B** price-guard enforcement implemented with mocks (trusted
+production source unresolved). **D-3** and **D-23** counsel-pending; **D-24 stands**; ballot **D-17
+unchanged**. Local unit tests are not a fork rehearsal, live simulation, or authorization.
+
 ## Restricted Rialto access request (DRAFT — NOT SENT)
 
 The exact text is preserved in the ballot §5 and the decision pack. Decision: `SEND MANUALLY`.

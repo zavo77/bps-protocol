@@ -14,6 +14,7 @@
 //   prices, fees, or basis points. Deviation rounding is documented (floor => conservative ceiling).
 
 import { createHash } from "node:crypto";
+import { keccak256, encodeAbiParameters, stringToHex } from "viem";
 import { reconcileRegistryTarget, type RegistryFeatureObservation } from "./registry-structural.js";
 
 export const GUARD_VERSION = "bps-guarded-settlement/1";
@@ -663,4 +664,81 @@ export function replayQex1Evidence(
   });
   const distinctFailureStatuses = [...new Set(readiness.failures.map((f) => f.status))];
   return { readiness, distinctFailureStatuses };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// On-chain digest parity (TASK 10K-4).
+// This mirrors GuardedSettlementExecutor's on-chain domain-separated intent digest
+// (`keccak256(abi.encode(DigestInput))`) so TypeScript and Solidity produce byte-identical digests.
+// DigestInput is an all-static struct, so `abi.encode(struct)` equals the concatenation of its encoded
+// fields; encoding the 17 fields individually via viem reproduces it exactly. This is distinct from the
+// off-chain `computeIntentDigest` above (a SHA-256 canonical-string digest for the offline model).
+// ---------------------------------------------------------------------------------------------------
+
+/** keccak256("BPS-GUARDED-SETTLEMENT/1") — equals the Solidity `GUARD_DOMAIN` constant. */
+export const ONCHAIN_GUARD_DOMAIN = keccak256(stringToHex("BPS-GUARDED-SETTLEMENT/1"));
+
+export interface OnchainDigestInput {
+  readonly chainId: number;
+  readonly executor: `0x${string}`;
+  readonly registry: `0x${string}`;
+  readonly feature: number;
+  readonly target: `0x${string}`;
+  readonly selector: `0x${string}`; // bytes4
+  readonly sellToken: `0x${string}`;
+  readonly buyToken: `0x${string}`;
+  readonly sellAmountRaw: bigint;
+  readonly minBuyAmountRaw: bigint;
+  readonly platformFeeBps: number;
+  readonly slippageBps: number;
+  readonly taker: `0x${string}`;
+  readonly nonce: bigint;
+  readonly deadlineSec: bigint;
+  readonly calldataHash: `0x${string}`; // bytes32
+}
+
+/** Compute the on-chain guarded-settlement intent digest exactly as the Solidity executor does. */
+export function computeOnchainIntentDigest(i: OnchainDigestInput): `0x${string}` {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "address" },
+        { type: "bytes4" },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint16" },
+        { type: "uint16" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "bytes32" },
+      ],
+      [
+        ONCHAIN_GUARD_DOMAIN,
+        BigInt(i.chainId),
+        i.executor,
+        i.registry,
+        BigInt(i.feature),
+        i.target,
+        i.selector,
+        i.sellToken,
+        i.buyToken,
+        i.sellAmountRaw,
+        i.minBuyAmountRaw,
+        i.platformFeeBps,
+        i.slippageBps,
+        i.taker,
+        i.nonce,
+        i.deadlineSec,
+        i.calldataHash,
+      ],
+    ),
+  );
 }

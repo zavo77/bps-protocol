@@ -7,6 +7,44 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-25 — TASK 10K-4: Solidity GuardedSettlementExecutor + offline Foundry tests
+
+- **Type:** Solidity contract + local Foundry tests + TS digest parity + docs. NO deployment, signing,
+  funding, live approval, simulation, submission, broadcast, quote request, or API-key read. All Foundry
+  testing local/offline (`forge test --offline`, no fork, no RPC). QEX-1 remains consumed. Commit
+  `ac70118` (10K-3) preserved.
+- **Dependency:** installed **forge-std v1.9.7** (commit `77041d2ce690e692d6e03cc812b57d1ddaa4d505`) by
+  cloning the pinned tag into the gitignored `packages/contracts/lib/` (the repo's deps-on-demand
+  convention; not tracked). OZ 5.6.1 via root node_modules. No other dependency added.
+- **Contract:** `packages/contracts/src/GuardedSettlementExecutor.sol` (UNDEPLOYED, starts paused,
+  disabled until configured). `Ownable2Step` Safe controller (rejects zero/dead/self); executor-as-taker
+  - purchased-token recipient; `Pausable`; `ReentrancyGuard`; `SafeERC20`. Registry `ownerOf(2)` lock
+    (never prev/next/quote/env/override); per-selector COMPLETE-calldata validator; required price guard
+    (D-22B); WETH→NVDA only; per-token cap ≤ 0.01 WETH; non-payable (msg.value 0); platform fee ≤ 5 bps; no
+    integrator fee; slippage ≤ 100 bps; domain-separated `keccak256(abi.encode(DigestInput))` digest with
+    single-use digest+nonce marked before the external call (atomic revert restores); exact-allowance →
+    verified router call → min received-delta → allowance reset to zero; sanitized events; narrow
+    owner-only own-balance-only `recover`. Interfaces `IGuardedSettlementExecutor` (rewritten to the
+    concrete surface), `ISettlementPriceGuard`, `ISettlementCalldataValidator`.
+- **Selector proof:** `0x77963966` is **NOT authoritatively proven** (no repo-owned/vendored Rialto router
+  ABI proves its signature/layout). It is **hard-blocked on-chain** (`EvidenceOnlySelectorDisabled`) and
+  stays disabled — recorded as the first canary blocker.
+- **Tests:** 50 Foundry tests (constructor/config, starts-paused, controller-only, registry lock incl.
+  paused/zero/mismatch/previous-router, selector+validator, token/amount/fee/value, price guard,
+  min-delta, fee-on-transfer fail-safe, allowance-clear failure, deadline/replay/digest, reentrancy,
+  emergency pause, sanitized events, recovery, fuzz, and a stateful invariant — router allowance always
+  zero across 128,000 handler calls). `forge fmt` clean; executor runtime ~9.05 KB.
+- **TS parity:** added `computeOnchainIntentDigest` (viem) to `packages/rialto/src/guarded-settlement.ts`;
+  a shared cross-language vector proves TS and Solidity compute the same digest
+  (`0x99edf1c9…8c06`) — asserted in `guarded-settlement.test.ts` and `test_digestParityVector`. rialto
+  vitest **202/202**; typecheck/lint clean.
+- **Governance (candidates only; nothing closed):** D-5 exact-allowance implemented locally
+  (approval/deployment-pending); D-6 executor-as-taker implemented, OPEN (selector proof, Safe, dated
+  registry strategy); D-8 0.01/100-bps candidate (no production authorization); D-21 replay+allowance
+  implemented/tested (deployment-review pending); D-22B price-guard with mocks (trusted source
+  unresolved); D-3/D-23 counsel-pending; **D-24 stands**; D-17 unchanged.
+- Commit `feat(rialto): implement guarded settlement executor`.
+
 ## 2026-07-25 — TASK 10K-3: guarded-settlement core (production-shaped, deliberately DISABLED)
 
 - **Type:** offline code + tests + concise docs. NO Rialto request, API key use/read, RPC/website/

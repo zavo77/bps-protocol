@@ -60,22 +60,65 @@ price sources, and the final taker.
 5. **Per-token sell cap** — a founder/security-approved maximum.
 6. **Durable atomic replay store + on-chain executor verification** (D-21, D-5).
 
-## Solidity executor — DEFERRED (prerequisite missing)
+## Solidity executor — IMPLEMENTED (TASK 10K-4)
 
-Foundry (`foundry.toml`, `forge`) and OpenZeppelin (root `node_modules`, remapped) are present, and a
-repo-owned documentation-verified `IRialtoRouterRegistry` ABI exists. **However, the Solidity test runner
-cannot run offline in this checkout: `packages/contracts/lib/` (forge-std) is gitignored and absent, so
-`forge test` cannot compile, and installing forge-std requires a network dependency download that this
-task forbids.** Per the task's fallback, the concrete executor + Foundry tests are deferred and a
-contract-ready interface (`IGuardedSettlementExecutor.sol`) mirroring the TypeScript invariants is
-provided instead. **Exact missing prerequisite:** vendored/installed `forge-std` (and a confirmed offline
-`forge build`/`forge test`) in `packages/contracts`.
+`packages/contracts/src/GuardedSettlementExecutor.sol` (undeployed) plus interfaces
+`IGuardedSettlementExecutor.sol`, `ISettlementPriceGuard.sol`, `ISettlementCalldataValidator.sol`.
+Dependency pin: **forge-std v1.9.7** (commit `77041d2ce690e692d6e03cc812b57d1ddaa4d505`), cloned into the
+gitignored `packages/contracts/lib/` (the repo's deps-on-demand convention); OpenZeppelin 5.6.1 via root
+`node_modules` (remapped). All tests run **offline** (`forge test --offline`, no fork, no RPC).
+
+Contract invariants (mirror the TypeScript core one-to-one):
+
+- **Controller/executor-as-taker:** `Ownable2Step` controller (a future Safe) is the ONLY account that may
+  configure, pause/unpause, settle, or recover; the executor is itself the taker and purchased-token
+  recipient. Constructor rejects a zero/dead/self controller and non-contract deps, forces chain 4663, and
+  **starts paused**. Disabled by default: no price guard, no selector validator, pair not enabled, cap
+  unset — all fail closed.
+- **Registry:** resolves the current feature-2 router via `ownerOf(2)` at settlement time (reverts on
+  paused/uninitialized), rejects a zero router, requires `target == current router`; previous/next/quote/
+  env/override routers can never pass.
+- **Selector + calldata:** a selector allow-list alone is insufficient — each approved selector needs a
+  registered `ISettlementCalldataValidator` that proves the COMPLETE calldata matches the intent
+  (tokens, exact sell, min buy, recipient == executor, platform fee ≤ 5 bps, zero integrator fee).
+  Registering the evidence-only selector `0x77963966` is **hard-blocked on-chain**
+  (`EvidenceOnlySelectorDisabled`).
+- **Token/amount/fee/value:** WETH→NVDA only; positive amounts; per-token cap ≤ 0.01 WETH; non-payable
+  (`msg.value` always 0); platform fee ≤ 5 bps; no integrator fee; slippage ≤ 100 bps.
+- **Price guard (D-22B):** requires a configured `ISettlementPriceGuard`; a zero/reverting/rejecting/
+  deviating guard reverts. No production source approved (mock only).
+- **Replay/digest:** domain-separated `keccak256(abi.encode(DigestInput))` binding chain, executor,
+  registry, feature, target, selector, token pair, amounts, fee/slippage, taker, nonce, deadline, and
+  calldata hash; single-use digest + nonce marked BEFORE the external call (atomic revert restores them);
+  rejects expired/too-far deadlines, digest/calldata-hash mismatches, reused nonces/digests.
+- **Atomic settlement:** require zero prior allowance → approve EXACTLY the sell amount → call ONLY the
+  verified router → require the measured NVDA balance delta ≥ minimum → reset allowance to zero → require
+  zero allowance → emit sanitized event. Any failure reverts the whole operation. No arbitrary-call,
+  delegatecall, arbitrary-approval, or policy-bypassing path; `recover` only sweeps the contract's own
+  balance to the controller and is `nonReentrant`.
+
+Cross-language digest parity is proven by a shared fixed vector asserted in both the TypeScript test
+(`computeOnchainIntentDigest`) and the Solidity test (`test_digestParityVector`): digest
+`0x99edf1c907908d0d6f278d7e04c0a6624ba35f59ca6b7b74800b220fdd8e8c06`.
+
+Test coverage: 50 Foundry tests (unit + fuzz + a stateful invariant that the router allowance is always
+zero across 128,000 handler calls). Executor runtime size ~9.05 KB.
+
+### Remaining gaps (unchanged)
+
+- **Selector proof:** authoritative ABI/source for `0x77963966` NOT found (no repo-owned/vendored Rialto
+  router ABI proves its signature/layout) — it stays disabled; **first canary blocker**.
+- **Price source (D-22B):** no trusted production price guard/oracle + freshness policy.
+- **Safe address:** no production controller Safe authorized.
+- **Deployment/authorization:** undeployed; no deploy script/address; D-24 requires a separate bounded
+  founder authorization before any live use.
 
 ## Decision states (unchanged governance; candidates only)
 
-D-5 candidate exact-allowance settlement implemented offline (founder/security approval required). D-6
-open (selector unproven/unapproved, final taker unknown, dated registry strategy unapproved). D-8
-candidate 50/100 bps implemented (production policy approval-pending). D-21 replay + exact-allowance
-mitigations implemented offline (on-chain executor verification open). D-22B price-guard interface +
-offline enforcement implemented (trusted source unresolved). D-3 counsel-pending. D-23 counsel-pending.
-D-24 stands. D-17 unchanged.
+D-5 exact temporary allowance implemented locally (approval/deployment-pending). D-6 executor-as-taker
+architecture implemented; remains open (selector proof, production Safe, and dated runtime registry
+strategy unresolved). D-8 0.01 WETH cap + 100-bps ceiling implemented as candidate policy (no production
+authorization). D-21 replay + allowance protections implemented/tested locally (deployment-review
+pending). D-22B price-guard enforcement implemented with mocks (trusted production source unresolved).
+D-3 counsel-pending. D-23 counsel-pending. D-24 stands. D-17 unchanged. Local unit tests are NOT a fork
+rehearsal, live simulation, or authorization.

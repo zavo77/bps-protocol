@@ -10,6 +10,8 @@ import {
   replayQex1Evidence,
   InMemoryReplayStore,
   evaluateLiveCliAuthorization,
+  computeOnchainIntentDigest,
+  ONCHAIN_GUARD_DOMAIN,
   GUARD_VERSION,
   OFFICIAL_REGISTRY,
   WETH,
@@ -443,6 +445,34 @@ describe("replay and expiry", () => {
     };
     expect(computeIntentDigest(base)).toBe(computeIntentDigest(base));
     expect(computeIntentDigest(base)).not.toBe(computeIntentDigest({ ...base, nonce: 2n }));
+  });
+});
+
+describe("on-chain digest parity (matches Solidity GuardedSettlementExecutor)", () => {
+  // Shared cross-language vector — the Solidity test test_digestParityVector asserts the same values.
+  it("computes the shared vector's domain and digest identically to Solidity", () => {
+    expect(ONCHAIN_GUARD_DOMAIN).toBe(
+      "0xc7f83144102cea8c4daddf564ae4844c4d4b1339359d09e218eb4420af3bad84",
+    );
+    const digest = computeOnchainIntentDigest({
+      chainId: 4663,
+      executor: "0x1111111111111111111111111111111111111111",
+      registry: "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+      feature: 2,
+      target: "0xc94135b63772b91d79d0a2daab2a8801f32359bd",
+      selector: "0x77963966",
+      sellToken: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      buyToken: "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      sellAmountRaw: 5_000000000000000n,
+      minBuyAmountRaw: 1_000000000000000n,
+      platformFeeBps: 5,
+      slippageBps: 50,
+      taker: "0x1111111111111111111111111111111111111111",
+      nonce: 1n,
+      deadlineSec: 1893456000n,
+      calldataHash: "0x00000000000000000000000000000000000000000000000000000000deadbeef",
+    });
+    expect(digest).toBe("0x99edf1c907908d0d6f278d7e04c0a6624ba35f59ca6b7b74800b220fdd8e8c06");
   });
 });
 
