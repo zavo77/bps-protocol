@@ -1,37 +1,48 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-26T12:30:00Z",
+  "updatedUtc": "2026-07-26T11:40:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "5181f1b4026ca530b6379ab177fe629df5ff8f78 (parent of the TASK 10K-7 commit); the commit 'fix(settlement): verify live oracle and canary preflight' advances HEAD by one — run 'git rev-parse HEAD' to read the exact new hash.",
+  "head": "be682e872cc8a8c333301b0729b63d0602cf740a (parent of the TASK 10K-8 commit); the commit 'ops(safe): record canonical controller deployment' advances HEAD by one — run 'git rev-parse HEAD' to read the exact new hash.",
   "workingTree": {
     "dirty": false,
-    "note": "TASK 10K-7 committed (code + docs + continuity together) as 'fix(settlement): verify live oracle and canary preflight'. forge-std v1.9.7 lives in gitignored packages/contracts/lib; run packages/contracts/tool/bootstrap-forge-std.{sh,ps1} on a fresh clone before forge test. Lists below = files this commit changed/added.",
+    "note": "TASK 10K-8 committed (sanitized evidence + continuity only; NO code change) as 'ops(safe): record canonical controller deployment'. forge-std v1.9.7 lives in gitignored packages/contracts/lib; run packages/contracts/tool/bootstrap-forge-std.{sh,ps1} on a fresh clone before forge test. Lists below = files this commit changed/added.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
       "docs/continuity/CHANGELOG.md",
-      "docs/audit/BPS_FOUNDER_DECISION_REGISTER_2026-07-25.md",
-      "docs/audit/BPS_RIALTO_CANARY_BUILD_2026-07-26.evidence.json",
-      "packages/contracts/deploy/GUARDED_SETTLEMENT_RUNBOOK.md",
-      "packages/rialto/src/canary-preflight.ts",
-      "packages/rialto/src/canary-preflight-cli.ts",
-      "packages/rialto/src/canary-preflight.test.ts",
-      "packages/rialto/src/canary-preflight-cli.test.ts"
+      "docs/audit/BPS_FOUNDER_DECISION_REGISTER_2026-07-25.md"
     ],
     "deleted": [],
     "untracked": [
-      "docs/audit/BPS_RIALTO_LIVE_ORACLE_2026-07-26.md",
-      "docs/audit/BPS_RIALTO_LIVE_ORACLE_2026-07-26.evidence.json",
-      "packages/contracts/deploy/SAFE_CONTROLLER_SETUP.md"
+      "docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.md",
+      "docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.evidence.json"
     ]
   },
   "phase": "post-canary",
-  "latestCompletedMilestone": "TASK 10K-7 — live oracle/Safe/preflight acceptance. Read-only live-chain verification at pinned block 19761208 (2026-07-26): all configured feed/token/router identities MATCH chain (ETH/USD 'ETH / USD' 8dp; NVDA/USD on-chain description 'RHNVDA / USD' 8dp; router code hash 0xa7041268...27611; no fix needed). No official Chainlink sequencer feed. Preflight hardened (CONTROLLER_REQUIRED / stale classification / RPC redaction). Real read-only preflight = CANARY_NOT_READY. Safe v1.4.1 stack verified available on 4663 (CANONICAL_SAFE_STACK_AVAILABLE). D-22B ENGINEERING-COMPLETE. 513 Foundry / 252 rialto vitest",
-  "currentTask": "none — guarded-settlement canary stack build-ready + LIVE-verified (read-only); UNDEPLOYED; execution locked; live trading NOT enabled; D-24 stands (expired)",
+  "safeController": {
+    "deployed": true,
+    "address": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
+    "safeVersion": "1.4.1",
+    "type": "SafeL2 2-of-3 multisig",
+    "owners": [
+      "0x7116F2998e625651D310E97919a1c638a7F82ba2",
+      "0x006024ff3b9b707ad0779eD3586546440fAAC49f",
+      "0xd5Bb1534Efc88400f34A832D85D0939c0e2F1759"
+    ],
+    "threshold": 2,
+    "nonce": 0,
+    "deployTx": "0x09a4b2c179da9b1ab2abfc0c2b8067a07fe5850f026d8f8aa89af4d5451ccbb0",
+    "block": 19831992,
+    "role": "verified CANDIDATE contract controller",
+    "activatedAsExecutorController": false,
+    "note": "Safe deployed + verified (29/29 checks). NOT activated — no GuardedSettlementExecutor exists. Owns/controls nothing. Evidence docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.*"
+  },
+  "latestCompletedMilestone": "TASK 10K-8 — canonical 2-of-3 Safe controller DEPLOYED + verified (read-only). Founder signed/broadcast one createProxyWithNonce via Owner 1's Rabby wallet; Claude verified only. Safe 0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62 (v1.4.1 SafeL2, 2-of-3, threshold 2, nonce 0, no modules/guard, balances zero). Deploy tx 0x09a4b2c1...ccbb0 block 19831992, status 1. 29/29 verification checks pass. Recorded as candidate controller; NOT activated (no executor). D-24 stands; Safe-creation authorization consumed",
+  "currentTask": "none — canonical 2-of-3 Safe controller deployed + verified; guarded-settlement executor still UNDEPLOYED; execution locked; live trading NOT enabled; D-24 stands (expired)",
   "buildReadiness": "CANARY_BUILD_READY_EXECUTION_LOCKED",
-  "runtimeReadiness": "CANARY_NOT_READY (controller missing + feeds stale/market-closed; runtime availability, not a defect)",
-  "nextTask": "Build + live verification done. Remaining are EXTERNAL HUMAN INPUTS only: (1) final Safe owners+threshold or another audited deployed-contract controller (Safe v1.4.1 factory/singletons verified available on 4663; see packages/contracts/deploy/SAFE_CONTROLLER_SETUP.md); (2) independent security audit + counsel (D-3/D-23); (3) a NEW bounded founder authorization replacing the expired D-24; (4) explicit deployment + execution authorization. Then controller-driven deploy->configure->preflight->unpause per packages/contracts/deploy/GUARDED_SETTLEMENT_RUNBOOK.md",
+  "runtimeReadiness": "CANARY_NOT_READY (executor undeployed; feeds market-closed/low-volatility at last live check)",
+  "nextTask": "Controller now exists (Safe 0x62Ae5b22...5E62, verified). Remaining EXTERNAL HUMAN INPUTS: (1) independent security audit of guard + executor + counsel (D-3/D-23); (2) a NEW bounded founder authorization replacing the expired D-24; (3) explicit executor deployment + execution authorization. Then deploy GuardedSettlementExecutor (paused) -> configure -> transferOwnership(Safe) -> acceptOwnership (2-of-3) -> preflight -> unpause per packages/contracts/deploy/GUARDED_SETTLEMENT_RUNBOOK.md",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,

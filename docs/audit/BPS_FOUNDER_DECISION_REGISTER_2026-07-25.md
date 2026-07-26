@@ -188,6 +188,25 @@ required before any live step); ballot **D-17 unchanged**; **QEX-1 consumed.** E
 `packages/contracts/deploy/SAFE_CONTROLLER_SETUP.md`. No Rialto request, no key read, no signing, no
 broadcast, no deployment occurred; authenticated RPC URLs were never written to the repository.
 
+### Canonical 2-of-3 Safe controller deployed (2026-07-26, TASK 10K-8)
+
+The founder granted a **narrow, one-time** authorization to create exactly one canonical Safe proxy and
+signed/broadcast it through Owner 1's Rabby wallet; Claude performed read-only verification only (no signing,
+broadcast, funding, or key access). The deployed **Safe `0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62`** (Safe
+v1.4.1 SafeL2, **2-of-3**; owners `0x7116…2ba2`, `0x0060…c49f`, `0xd5Bb…1759`; threshold 2; nonce 0; no
+modules; no guard; balances zero) is recorded as the **verified candidate contract controller** for the
+guarded-settlement executor. It is **NOT activated** — no `GuardedSettlementExecutor` is deployed, so the
+Safe owns and controls nothing. Founder-supplied review statuses recorded as-is: RPC rotation complete;
+security review `APPROVED FOR PAUSED DEPLOYMENT`; counsel gate approved; Safe-only deployment authorized. This
+partially advances **D-6** (a real deployed-contract controller now exists) but does **not** close it —
+executor deployment, configuration, and controller transfer remain. **D-3/D-23** (independent audit +
+counsel) remain external gates. The **one-time Safe-creation authorization is CONSUMED**; **D-24 remains
+fully effective** and continues to prohibit executor deployment, configuration, controller transfer, funding,
+approvals, swaps, settlement, and canary execution — a new bounded, independently reviewed authorization is
+required before any of those. Ballot **D-17 unchanged**; **QEX-1 consumed**. Evidence:
+`docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.*`. 29/29 post-deployment checks passed. No private
+key, mnemonic, or authenticated RPC URL was exposed.
+
 ## Restricted Rialto access request (DRAFT — NOT SENT)
 
 The exact text is preserved in the ballot §5 and the decision pack. Decision: `SEND MANUALLY`.

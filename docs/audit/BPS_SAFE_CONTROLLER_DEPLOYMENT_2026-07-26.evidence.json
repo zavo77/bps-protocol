@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "1.0.0",
+  "task": "TASK 10K-8",
+  "title": "Canonical 2-of-3 Safe controller deployment — record & independent verification",
+  "dateUtc": "2026-07-26",
+  "result": "SAFE_DEPLOYED_AND_VERIFIED",
+  "startingCommit": "be682e872cc8a8c333301b0729b63d0602cf740a",
+  "network": { "name": "Robinhood Chain Mainnet", "chainId": 4663 },
+  "verificationMethod": "independent read-only live-chain verification (public official endpoint; no signing, no broadcast; ROBINHOOD_RPC_URL not exposed)",
+  "safe": {
+    "address": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
+    "version": "1.4.1",
+    "type": "Gnosis Safe (SafeL2) proxy — 2-of-3 multisig",
+    "owners": [
+      "0x7116F2998e625651D310E97919a1c638a7F82ba2",
+      "0x006024ff3b9b707ad0779eD3586546440fAAC49f",
+      "0xd5Bb1534Efc88400f34A832D85D0939c0e2F1759"
+    ],
+    "threshold": 2,
+    "nonce": 0,
+    "singletonMasterCopy": "0x29fcB43b46531BcA003ddC8FCB67FFE91900C762",
+    "proxyFactory": "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+    "fallbackHandler": "0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99",
+    "guard": "0x0000000000000000000000000000000000000000",
+    "modules": [],
+    "saltNonce": "61304667933828973231928904125986478648841283769805627811121978844726797569273",
+    "saltNonceHex": "0x87893661a8fb3d315b0be111a0c6d3512fb3b901318f9b5b97f85ca9452c8cf9",
+    "runtimeCodeLength": 171,
+    "runtimeCodeHash": "0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c"
+  },
+  "deploymentTransaction": {
+    "hash": "0x09a4b2c179da9b1ab2abfc0c2b8067a07fe5850f026d8f8aa89af4d5451ccbb0",
+    "sender": "0x7116F2998e625651D310E97919a1c638a7F82ba2",
+    "senderRole": "Owner 1 (the founder-authorized deployment sender, signed via Owner 1's Rabby wallet)",
+    "to": "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+    "method": "SafeProxyFactory.createProxyWithNonce(address,bytes,uint256)",
+    "value": "0",
+    "blockNumber": 19831992,
+    "blockHash": "0x304d994ffc9a9a853371d9349984258305c9654dd8b2b325c357a5ca721e77b2",
+    "timestamp": 1785065026,
+    "timestampUtc": "2026-07-26T11:23:46Z",
+    "receiptStatus": 1,
+    "gasUsed": 306172,
+    "effectiveGasPriceWei": "54260000",
+    "nativeGasCostWei": "16612892720000",
+    "nativeGasCostEth": "0.00001661289272",
+    "proxyCreationEvents": 1,
+    "proxyCreationProxy": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
+    "proxyCreationSingleton": "0x29fcB43b46531BcA003ddC8FCB67FFE91900C762"
+  },
+  "postDeploymentVerification": {
+    "allPass": true,
+    "checksPassed": 29,
+    "checksFailed": 0,
+    "properties": {
+      "receiptStatusIs1": true,
+      "chainIdIs4663": true,
+      "blockNumberMatches": true,
+      "blockHashMatches": true,
+      "timestampMatches": true,
+      "senderIsOwner1": true,
+      "destinationIsCanonicalProxyFactory": true,
+      "transactionValueZero": true,
+      "gasUsedMatches": true,
+      "nativeGasCostMatches": true,
+      "exactlyOneProxyCreationEvent": true,
+      "eventProxyEqualsPredictedSafe": true,
+      "eventSingletonEqualsReviewedSafeL2": true,
+      "safeVersionIs1_4_1": true,
+      "getOwnersReturnsExactlyThreeApproved": true,
+      "getThresholdReturns2": true,
+      "safeNonceIs0": true,
+      "masterCopyIsReviewedSafeL2Singleton": true,
+      "compatibilityFallbackHandlerCorrect": true,
+      "noGuardConfigured": true,
+      "noModulesEnabled": true,
+      "safeNativeBalanceZero": true,
+      "safeWethBalanceZero": true,
+      "safeNvdaBalanceZero": true,
+      "runtimeLengthIs171": true,
+      "runtimeHashMatchesReviewedSafeProxy": true,
+      "noTokenTransferOrApprovalLog": true,
+      "noForeignLogsOnlyFactoryAndSafeCreationLogs": true,
+      "noExecutorControllerTransferSwapSettlementCanary": true
+    },
+    "logsObserved": [
+      {
+        "address": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
+        "event": "SafeSetup (topic0 0x141df868...)"
+      },
+      {
+        "address": "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+        "event": "ProxyCreation (topic0 0x4f51faf6...)"
+      }
+    ],
+    "note": "Only the new Safe's SafeSetup log and the factory's ProxyCreation log were emitted — the expected creation/initialization logs, nothing else. The verify script displayed owners 2/3 in EIP-1191 chain-specific casing due to Array.map passing the index as viem getAddress's chainId arg; the addresses are byte-identical to the founder-supplied canonical EIP-55 addresses recorded above (the set-equality check passed case-insensitively)."
+  },
+  "safetyAttestation": {
+    "signedByClaude": false,
+    "broadcastByClaude": false,
+    "retried": false,
+    "safeFunded": false,
+    "fundsSentToSafe": false,
+    "safeExecutedAnyTransaction": false,
+    "executorDeployed": false,
+    "controllerTransferPerformed": false,
+    "tokenApprovalOrTransfer": false,
+    "swapOrSettlementOrCanary": false,
+    "privateKeyOrMnemonicRead": false,
+    "authenticatedRpcUrlExposed": false,
+    "oneTimeSafeCreationAuthorizationConsumed": true,
+    "d24RemainsEffectiveForExecutorSettlementCanary": true
+  },
+  "controllerStatus": {
+    "role": "CANDIDATE contract controller for the guarded-settlement executor",
+    "activatedAsExecutorController": false,
+    "reason": "No GuardedSettlementExecutor is deployed. The Safe is recorded as the verified candidate controller only; it owns nothing and controls nothing yet.",
+    "nextGates": [
+      "Independent security audit of the guard + executor (D-3)",
+      "Legal counsel sign-off (D-23)",
+      "A new bounded founder authorization replacing the expired D-24 before deploying/configuring/unpausing the executor",
+      "Funding of a deployment sender and the executor deploy → configure → transferOwnership(Safe) → acceptOwnership flow per GUARDED_SETTLEMENT_RUNBOOK.md §5"
+    ]
+  }
+}

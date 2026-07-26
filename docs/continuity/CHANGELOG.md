@@ -7,6 +7,44 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-26 — TASK 10K-8: deploy the canonical 2-of-3 Safe controller only
+
+- **Type:** One founder-signed on-chain Safe creation + Claude read-only verification + sanitized evidence +
+  continuity. **Claude did NOT sign, broadcast, fund, retry, approve, deploy the executor, transfer control,
+  swap, settle, or run a canary.** No private key or mnemonic read; no authenticated RPC URL exposed
+  (verification via the public official endpoint). In the prior turn Claude produced the complete unsigned
+  packet (`UNSIGNED_SAFE_CREATION_READY`) because this headless environment has no interactive signer; the
+  founder then signed/broadcast the single authorized transaction through Owner 1's Rabby wallet. Start HEAD
+  be682e8 (10K-7).
+- **Deployed Safe:** `0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62` — Gnosis Safe v1.4.1 SafeL2, 2-of-3. Owners
+  `0x7116F2998e625651D310E97919a1c638a7F82ba2`, `0x006024ff3b9b707ad0779eD3586546440fAAC49f`,
+  `0xd5Bb1534Efc88400f34A832D85D0939c0e2F1759`; threshold 2; nonce 0; master copy = SafeL2 singleton
+  `0x29fcB43b46531BcA003ddC8FCB67FFE91900C762`; proxy factory `0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67`;
+  fallback handler `0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99`; **no modules, no guard**; native/WETH/NVDA
+  balances all zero; runtime 171 B hash `0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c`;
+  salt nonce `0x87893661a8fb3d315b0be111a0c6d3512fb3b901318f9b5b97f85ca9452c8cf9`.
+- **Deploy tx:** `0x09a4b2c179da9b1ab2abfc0c2b8067a07fe5850f026d8f8aa89af4d5451ccbb0`, block 19831992 (hash
+  `0x304d994ffc9a9a853371d9349984258305c9654dd8b2b325c357a5ca721e77b2`, 2026-07-26T11:23:46Z), receipt status
+  1, chainId 4663, sender Owner 1, to the canonical proxy factory, value 0, gas used 306172
+  (0.00001661289272 ETH), exactly one `ProxyCreation` (proxy = Safe, singleton = SafeL2).
+- **Independent read-only verification: 29/29 checks pass** — receipt/chain/block/timestamp; sender=Owner 1;
+  destination=factory; value 0; gas + native cost; single ProxyCreation with correct proxy+singleton; Safe
+  VERSION 1.4.1; getOwners = exactly the three approved owners; getThreshold 2; nonce 0; slot-0 master copy =
+  SafeL2; fallback-handler slot correct; guard slot zero; getModulesPaginated empty; native/WETH/NVDA
+  balances zero; runtime length 171 + hash match; no token Transfer/Approval logs; only factory ProxyCreation
+  - Safe SafeSetup creation logs; no executor/controller-transfer/swap/settlement/canary. (The verify script
+    printed owners 2/3 in EIP-1191 casing due to `Array.map(getAddress)` passing the index as chainId; the
+    addresses are byte-identical to the canonical EIP-55 owners recorded above.)
+- **Controller status:** recorded as the **verified candidate contract controller**; **NOT activated** — no
+  `GuardedSettlementExecutor` is deployed, so the Safe owns/controls nothing. Continuity `safeController`
+  block added.
+- **Governance:** the one-time Safe-creation authorization is **CONSUMED**; **D-24 remains fully effective**
+  for the executor, settlement, and canary. D-6 controller now exists (candidate); activation still gated on
+  D-3/D-23 (audit/counsel) + a new bounded authorization replacing D-24. Register row D-019 added.
+- Evidence `docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.{md,evidence.json}`. Commit `ops(safe):
+record canonical controller deployment` (evidence + continuity only; no code change). Status
+  SAFE_DEPLOYED_AND_VERIFIED.
+
 ## 2026-07-26 — TASK 10K-7: close the live oracle, Safe, and preflight evidence gaps
 
 - **Type:** Read-only live-chain verification + TS preflight hardening + evidence + continuity. NO Rialto
