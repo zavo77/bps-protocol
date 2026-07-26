@@ -73,7 +73,11 @@ interface IGuardedSettlementExecutor {
     error DeadlineTooFar();
     error NonceUsed();
     error DigestUsed();
-    error SelectorNoValidator();
+    error ZeroCodeHash();
+    error ZeroSelector();
+    error RouterCodeUnset();
+    error SelectorUnapproved();
+    error CodeHashMismatch(bytes32 actual, bytes32 approved);
     error RouterFeatureUninitialized();
     error ZeroRouter();
     error RouterMismatch(address target, address current);
@@ -85,7 +89,7 @@ interface IGuardedSettlementExecutor {
     error ResidualSellToken(uint256 before, uint256 afterBalance);
 
     // --- Events (sanitized; never contain calldata/credentials/quote ids) ---
-    event SelectorValidatorSet(bytes4 indexed selector, address indexed validator);
+    event ApprovedRouterCodeSet(bytes32 indexed codeHash, bytes4 indexed selector);
     event TokenPairAllowedSet(address indexed sellToken, address indexed buyToken, bool allowed);
     event MaxSellAmountSet(address indexed sellToken, uint256 maxAmount);
     event PriceGuardSet(address indexed priceGuard);
@@ -102,7 +106,7 @@ interface IGuardedSettlementExecutor {
     event TokensRecovered(address indexed token, address indexed to, uint256 amount);
 
     // --- Controller-only configuration (starts unset => fail closed) ---
-    function setSelectorValidator(bytes4 selector, address validator) external;
+    function setApprovedRouterCode(bytes32 codeHash, bytes4 selector) external;
     function setTokenPairAllowed(address sellToken, address buyToken, bool allowed) external;
     function setMaxSellAmount(address sellToken, uint256 maxAmount) external;
     function setPriceGuard(address priceGuard) external;
@@ -118,7 +122,8 @@ interface IGuardedSettlementExecutor {
     function stockToken() external view returns (address);
     function registry() external view returns (address);
     function priceGuard() external view returns (address);
-    function selectorValidator(bytes4 selector) external view returns (address);
+    function approvedRouterCodeHash() external view returns (bytes32);
+    function approvedSelector() external view returns (bytes4);
     function isTokenPairAllowed(address sellToken, address buyToken) external view returns (bool);
     function maxSellAmount(address sellToken) external view returns (uint256);
     function isDigestConsumed(bytes32 intentDigest) external view returns (bool);

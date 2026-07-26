@@ -1,0 +1,97 @@
+{
+  "task": "TASK 10K-5",
+  "artifact": "BPS_RIALTO_ROUTER_OPAQUE_CALL_2026-07-26.evidence.json",
+  "generated": "2026-07-26",
+  "summary": "Read-only on-chain evidence that the Rialto feature-2 allowance-settlement router can be integrated as an OPAQUE, quote-bound call bound to an approved runtime code hash + selector — no human-readable inner ABI is required. Nothing here is a trade, approval, or authorization; D-24 stands.",
+  "chainId": 4663,
+  "pinnedBlock": {
+    "number": 19674173,
+    "hash": "0x205bd50b0582aea53ecf08e63bf3b7f21bca37b973f6626df2813c99d771eb88",
+    "timestampUnix": 1785049184,
+    "timestampUtc": "2026-07-26T06:59:44Z",
+    "rpc": "public Robinhood Chain RPC (read-only); no API key; no signing/broadcast"
+  },
+  "registry": {
+    "address": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+    "feature": 2,
+    "featureMeaning": "taker-submitted allowance-mode swap router",
+    "ownerOfFeature2AtPinnedBlock": "0xC94135b63772b91D79d0A2DaAb2a8801f32359bD",
+    "ownerOfFeature2AtExampleTxBlock": "0xC94135b63772b91D79d0A2DaAb2a8801f32359bD"
+  },
+  "router": {
+    "address": "0xc94135b63772b91d79d0a2daab2a8801f32359bd",
+    "runtimeCodeHashAtPinnedBlock": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611",
+    "runtimeCodeHashAtExampleTxBlock": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611",
+    "runtimeCodeBytes": 24232,
+    "codeHashStable": true,
+    "targetEqualsCurrentRouter": true,
+    "targetEqualsAllowanceSpender": true
+  },
+  "proxyUpgradeability": {
+    "eip1967ImplementationSlot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "eip1967AdminSlot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "eip1967BeaconSlot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "creationTx": "0x516744e40233704b67fb868501caf19936bf688d3353c28326cfdf7c139f5f6a",
+    "creationTxTo": null,
+    "creationDeployer": "0xe794a9e97288ab68c84fdd2aa1e7f17317b906bb",
+    "creationBlock": 52623,
+    "conclusion": "DIRECT IMPLEMENTATION — not an EIP-1967 proxy/upgradeable (impl/admin/beacon slots are zero; creation tx is a direct contract create). A future redeploy + registry rotation is the upgrade path; the executor's approved-code-hash + registry checks halt settlement automatically on any change."
+  },
+  "selectorDispatcher": {
+    "selector": "0x77963966",
+    "name": "Rialto feature-2 allowance-settlement selector 0x77963966 (function name NOT guessed)",
+    "presentInRuntimeDispatcher": true
+  },
+  "historicalTransactions": [
+    {
+      "hash": "0xe25bcc4e139e7ae055fb6f7af1d5dfb375fd564d3c3b5c71a593cb72fec7f107",
+      "block": 19654333,
+      "to": "0xc94135b63772b91d79d0a2daab2a8801f32359bd",
+      "selector": "0x77963966",
+      "txValueWei": "0",
+      "calldataBytes": 1700,
+      "status": "success",
+      "observed": "taker transferred the sold token INTO the router (router pulled via the granted allowance), the router routed through pools, and the router is both the call target and the allowance spender. Complete calldata deliberately NOT recorded."
+    },
+    {
+      "hash": "0x6ebe4a015c97377a3a626830fb20aeca3f662c1bc538d303edd6cbfa972fda66",
+      "block": 10634440,
+      "to": "0xc94135b63772b91d79d0a2daab2a8801f32359bd",
+      "selector": "0x8fb4309b",
+      "selectorNote": "a DIFFERENT (older) function selector on the same router address; recorded for context",
+      "txValueWei": "0",
+      "status": "success",
+      "observed": "the router delivered NVDA (0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC) to the ORIGINAL taker — confirming the router routes NVDA and returns output to the taker. This supports the executor's own-balance-delta minimum-output check (output not sent to the executor fails the minimum and reverts)."
+    }
+  ],
+  "forkReplay": {
+    "archiveStateReadsSucceeded": true,
+    "archiveStateEvidence": "eth_getCode + registry ownerOf(2) at the example-tx block 19654333 returned consistent results (code hash identical to the pinned block); confirms the approved-code-hash binding is stable across the period selector 0x77963966 has been in use.",
+    "fullTransactionReplay": "UNAVAILABLE",
+    "fullTransactionReplayReason": "Robinhood Chain is an Arbitrum-Nitro L2; `cast run` failed to deserialize its non-standard block/transaction encoding (l1BlockNumber/sendRoot/sendCount fields and tx type 0x6a) in foundry 1.7.1 — a tooling/format limitation, not missing archive state. Deep-archive state at the very old NVDA-tx block (10634440) was also not served by the public RPC.",
+    "blocker": false
+  },
+  "bytecodeEvidence": {
+    "note": "Readable type strings embedded in the deployment bytecode — recorded as bytecode EVIDENCE, NOT as a complete authoritative ABI, and NOT relied upon by the executor.",
+    "strings": [
+      "RialtoSwap(address recipient,address buyToken,uint256 minBuyAmount,uint64 deadline,address feeRecipient,uint16 srcBps,uint16 dstBps,bytes32 referralCode,bytes32 quoteId,bytes32 actionsHash)",
+      "TokenPermissions(address token,uint256 amount)"
+    ]
+  },
+  "whyInnerAbiUnnecessary": "Rialto's published execution docs instruct allowance-mode integrators to submit the returned tx.to/tx.data/tx.value UNMODIFIED. The guarded executor therefore treats tx.data as opaque and never decodes or generates Rialto's inner action bytes. Safety is venue-agnostic: (1) the target is registry.ownerOf(2) at execution AND its runtime code hash equals an approved hash AND the leading selector equals an approved selector; (2) WETH->NVDA only, tx.value 0, and only the exact sell amount is approved to the router, so it cannot spend more; (3) the executor requires its OWN measured NVDA balance delta to meet the minimum, so calldata routing output elsewhere reverts the whole operation; (4) the allowance is cleared to zero and the intent digest+nonce consumed atomically, with a full revert on any failure. A malicious quote can therefore only reduce output (caught by the minimum) or fail (reverts) — it cannot redirect the executor's WETH or credit the wrong asset.",
+  "remainingAssumptionsAndUpgradeRisks": [
+    "The approved code hash pins THIS router build; a legitimate Rialto router upgrade (redeploy + registry rotation) changes the code hash and HALTS settlement until a human re-reviews and re-approves the new code hash — intended fail-closed behavior.",
+    "The RialtoSwap type string suggests intended fields but is NOT verified as a stable ABI and is NOT relied upon.",
+    "A trusted production price source + freshness policy is still unresolved (D-22B) — separate from this ABI-blocker removal.",
+    "Full transaction replay could not be performed with the installed foundry due to the L2's non-standard encoding; archive STATE reads were used instead."
+  ],
+  "governance": {
+    "abiBlocker": "REMOVED — the missing human-readable ABI is no longer a technical blocker",
+    "selectorApproval": "0x77963966 may be approved ONLY when paired with the observed router runtime code hash (0xa7041268...27611); the executor enforces this on-chain",
+    "rotationHalt": "any router rotation or code-hash change automatically halts settlement pending review",
+    "d6": "remains open only for final production Safe/taker approval and formal activation — NOT because Rialto support is unavailable",
+    "priceSource": "trusted production price-source decision remains separate (D-22B)",
+    "d24": "continues to prohibit live execution"
+  },
+  "securityOmissions": "No complete calldata, no raw quote IDs, no secrets, no API key. Only selectors, byte lengths, code hashes, addresses, and amounts are recorded."
+}

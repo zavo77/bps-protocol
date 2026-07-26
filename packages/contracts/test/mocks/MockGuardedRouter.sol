@@ -13,6 +13,9 @@ contract MockGuardedRouter {
     address public immutable stock;
     uint256 public deliverOverride; // 0 => deliver exactly minBuyAmount
     bool public shouldRevert;
+    bool public noOutput; // deliver nothing (malicious: success with no output)
+    address public outputRecipient; // 0 => deliver to the caller; else route output elsewhere (malicious)
+    uint256 public overpull; // extra sell token to attempt to pull beyond sellAmount (malicious)
     uint256 public seenAllowance;
 
     constructor(address weth_, address stock_) {
@@ -28,6 +31,18 @@ contract MockGuardedRouter {
         shouldRevert = r;
     }
 
+    function setNoOutput(bool n) external {
+        noOutput = n;
+    }
+
+    function setOutputRecipient(address r) external {
+        outputRecipient = r;
+    }
+
+    function setOverpull(uint256 x) external {
+        overpull = x;
+    }
+
     function guardedSettle(
         address sellToken,
         address buyToken,
@@ -40,9 +55,11 @@ contract MockGuardedRouter {
         if (shouldRevert) revert("router revert");
         seenAllowance = IERC20(sellToken).allowance(msg.sender, address(this));
         // forge-lint: disable-next-line(erc20-unchecked-transfer)
-        IERC20(sellToken).transferFrom(msg.sender, address(this), sellAmount);
+        IERC20(sellToken).transferFrom(msg.sender, address(this), sellAmount + overpull);
+        if (noOutput) return 0;
         delivered = deliverOverride == 0 ? minBuyAmount : deliverOverride;
+        address to = outputRecipient == address(0) ? recipient : outputRecipient;
         // forge-lint: disable-next-line(erc20-unchecked-transfer)
-        IERC20(buyToken).transfer(recipient, delivered);
+        IERC20(buyToken).transfer(to, delivered);
     }
 }

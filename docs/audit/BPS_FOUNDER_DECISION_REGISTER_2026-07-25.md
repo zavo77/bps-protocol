@@ -128,6 +128,21 @@ locally (deployment-review pending). **D-22B** price-guard enforcement implement
 production source unresolved). **D-3** and **D-23** counsel-pending; **D-24 stands**; ballot **D-17
 unchanged**. Local unit tests are not a fork rehearsal, live simulation, or authorization.
 
+### Opaque-call settlement — Rialto ABI blocker removed (2026-07-26, TASK 10K-5)
+
+Read-only on-chain investigation (block 19674173) plus an opaque-call executor design remove the
+assumption that BPS needs Rialto's private ABI/function signature. **The missing human-readable ABI is no
+longer a technical blocker.** The executor (`packages/contracts/src/GuardedSettlementExecutor.sol`,
+UNDEPLOYED) submits Rialto's `tx.data` **unmodified** and binds an approved router **runtime code hash**
+(`0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611`) + selector, enforcing safety via the
+envelope (registry lock, exact allowance, own-balance minimum-output delta, atomic revert) rather than
+decoding the payload. Evidence: `docs/audit/BPS_RIALTO_ROUTER_OPAQUE_CALL_2026-07-26.*`. Governance:
+`0x77963966` may be approved **only** when paired with that code hash; any router rotation or code-hash
+change **automatically halts** settlement pending review. **D-6** remains open only for final production
+Safe/taker approval and formal activation — not because Rialto support is unavailable. The trusted
+production price-source decision (**D-22B**) remains separate. **D-5/D-8/D-21** remain candidate
+(approval/deployment-pending); **D-3/D-23** counsel-pending; **D-24 stands**; ballot **D-17 unchanged**.
+
 ## Restricted Rialto access request (DRAFT — NOT SENT)
 
 The exact text is preserved in the ballot §5 and the decision pack. Decision: `SEND MANUALLY`.

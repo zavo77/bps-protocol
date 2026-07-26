@@ -7,6 +7,39 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-26 — TASK 10K-5: remove the Rialto-ABI blocker via opaque-call validation
+
+- **Type:** Solidity refactor + read-only on-chain investigation + TS quote boundary + docs. NO Rialto
+  request, NO API key read, NO signing/funding/approval/simulation/deployment/broadcast. Read-only PUBLIC
+  Robinhood Chain RPC used for investigation only. QEX-1 remains consumed. Commit `164bec0` (10K-4)
+  preserved.
+- **Design:** the executor now treats Rialto's returned calldata as an OPAQUE, quote-bound payload (per
+  Rialto's "submit tx.to/tx.data/tx.value unmodified" docs). Removed the per-selector ABI-decoding
+  calldata validator (deleted `ISettlementCalldataValidator.sol` + `MockGuardedCalldataValidator.sol`) and
+  the evidence-only hard-block. Added `setApprovedRouterCode(codeHash, selector)`: at settlement the
+  executor requires `router.codehash == approvedRouterCodeHash` and the calldata's leading selector ==
+  `approvedSelector`, then low-level-calls the UNMODIFIED calldata. Safety is the envelope (registry lock +
+  approved code hash + exact WETH allowance + own-balance NVDA min-delta + allowance reset + digest/nonce
+  replay + atomic revert), not payload comprehension. `0x77963966` is approvable ONLY paired with the
+  observed code hash; a router rotation/upgrade changes the code hash and halts settlement.
+- **On-chain evidence (block 19674173):** router `0xc94135b63772b91d79d0a2daab2a8801f32359bd` runtime code
+  hash `0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611` (24,232 bytes; stable at the
+  example-tx block), **direct implementation** (no EIP-1967 slots; creation tx `to: null`),
+  `registry.ownerOf(2)`==router, selector `0x77963966` in the dispatcher, router = target + allowance
+  spender, and (older selector `0x8fb4309b`) delivering NVDA to the original taker. Full `cast run` replay
+  UNAVAILABLE (Arbitrum-Nitro block/tx encoding vs foundry 1.7.1); archive STATE reads used instead — not
+  a blocker. Evidence: `docs/audit/BPS_RIALTO_ROUTER_OPAQUE_CALL_2026-07-26.{md,evidence.json}`.
+- **TS:** added `validateOpaqueQuoteForIntent` (pure/offline; validates the fetched allowance-mode quote;
+  never modifies `tx.data`; returns only the calldata hash).
+- **Tests:** 55 Foundry (unit + malicious routers: output-elsewhere, no-output, overpull-allowance,
+  wrong/rotated code hash; + fuzz + allowance-zero invariant) all offline; rialto vitest 219/219
+  (opaque-quote boundary + digest parity unchanged). `forge fmt` + repo format:check clean.
+- **Governance:** the missing ABI is no longer a technical blocker; `0x77963966` approvable only with the
+  observed code hash; rotation halts; **D-6 open only for production Safe/taker approval + activation** (not
+  because Rialto support is unavailable); trusted price source separate (D-22B); D-5/D-8/D-21 candidate;
+  D-3/D-23 counsel-pending; **D-24 stands**; D-17 unchanged.
+- Commit `feat(rialto): validate opaque settlement calldata`.
+
 ## 2026-07-25 — TASK 10K-4: Solidity GuardedSettlementExecutor + offline Foundry tests
 
 - **Type:** Solidity contract + local Foundry tests + TS digest parity + docs. NO deployment, signing,

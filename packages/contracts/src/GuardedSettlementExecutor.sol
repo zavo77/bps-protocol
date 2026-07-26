@@ -10,23 +10,31 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IGuardedSettlementExecutor} from "./interfaces/IGuardedSettlementExecutor.sol";
 import {IRialtoRouterRegistry} from "./interfaces/IRialtoRouterRegistry.sol";
 import {ISettlementPriceGuard} from "./interfaces/ISettlementPriceGuard.sol";
-import {ISettlementCalldataValidator} from "./interfaces/ISettlementCalldataValidator.sol";
 
 /// @title GuardedSettlementExecutor
 /// @notice Safe-controlled guarded executor for the Rialto feature-2 WETH->stock-token settlement on
-///         Robinhood Chain (chain 4663). Production-shaped but UNDEPLOYED and DISABLED by default:
-///         constructed paused, with no price guard, no per-selector calldata validator, the WETH->NVDA
-///         pair not enabled, and the per-token cap unset — so it fails closed until the controller
-///         explicitly configures every component. The executor is itself the settlement taker and the
-///         purchased-token recipient; a future Safe (the controller = owner) is the ONLY account that
-///         may configure, pause/unpause, settle, or recover. There is NO arbitrary-call path, NO
-///         delegatecall, NO arbitrary approvals, and NO policy-bypassing rescue.
-/// @dev The observed Rialto selector `0x77963966` is EVIDENCE-ONLY and unproven; registering a validator
-///      for it is hard-blocked on-chain (`EvidenceOnlySelectorDisabled`) until its authoritative ABI is
-///      proven and a specific validator is implemented and tested via a source change. D-24 stands:
-///      deploying, configuring, or invoking this contract authorizes no acquisition/execution. All assets
-///      and executions in this repository's tests are fictional and local; nothing is deployed or
-///      connected to any network and no Rialto API is called.
+///         Robinhood Chain (chain 4663). Production-shaped but UNDEPLOYED and DISABLED by default.
+/// @dev OPAQUE-CALL MODEL (TASK 10K-5). Rialto's published execution docs instruct allowance-mode
+///      integrators to submit the returned `tx.to`/`tx.data`/`tx.value` UNMODIFIED. The executor
+///      therefore treats `tx.data` as an opaque, quote-bound payload — it never decodes, generates, or
+///      reproduces Rialto's inner action encoding, and needs NO human-readable router ABI. Safety comes
+///      from a strict envelope that holds regardless of what the calldata encodes:
+///        - registry-locked target (registry.ownerOf(2) at execution time; never prev/next/quote/env);
+///        - the target's runtime code hash equals an explicitly APPROVED code hash (a router rotation or
+///          any code change makes settlement fail closed until re-reviewed);
+///        - the calldata's leading selector equals an APPROVED selector bound to that code hash;
+///        - WETH->NVDA only, tx.value 0, exact temporary WETH allowance to the router only;
+///        - the executor's OWN measured NVDA balance delta must meet the minimum (calldata that routes
+///          output elsewhere reverts), and the allowance is cleared to zero afterward;
+///        - domain-separated single-use intent digest + nonce, marked before the external call so an
+///          atomic revert restores replay state on any failure.
+///      The executor is itself the taker and purchased-token recipient; a future Safe (controller = owner)
+///      is the only account that may configure, pause, settle, or recover. There is NO arbitrary-call
+///      path (the single low-level call goes only to the registry-resolved, code-hash-approved router),
+///      NO delegatecall, NO arbitrary approvals, and NO policy-bypassing rescue. D-24 stands: deploying,
+///      configuring, or invoking this contract authorizes no acquisition/execution. All assets and
+///      executions in this repository's tests are fictional and local; nothing is deployed or connected
+///      to any network and no Rialto API is called.
 contract GuardedSettlementExecutor is
     IGuardedSettlementExecutor,
     Ownable2Step,
@@ -46,21 +54,22 @@ contract GuardedSettlementExecutor is
     uint256 public constant MAX_DEADLINE_HORIZON_SEC = 300;
     bytes32 public constant GUARD_DOMAIN = keccak256("BPS-GUARDED-SETTLEMENT/1");
     address internal constant DEAD_ADDRESS = 0x000000000000000000000000000000000000dEaD;
-    bytes4 internal constant EVIDENCE_ONLY_SELECTOR = 0x77963966;
 
     address public immutable weth;
     address public immutable stockToken;
     address public immutable registry;
     address public priceGuard;
 
-    mapping(bytes4 => address) public selectorValidator;
+    /// @notice Approved runtime code hash of the feature-2 router. Zero = unset (fail closed). Any change
+    ///         to the deployed router's code (upgrade/redeploy/rotation) makes settlement revert.
+    bytes32 public approvedRouterCodeHash;
+    /// @notice Approved leading selector paired with `approvedRouterCodeHash`. Zero = unset (fail closed).
+    bytes4 public approvedSelector;
+
     mapping(address => uint256) public maxSellAmount;
     mapping(address => mapping(address => bool)) private _pairAllowed;
     mapping(bytes32 => bool) private _consumedDigest;
     mapping(uint256 => bool) private _usedNonce;
-
-    /// @notice The observed selector is disabled at the contract level until authoritative proof exists.
-    error EvidenceOnlySelectorDisabled();
 
     /// @param controller_ Future Safe controller (owner). Must be nonzero, not the dead address, and not
     ///        the executor itself.
@@ -97,11 +106,12 @@ contract GuardedSettlementExecutor is
     // --- Controller-only configuration ---
 
     /// @inheritdoc IGuardedSettlementExecutor
-    function setSelectorValidator(bytes4 selector, address validator) external onlyOwner {
-        if (selector == EVIDENCE_ONLY_SELECTOR) revert EvidenceOnlySelectorDisabled();
-        if (validator != address(0) && validator.code.length == 0) revert NotAContract(validator);
-        selectorValidator[selector] = validator;
-        emit SelectorValidatorSet(selector, validator);
+    function setApprovedRouterCode(bytes32 codeHash, bytes4 selector) external onlyOwner {
+        if (codeHash == bytes32(0)) revert ZeroCodeHash();
+        if (selector == bytes4(0)) revert ZeroSelector();
+        approvedRouterCodeHash = codeHash;
+        approvedSelector = selector;
+        emit ApprovedRouterCodeSet(codeHash, selector);
     }
 
     /// @inheritdoc IGuardedSettlementExecutor
@@ -198,6 +208,9 @@ contract GuardedSettlementExecutor is
         // forge-lint: disable-next-line(block-timestamp)
         if (block.chainid != ROBINHOOD_CHAIN_ID) revert WrongChain(block.chainid);
         if (priceGuard == address(0)) revert PriceGuardUnset();
+        if (approvedRouterCodeHash == bytes32(0) || approvedSelector == bytes4(0)) {
+            revert RouterCodeUnset();
+        }
 
         // Token + direction.
         if (p.sellToken != weth || p.buyToken != stockToken) revert WrongTokenOrDirection();
@@ -220,19 +233,17 @@ contract GuardedSettlementExecutor is
         // forge-lint: disable-next-line(block-timestamp)
         if (p.deadline - block.timestamp > MAX_DEADLINE_HORIZON_SEC) revert DeadlineTooFar();
 
-        // Calldata hash + digest binding.
+        // Opaque calldata: bind its full hash + leading selector, but never decode it.
         if (p.callData.length < 4) revert CalldataHashMismatch();
         if (keccak256(p.callData) != p.calldataHash) revert CalldataHashMismatch();
+        if (_leadingSelector(p.callData) != p.selector) revert SelectorUnapproved();
+        if (p.selector != approvedSelector) revert SelectorUnapproved();
 
         SettleVars memory v;
         v.digest = _digestFor(p);
         if (v.digest != p.intentDigest) revert DigestMismatch();
         if (_consumedDigest[v.digest]) revert DigestUsed();
         if (_usedNonce[p.nonce]) revert NonceUsed();
-
-        // Selector must have a registered validator (a selector allow-list alone is insufficient).
-        address validator = selectorValidator[p.selector];
-        if (validator == address(0)) revert SelectorNoValidator();
 
         // Registry lock: the current feature-2 router (reverts if paused/uninitialized). Never accept the
         // previous/next router, a quote-supplied router, an env value, or an operator override.
@@ -242,41 +253,33 @@ contract GuardedSettlementExecutor is
         if (v.router.code.length == 0) revert NotAContract(v.router);
         if (
             v.router == registry || v.router == weth || v.router == stockToken
-                || v.router == address(this) || v.router == priceGuard || v.router == validator
+                || v.router == address(this) || v.router == priceGuard
         ) {
             revert InvalidRouterTarget(v.router);
+        }
+        // The target's runtime code hash must equal the approved hash (rotation/upgrade => fail closed).
+        bytes32 targetCodeHash = v.router.codehash;
+        if (targetCodeHash != approvedRouterCodeHash) {
+            revert CodeHashMismatch(targetCodeHash, approvedRouterCodeHash);
         }
 
         // EFFECTS before the external call: mark replay state (atomic revert restores it on any failure).
         _consumedDigest[v.digest] = true;
         _usedNonce[p.nonce] = true;
 
-        // Selector-specific COMPLETE-calldata validation against the exact intent (recipient = executor).
-        ISettlementCalldataValidator(validator)
-            .validate(
-                p.selector,
-                p.callData,
-                ISettlementCalldataValidator.IntentView({
-                sellToken: weth,
-                buyToken: stockToken,
-                sellAmount: p.sellAmount,
-                minBuyAmount: p.minBuyAmount,
-                recipient: address(this),
-                maxPlatformFeeBps: MAX_PLATFORM_FEE_BPS
-            })
-            );
-
         // Price guard (D-22B): reverts unless acceptable against a trusted, fresh reference.
         ISettlementPriceGuard(priceGuard)
             .check(weth, stockToken, p.sellAmount, p.minBuyAmount, MAX_PRICE_DEVIATION_BPS);
 
-        // Atomic settlement: exact allowance -> verified router call -> min received-delta -> reset.
+        // Atomic settlement: exact allowance -> UNMODIFIED opaque router call -> min received-delta ->
+        // reset. Output is measured as the executor's own NVDA delta, so calldata that routes the output
+        // elsewhere fails the minimum check and reverts the whole operation.
         v.stockBefore = IERC20(stockToken).balanceOf(address(this));
         uint256 existing = IERC20(weth).allowance(address(this), v.router);
         if (existing != 0) revert AllowanceNotZeroBefore(existing);
         IERC20(weth).forceApprove(v.router, p.sellAmount);
 
-        (bool ok,) = v.router.call(p.callData); // zero native value (non-payable function)
+        (bool ok,) = v.router.call(p.callData); // opaque, unmodified; zero native value (non-payable)
         if (!ok) revert RouterCallFailed();
 
         v.received = IERC20(stockToken).balanceOf(address(this)) - v.stockBefore;
@@ -290,6 +293,13 @@ contract GuardedSettlementExecutor is
             v.digest, p.nonce, v.router, weth, stockToken, p.sellAmount, v.received, p.selector
         );
         return v.received;
+    }
+
+    /// @dev Read the leading 4-byte selector of opaque calldata without decoding the payload.
+    function _leadingSelector(bytes calldata data) internal pure returns (bytes4 sel) {
+        assembly {
+            sel := calldataload(data.offset)
+        }
     }
 
     function _digestFor(SettlementParams calldata p) internal view returns (bytes32) {

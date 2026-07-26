@@ -14,24 +14,23 @@ import {MockFeeOnTransferERC20} from "./mocks/MockFeeOnTransferERC20.sol";
 import {AllowanceTrapERC20} from "./mocks/AllowanceTrapERC20.sol";
 import {MockRialtoRouterRegistry} from "./mocks/MockRialtoRouterRegistry.sol";
 import {MockGuardedRouter} from "./mocks/MockGuardedRouter.sol";
-import {MockGuardedCalldataValidator} from "./mocks/MockGuardedCalldataValidator.sol";
 import {MockSettlementPriceGuard} from "./mocks/MockSettlementPriceGuard.sol";
 import {ReentrantGuardedRouter} from "./mocks/ReentrantGuardedRouter.sol";
 
-/// @notice Local, offline Foundry tests for GuardedSettlementExecutor. No fork, no RPC, no live call.
+/// @notice Local, offline Foundry tests for the OPAQUE-CALL GuardedSettlementExecutor (TASK 10K-5).
+///         No fork, no RPC, no live call. Malicious mock routers prove the security envelope holds
+///         independently of Rialto's cooperation — the executor never decodes the opaque calldata.
 contract GuardedSettlementExecutorTest is Test {
     uint256 internal constant CHAIN = 4663;
     uint256 internal constant CAP = 10_000_000_000_000_000; // 0.01 WETH
     uint256 internal constant SELL = 5_000_000_000_000_000; // 0.005 WETH
     uint256 internal constant MINBUY = 1_000_000_000_000_000;
     bytes32 internal constant DOMAIN = keccak256("BPS-GUARDED-SETTLEMENT/1");
-    bytes4 internal constant EVIDENCE_ONLY_SELECTOR = 0x77963966;
 
     MockERC20 internal weth;
     MockERC20 internal nvda;
     MockRialtoRouterRegistry internal registry;
     MockGuardedRouter internal router;
-    MockGuardedCalldataValidator internal validator;
     MockSettlementPriceGuard internal priceGuard;
     GuardedSettlementExecutor internal exec;
 
@@ -45,7 +44,6 @@ contract GuardedSettlementExecutorTest is Test {
         registry = new MockRialtoRouterRegistry();
         router = new MockGuardedRouter(address(weth), address(nvda));
         registry.setOwner(2, address(router));
-        validator = new MockGuardedCalldataValidator();
         priceGuard = new MockSettlementPriceGuard();
         exec = new GuardedSettlementExecutor(
             address(this), address(weth), address(nvda), address(registry)
@@ -62,7 +60,7 @@ contract GuardedSettlementExecutorTest is Test {
         exec.setTokenPairAllowed(address(weth), address(nvda), true);
         exec.setMaxSellAmount(address(weth), CAP);
         exec.setPriceGuard(address(priceGuard));
-        exec.setSelectorValidator(FAKE_SELECTOR, address(validator));
+        exec.setApprovedRouterCode(address(router).codehash, FAKE_SELECTOR);
     }
 
     function _cd(
@@ -132,7 +130,6 @@ contract GuardedSettlementExecutorTest is Test {
     function test_constructor_rejectsZeroAndBadController() public {
         vm.expectRevert(IGuardedSettlementExecutor.ZeroAddress.selector);
         new GuardedSettlementExecutor(address(this), address(0), address(nvda), address(registry));
-        // Ownable rejects the zero controller.
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableInvalidOwner.selector, address(0)));
         new GuardedSettlementExecutor(address(0), address(weth), address(nvda), address(registry));
         vm.expectRevert(IGuardedSettlementExecutor.InvalidController.selector);
@@ -186,10 +183,11 @@ contract GuardedSettlementExecutorTest is Test {
         exec.executeSettlement(p);
     }
 
-    function test_evidenceOnlySelector_cannotBeRegistered() public {
-        vm.expectRevert(GuardedSettlementExecutor.EvidenceOnlySelectorDisabled.selector);
-        exec.setSelectorValidator(EVIDENCE_ONLY_SELECTOR, address(validator));
-        assertEq(exec.selectorValidator(EVIDENCE_ONLY_SELECTOR), address(0));
+    function test_setApprovedRouterCode_rejectsZeros() public {
+        vm.expectRevert(IGuardedSettlementExecutor.ZeroCodeHash.selector);
+        exec.setApprovedRouterCode(bytes32(0), FAKE_SELECTOR);
+        vm.expectRevert(IGuardedSettlementExecutor.ZeroSelector.selector);
+        exec.setApprovedRouterCode(address(router).codehash, bytes4(0));
     }
 
     function test_setMaxSellAmount_capCeiling() public {
@@ -266,12 +264,11 @@ contract GuardedSettlementExecutorTest is Test {
 
     function test_registry_previousRouterCannotPass() public {
         _configure();
-        // Migrate feature 2 to a new router; the old (previous) router must no longer settle.
         address oldRouter = address(router);
         MockGuardedRouter newRouter = new MockGuardedRouter(address(weth), address(nvda));
         registry.setOwner(2, address(newRouter));
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
-        p.target = oldRouter; // targeting the stale/previous router
+        p.target = oldRouter; // stale/previous router
         p = _finalize(p);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -281,36 +278,76 @@ contract GuardedSettlementExecutorTest is Test {
         exec.executeSettlement(p);
     }
 
-    // ============================ selector + calldata validation ============================
+    // ============================ code-hash + selector approval (opaque model) ============================
 
-    function test_selectorWithoutValidatorFails() public {
+    function test_routerCodeUnsetFails() public {
         exec.unpause();
         exec.setTokenPairAllowed(address(weth), address(nvda), true);
         exec.setMaxSellAmount(address(weth), CAP);
         exec.setPriceGuard(address(priceGuard));
-        // NOTE: no selector validator registered.
+        // NOTE: approved router code hash + selector NOT set.
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
-        vm.expectRevert(IGuardedSettlementExecutor.SelectorNoValidator.selector);
+        vm.expectRevert(IGuardedSettlementExecutor.RouterCodeUnset.selector);
         exec.executeSettlement(p);
     }
 
-    function test_validatorMismatch_recipientNotExecutor() public {
+    function test_wrongApprovedCodeHashFails() public {
         _configure();
+        exec.setApprovedRouterCode(bytes32(uint256(0xBAD)), FAKE_SELECTOR); // not the router's real hash
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
-        // Calldata routes the purchase to a stranger, not the executor.
-        p.callData = _cd(address(weth), address(nvda), SELL, MINBUY, stranger, 5, 0);
-        p = _finalize(p);
-        vm.expectRevert(MockGuardedCalldataValidator.ValidatorMismatch.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGuardedSettlementExecutor.CodeHashMismatch.selector,
+                address(router).codehash,
+                bytes32(uint256(0xBAD))
+            )
+        );
         exec.executeSettlement(p);
     }
 
-    function test_validatorMismatch_integratorFeeInCalldata() public {
+    function test_selectorNotApprovedFails() public {
+        _configure();
+        exec.setApprovedRouterCode(address(router).codehash, bytes4(0xdeadbeef)); // different selector
+        IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
+        vm.expectRevert(IGuardedSettlementExecutor.SelectorUnapproved.selector);
+        exec.executeSettlement(p); // calldata leads with FAKE_SELECTOR != approved
+    }
+
+    function test_calldataSelectorMustMatchDeclared() public {
         _configure();
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
-        p.callData = _cd(address(weth), address(nvda), SELL, MINBUY, address(exec), 5, 3); // integrator fee 3
+        // Calldata leads with a different selector than p.selector.
+        p.callData = abi.encodeWithSelector(
+            bytes4(0x12345678),
+            address(weth),
+            address(nvda),
+            SELL,
+            MINBUY,
+            address(exec),
+            uint16(5),
+            uint16(0)
+        );
         p = _finalize(p);
-        vm.expectRevert(MockGuardedCalldataValidator.ValidatorMismatch.selector);
+        vm.expectRevert(IGuardedSettlementExecutor.SelectorUnapproved.selector);
         exec.executeSettlement(p);
+    }
+
+    function test_registryRotationToDifferentCodeHaltsSettlement() public {
+        _configure(); // approves the MockGuardedRouter code hash
+        // Rotate feature 2 to a DIFFERENT contract type (different runtime code hash).
+        ReentrantGuardedRouter rotated = new ReentrantGuardedRouter(address(weth), address(nvda));
+        registry.setOwner(2, address(rotated));
+        IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
+        p.target = address(rotated); // matches the new current router...
+        p = _finalize(p);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGuardedSettlementExecutor.CodeHashMismatch.selector,
+                address(rotated).codehash,
+                address(router).codehash
+            )
+        );
+        exec.executeSettlement(p); // ...but its code hash is not approved => halt
     }
 
     // ============================ token / amount / fee / value ============================
@@ -339,7 +376,7 @@ contract GuardedSettlementExecutorTest is Test {
         exec.unpause();
         exec.setTokenPairAllowed(address(weth), address(nvda), true);
         exec.setPriceGuard(address(priceGuard));
-        exec.setSelectorValidator(FAKE_SELECTOR, address(validator));
+        exec.setApprovedRouterCode(address(router).codehash, FAKE_SELECTOR);
         // cap not set
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
         vm.expectRevert(IGuardedSettlementExecutor.AmountCapUnset.selector);
@@ -401,7 +438,7 @@ contract GuardedSettlementExecutorTest is Test {
         exec.unpause();
         exec.setTokenPairAllowed(address(weth), address(nvda), true);
         exec.setMaxSellAmount(address(weth), CAP);
-        exec.setSelectorValidator(FAKE_SELECTOR, address(validator));
+        exec.setApprovedRouterCode(address(router).codehash, FAKE_SELECTOR);
         // price guard not set
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
         vm.expectRevert(IGuardedSettlementExecutor.PriceGuardUnset.selector);
@@ -418,18 +455,17 @@ contract GuardedSettlementExecutorTest is Test {
 
     function test_priceGuardDeviationFails() public {
         _configure();
-        // Reference: 0.005 WETH -> ~0.0009 NVDA; minBuy of 0.001 exceeds +1% ceiling.
-        priceGuard.setReference(SELL, 900_000_000_000_000); // refBuyForSell = 0.0009
+        priceGuard.setReference(SELL, 900_000_000_000_000); // refBuyForSell = 0.0009 < minBuy 0.001
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
         vm.expectRevert(MockSettlementPriceGuard.PriceDeviation.selector);
         exec.executeSettlement(p);
     }
 
-    // ============================ received-delta / atomicity ============================
+    // ============================ malicious-router envelope ============================
 
     function test_minBuyNotMetReverts() public {
         _configure();
-        router.setDeliver(MINBUY - 1); // deliver less than the minimum
+        router.setDeliver(MINBUY - 1);
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -437,9 +473,44 @@ contract GuardedSettlementExecutorTest is Test {
             )
         );
         exec.executeSettlement(p);
-        // Replay state restored by the atomic revert.
         assertFalse(exec.isDigestConsumed(p.intentDigest));
         assertFalse(exec.isNonceUsed(1));
+        assertEq(weth.allowance(address(exec), address(router)), 0);
+    }
+
+    function test_outputToOtherRecipientReverts() public {
+        _configure();
+        router.setOutputRecipient(stranger); // NVDA goes to a stranger, not the executor
+        IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGuardedSettlementExecutor.MinBuyNotMet.selector, MINBUY, uint256(0)
+            )
+        );
+        exec.executeSettlement(p);
+        assertFalse(exec.isDigestConsumed(p.intentDigest)); // replay state restored
+        assertEq(nvda.balanceOf(address(exec)), 0);
+    }
+
+    function test_noOutputSuccessReverts() public {
+        _configure();
+        router.setNoOutput(true); // router "succeeds" but delivers nothing
+        IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGuardedSettlementExecutor.MinBuyNotMet.selector, MINBUY, uint256(0)
+            )
+        );
+        exec.executeSettlement(p);
+    }
+
+    function test_routerCannotOverpullAllowance() public {
+        _configure();
+        router.setOverpull(1); // attempt to pull sellAmount + 1 (beyond the exact allowance)
+        IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
+        vm.expectRevert(IGuardedSettlementExecutor.RouterCallFailed.selector);
+        exec.executeSettlement(p);
+        assertFalse(exec.isDigestConsumed(p.intentDigest));
         assertEq(weth.allowance(address(exec), address(router)), 0);
     }
 
@@ -454,7 +525,6 @@ contract GuardedSettlementExecutorTest is Test {
     }
 
     function test_feeOnTransferStockFailsSafe() public {
-        // Deploy an executor whose stock token is fee-on-transfer: the received delta < minBuy => revert.
         MockFeeOnTransferERC20 feeStock = new MockFeeOnTransferERC20("FEE", "FEE", 100); // 1%
         MockGuardedRouter feeRouter = new MockGuardedRouter(address(weth), address(feeStock));
         MockRialtoRouterRegistry feeReg = new MockRialtoRouterRegistry();
@@ -468,53 +538,15 @@ contract GuardedSettlementExecutorTest is Test {
         feeExec.setTokenPairAllowed(address(weth), address(feeStock), true);
         feeExec.setMaxSellAmount(address(weth), CAP);
         feeExec.setPriceGuard(address(priceGuard));
-        feeExec.setSelectorValidator(FAKE_SELECTOR, address(validator));
+        feeExec.setApprovedRouterCode(address(feeRouter).codehash, FAKE_SELECTOR);
 
-        bytes memory cd =
-            _cd(address(weth), address(feeStock), SELL, MINBUY, address(feeExec), 5, 0);
-        IGuardedSettlementExecutor.DigestInput memory d = IGuardedSettlementExecutor.DigestInput({
-            domain: DOMAIN,
-            chainId: CHAIN,
-            executor: address(feeExec),
-            registryAddr: address(feeReg),
-            featureId: 2,
-            target: address(feeRouter),
-            selector: FAKE_SELECTOR,
-            sellToken: address(weth),
-            buyToken: address(feeStock),
-            sellAmount: SELL,
-            minBuyAmount: MINBUY,
-            platformFeeBps: 5,
-            slippageBps: 50,
-            taker: address(feeExec),
-            nonce: 1,
-            deadline: block.timestamp + 100,
-            calldataHash: keccak256(cd)
-        });
         IGuardedSettlementExecutor.SettlementParams memory p =
-            IGuardedSettlementExecutor.SettlementParams({
-                sellToken: address(weth),
-                buyToken: address(feeStock),
-                sellAmount: SELL,
-                minBuyAmount: MINBUY,
-                target: address(feeRouter),
-                selector: FAKE_SELECTOR,
-                callData: cd,
-                platformFeeBps: 5,
-                integratorFeePresent: false,
-                slippageBps: 50,
-                nonce: 1,
-                deadline: block.timestamp + 100,
-                intentDigest: feeExec.computeIntentDigest(d),
-                calldataHash: keccak256(cd)
-            });
-        // Router delivers exactly MINBUY, but the 1% fee makes the received delta < MINBUY.
-        vm.expectRevert(); // MinBuyNotMet
+            _buildFor(feeExec, feeReg, feeRouter, address(feeStock), SELL, MINBUY, 5, 50, 1);
+        vm.expectRevert(); // MinBuyNotMet: the 1% fee drops the received delta below MINBUY
         feeExec.executeSettlement(p);
     }
 
     function test_allowanceClearFailureRevertsAtomically() public {
-        // WETH that refuses allowance clearing => AllowanceNotCleared after the swap.
         AllowanceTrapERC20 trap = new AllowanceTrapERC20();
         MockGuardedRouter trapRouter = new MockGuardedRouter(address(trap), address(nvda));
         MockRialtoRouterRegistry trapReg = new MockRialtoRouterRegistry();
@@ -528,47 +560,71 @@ contract GuardedSettlementExecutorTest is Test {
         trapExec.setTokenPairAllowed(address(trap), address(nvda), true);
         trapExec.setMaxSellAmount(address(trap), CAP);
         trapExec.setPriceGuard(address(priceGuard));
-        trapExec.setSelectorValidator(FAKE_SELECTOR, address(validator));
+        trapExec.setApprovedRouterCode(address(trapRouter).codehash, FAKE_SELECTOR);
 
-        bytes memory cd = _cd(address(trap), address(nvda), SELL, MINBUY, address(trapExec), 5, 0);
+        IGuardedSettlementExecutor.SettlementParams memory p =
+            _buildFor(trapExec, trapReg, trapRouter, address(nvda), SELL, MINBUY, 5, 50, 1);
+        p.sellToken = address(trap);
+        p.callData = _cd(address(trap), address(nvda), SELL, MINBUY, address(trapExec), 5, 0);
+        p = _finalizeFor(trapExec, trapReg, p);
+        vm.expectRevert(); // AllowanceNotCleared
+        trapExec.executeSettlement(p);
+    }
+
+    // Build valid params for a non-default executor/registry/router (sellToken WETH by default).
+    function _buildFor(
+        GuardedSettlementExecutor e,
+        MockRialtoRouterRegistry reg,
+        MockGuardedRouter r,
+        address buyTok,
+        uint256 sell,
+        uint256 minBuy,
+        uint16 pf,
+        uint16 slip,
+        uint256 nonce
+    ) internal view returns (IGuardedSettlementExecutor.SettlementParams memory p) {
+        p.sellToken = address(weth);
+        p.buyToken = buyTok;
+        p.sellAmount = sell;
+        p.minBuyAmount = minBuy;
+        p.target = address(r);
+        p.selector = FAKE_SELECTOR;
+        p.callData = _cd(address(weth), buyTok, sell, minBuy, address(e), pf, 0);
+        p.platformFeeBps = pf;
+        p.integratorFeePresent = false;
+        p.slippageBps = slip;
+        p.nonce = nonce;
+        p.deadline = block.timestamp + 100;
+        p = _finalizeFor(e, reg, p);
+    }
+
+    function _finalizeFor(
+        GuardedSettlementExecutor e,
+        MockRialtoRouterRegistry reg,
+        IGuardedSettlementExecutor.SettlementParams memory p
+    ) internal view returns (IGuardedSettlementExecutor.SettlementParams memory) {
+        p.calldataHash = keccak256(p.callData);
         IGuardedSettlementExecutor.DigestInput memory d = IGuardedSettlementExecutor.DigestInput({
             domain: DOMAIN,
             chainId: CHAIN,
-            executor: address(trapExec),
-            registryAddr: address(trapReg),
+            executor: address(e),
+            registryAddr: address(reg),
             featureId: 2,
-            target: address(trapRouter),
-            selector: FAKE_SELECTOR,
-            sellToken: address(trap),
-            buyToken: address(nvda),
-            sellAmount: SELL,
-            minBuyAmount: MINBUY,
-            platformFeeBps: 5,
-            slippageBps: 50,
-            taker: address(trapExec),
-            nonce: 1,
-            deadline: block.timestamp + 100,
-            calldataHash: keccak256(cd)
+            target: p.target,
+            selector: p.selector,
+            sellToken: p.sellToken,
+            buyToken: p.buyToken,
+            sellAmount: p.sellAmount,
+            minBuyAmount: p.minBuyAmount,
+            platformFeeBps: p.platformFeeBps,
+            slippageBps: p.slippageBps,
+            taker: address(e),
+            nonce: p.nonce,
+            deadline: p.deadline,
+            calldataHash: p.calldataHash
         });
-        IGuardedSettlementExecutor.SettlementParams memory p =
-            IGuardedSettlementExecutor.SettlementParams({
-                sellToken: address(trap),
-                buyToken: address(nvda),
-                sellAmount: SELL,
-                minBuyAmount: MINBUY,
-                target: address(trapRouter),
-                selector: FAKE_SELECTOR,
-                callData: cd,
-                platformFeeBps: 5,
-                integratorFeePresent: false,
-                slippageBps: 50,
-                nonce: 1,
-                deadline: block.timestamp + 100,
-                intentDigest: trapExec.computeIntentDigest(d),
-                calldataHash: keccak256(cd)
-            });
-        vm.expectRevert(); // AllowanceNotCleared
-        trapExec.executeSettlement(p);
+        p.intentDigest = e.computeIntentDigest(d);
+        return p;
     }
 
     // ============================ deadline / replay / digest ============================
@@ -595,7 +651,7 @@ contract GuardedSettlementExecutorTest is Test {
     function test_deadlineTooFarFails() public {
         _configure();
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
-        p.deadline = block.timestamp + 301; // > 300s horizon
+        p.deadline = block.timestamp + 301;
         p = _finalize(p);
         vm.expectRevert(IGuardedSettlementExecutor.DeadlineTooFar.selector);
         exec.executeSettlement(p);
@@ -604,7 +660,6 @@ contract GuardedSettlementExecutorTest is Test {
     function test_reusedNonceFails() public {
         _configure();
         exec.executeSettlement(_valid(1));
-        // Same nonce, different amount => distinct digest => NonceUsed is the failure.
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
         p.sellAmount = SELL + 1;
         p.callData = _cd(address(weth), address(nvda), SELL + 1, MINBUY, address(exec), 5, 0);
@@ -618,7 +673,7 @@ contract GuardedSettlementExecutorTest is Test {
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
         exec.executeSettlement(p);
         vm.expectRevert(IGuardedSettlementExecutor.DigestUsed.selector);
-        exec.executeSettlement(p); // identical => same digest
+        exec.executeSettlement(p);
     }
 
     function test_digestMismatchFails() public {
@@ -640,8 +695,6 @@ contract GuardedSettlementExecutorTest is Test {
     // ============================ reentrancy / pause / recovery ============================
 
     function test_reentrancyBlocked() public {
-        // The reentrant router is BOTH the feature-2 router AND the executor's controller (owner), so its
-        // nested re-entry passes onlyOwner and reaches the nonReentrant guard.
         ReentrantGuardedRouter reRouter = new ReentrantGuardedRouter(address(weth), address(nvda));
         MockRialtoRouterRegistry reg2 = new MockRialtoRouterRegistry();
         reg2.setOwner(2, address(reRouter));
@@ -655,50 +708,17 @@ contract GuardedSettlementExecutorTest is Test {
         rexec.setTokenPairAllowed(address(weth), address(nvda), true);
         rexec.setMaxSellAmount(address(weth), CAP);
         rexec.setPriceGuard(address(priceGuard));
-        rexec.setSelectorValidator(FAKE_SELECTOR, address(validator));
+        rexec.setApprovedRouterCode(address(reRouter).codehash, FAKE_SELECTOR);
         vm.stopPrank();
 
-        bytes memory cd = _cd(address(weth), address(nvda), SELL, MINBUY, address(rexec), 5, 0);
-        IGuardedSettlementExecutor.DigestInput memory d = IGuardedSettlementExecutor.DigestInput({
-            domain: DOMAIN,
-            chainId: CHAIN,
-            executor: address(rexec),
-            registryAddr: address(reg2),
-            featureId: 2,
-            target: address(reRouter),
-            selector: FAKE_SELECTOR,
-            sellToken: address(weth),
-            buyToken: address(nvda),
-            sellAmount: SELL,
-            minBuyAmount: MINBUY,
-            platformFeeBps: 5,
-            slippageBps: 50,
-            taker: address(rexec),
-            nonce: 1,
-            deadline: block.timestamp + 100,
-            calldataHash: keccak256(cd)
-        });
-        IGuardedSettlementExecutor.SettlementParams memory p =
-            IGuardedSettlementExecutor.SettlementParams({
-                sellToken: address(weth),
-                buyToken: address(nvda),
-                sellAmount: SELL,
-                minBuyAmount: MINBUY,
-                target: address(reRouter),
-                selector: FAKE_SELECTOR,
-                callData: cd,
-                platformFeeBps: 5,
-                integratorFeePresent: false,
-                slippageBps: 50,
-                nonce: 1,
-                deadline: block.timestamp + 100,
-                intentDigest: rexec.computeIntentDigest(d),
-                calldataHash: keccak256(cd)
-            });
-        // The nested params only need to reach the nonReentrant modifier; reuse `p`.
+        IGuardedSettlementExecutor.SettlementParams memory p = _buildFor(
+            rexec, reg2, MockGuardedRouter(address(reRouter)), address(nvda), SELL, MINBUY, 5, 50, 1
+        );
+        p.target = address(reRouter);
+        p = _finalizeFor(rexec, reg2, p);
         reRouter.setReentry(rexec, p);
 
-        reRouter.kickoff(rexec, p); // outer succeeds; the nested re-entry is blocked by nonReentrant
+        reRouter.kickoff(rexec, p);
         assertEq(
             bytes4(reRouter.reentryError()), ReentrancyGuard.ReentrancyGuardReentrantCall.selector
         );
@@ -713,11 +733,10 @@ contract GuardedSettlementExecutorTest is Test {
     }
 
     function test_recover_sendsOnlyToControllerAndClamps() public {
-        // Send stray tokens to the executor; recovery returns them to the controller (owner) only.
         weth.mint(address(exec), 3e18);
         uint256 execBal = weth.balanceOf(address(exec));
         uint256 ownerBefore = weth.balanceOf(address(this));
-        exec.recover(address(weth), type(uint256).max); // clamps to the balance
+        exec.recover(address(weth), type(uint256).max);
         assertEq(weth.balanceOf(address(exec)), 0);
         assertEq(weth.balanceOf(address(this)), ownerBefore + execBal);
 
@@ -730,8 +749,7 @@ contract GuardedSettlementExecutorTest is Test {
 
     // ============================ cross-language digest parity ============================
 
-    /// @dev Must equal the TypeScript `computeOnchainIntentDigest` for the same fixed vector
-    ///      (packages/rialto/src/guarded-settlement.ts). Proves TS and Solidity digests are identical.
+    /// @dev Must equal the TypeScript `computeOnchainIntentDigest` for the same fixed vector.
     function test_digestParityVector() public view {
         assertEq(exec.GUARD_DOMAIN(), DOMAIN);
         IGuardedSettlementExecutor.DigestInput memory d = IGuardedSettlementExecutor.DigestInput({
@@ -815,15 +833,14 @@ contract GuardedSettlementExecutorTest is Test {
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
         vm.assume(xorVal != 0);
         idx = bound(idx, 0, p.callData.length - 1);
-        // Mutate one calldata byte WITHOUT updating calldataHash => CalldataHashMismatch (fail closed).
         p.callData[idx] = bytes1(uint8(p.callData[idx]) ^ xorVal);
-        vm.expectRevert(IGuardedSettlementExecutor.CalldataHashMismatch.selector);
+        // A mutated byte breaks the calldata hash (and, if in the selector, the selector) => fail closed.
+        vm.expectRevert();
         exec.executeSettlement(p);
     }
 }
 
-/// @notice Stateful invariant: the executor never leaves a lingering router allowance, whatever the
-///         controller does. The handler configures + drives settlements; the invariant checks allowance.
+/// @notice Stateful invariant: the executor never leaves a lingering router allowance.
 contract GuardedSettlementInvariant is Test {
     uint256 internal constant CHAIN = 4663;
     uint256 internal constant CAP = 10_000_000_000_000_000;
@@ -844,8 +861,7 @@ contract GuardedSettlementInvariant is Test {
     }
 }
 
-/// @notice Invariant handler: owns + configures a GuardedSettlementExecutor and drives settlements with
-///         fresh nonces (catching reverts). Used only by the invariant runner. Test-only.
+/// @notice Invariant handler: owns + configures an executor and drives settlements. Test-only.
 contract GuardedSettlementHandler is Test {
     uint256 internal constant CHAIN = 4663;
     uint256 internal constant CAP = 10_000_000_000_000_000;
@@ -855,7 +871,6 @@ contract GuardedSettlementHandler is Test {
     MockERC20 internal nvda;
     MockRialtoRouterRegistry internal registry;
     MockGuardedRouter internal router;
-    MockGuardedCalldataValidator internal validator;
     MockSettlementPriceGuard internal priceGuard;
     GuardedSettlementExecutor internal exec;
     bytes4 internal FAKE_SELECTOR;
@@ -868,7 +883,6 @@ contract GuardedSettlementHandler is Test {
         registry = new MockRialtoRouterRegistry();
         router = new MockGuardedRouter(address(weth), address(nvda));
         registry.setOwner(2, address(router));
-        validator = new MockGuardedCalldataValidator();
         priceGuard = new MockSettlementPriceGuard();
         exec = new GuardedSettlementExecutor(
             address(this), address(weth), address(nvda), address(registry)
@@ -880,7 +894,7 @@ contract GuardedSettlementHandler is Test {
         exec.setTokenPairAllowed(address(weth), address(nvda), true);
         exec.setMaxSellAmount(address(weth), CAP);
         exec.setPriceGuard(address(priceGuard));
-        exec.setSelectorValidator(FAKE_SELECTOR, address(validator));
+        exec.setApprovedRouterCode(address(router).codehash, FAKE_SELECTOR);
     }
 
     function currentAllowance() external view returns (uint256) {

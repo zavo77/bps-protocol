@@ -12,6 +12,10 @@ import {
   evaluateLiveCliAuthorization,
   computeOnchainIntentDigest,
   ONCHAIN_GUARD_DOMAIN,
+  validateOpaqueQuoteForIntent,
+  OPAQUE_SETTLEMENT_SELECTOR,
+  type OpaqueQuote,
+  type OpaqueQuoteContext,
   GUARD_VERSION,
   OFFICIAL_REGISTRY,
   WETH,
@@ -473,6 +477,94 @@ describe("on-chain digest parity (matches Solidity GuardedSettlementExecutor)", 
       calldataHash: "0x00000000000000000000000000000000000000000000000000000000deadbeef",
     });
     expect(digest).toBe("0x99edf1c907908d0d6f278d7e04c0a6624ba35f59ca6b7b74800b220fdd8e8c06");
+  });
+});
+
+describe("validateOpaqueQuoteForIntent — opaque quote boundary", () => {
+  const ROUTER = "0xc94135b63772b91d79d0a2daab2a8801f32359bd";
+  const EXECUTOR = "0x00000000000000000000000000000000000000e1";
+  const NOW = 1_800_000_000;
+  const CALLDATA = `${OPAQUE_SETTLEMENT_SELECTOR}${"ab".repeat(100)}` as `0x${string}`;
+
+  function quote(over: Partial<OpaqueQuote> = {}): OpaqueQuote {
+    return {
+      settlement: "allowance",
+      txTo: ROUTER,
+      txValue: "0",
+      selector: OPAQUE_SETTLEMENT_SELECTOR,
+      callData: CALLDATA,
+      sellToken: WETH,
+      buyToken: NVDA,
+      taker: EXECUTOR,
+      sellAmountRaw: 10_000000000000000n,
+      minBuyAmountRaw: 89_402580412743985n,
+      platformFeeBps: 5,
+      integratorFeePresent: false,
+      allowanceSpender: ROUTER,
+      expirySec: NOW + 60,
+      ...over,
+    };
+  }
+  function ctx(over: Partial<OpaqueQuoteContext> = {}): OpaqueQuoteContext {
+    return {
+      chainId: 4663,
+      resolvedRouter: ROUTER,
+      executor: EXECUTOR,
+      weth: WETH,
+      nvda: NVDA,
+      maxPlatformFeeBps: 5,
+      nowSec: NOW,
+      intentSellAmountRaw: 10_000000000000000n,
+      intentMinBuyAmountRaw: 89_402580412743985n,
+      ...over,
+    };
+  }
+
+  it("accepts a well-formed allowance quote and returns only the calldata hash", () => {
+    const r = validateOpaqueQuoteForIntent(quote(), ctx());
+    expect(r.ok).toBe(true);
+    expect(r.failures).toEqual([]);
+    expect(r.calldataHash).toMatch(/^0x[0-9a-f]{64}$/);
+    // The complete calldata never appears in the result.
+    expect(JSON.stringify(r)).not.toContain("ababab");
+  });
+
+  it.each([
+    [{ settlement: "gasless" }, "SETTLEMENT_NOT_ALLOWANCE"],
+    [{ txTo: "0x0000000000000000000000000000000000000009" }, "TX_TO_NOT_ROUTER"],
+    [
+      { allowanceSpender: "0x0000000000000000000000000000000000000009" },
+      "ALLOWANCE_SPENDER_NOT_ROUTER",
+    ],
+    [{ txValue: "1" }, "NONZERO_TX_VALUE"],
+    [{ selector: "0x12345678" }, "WRONG_SELECTOR"],
+    [{ sellToken: NVDA }, "SELL_TOKEN_NOT_WETH"],
+    [{ buyToken: WETH }, "BUY_TOKEN_NOT_NVDA"],
+    [{ taker: "0x0000000000000000000000000000000000000009" }, "TAKER_NOT_EXECUTOR"],
+    [{ sellAmountRaw: 1n }, "SELL_AMOUNT_MISMATCH"],
+    [{ minBuyAmountRaw: 1n }, "MIN_BUY_MISMATCH"],
+    [{ platformFeeBps: 6 }, "PLATFORM_FEE_TOO_HIGH"],
+    [{ integratorFeePresent: true }, "INTEGRATOR_FEE_PRESENT"],
+    [{ expirySec: NOW - 1 }, "QUOTE_EXPIRED"],
+    [{ expirySec: null }, "QUOTE_EXPIRED"],
+  ])("rejects %o with %s", (over, code) => {
+    const r = validateOpaqueQuoteForIntent(quote(over as Partial<OpaqueQuote>), ctx());
+    expect(r.ok).toBe(false);
+    expect(r.failures).toContain(code);
+  });
+
+  it("rejects calldata whose leading selector differs from the declared selector", () => {
+    const r = validateOpaqueQuoteForIntent(
+      quote({ callData: `0x12345678${"ab".repeat(100)}` as `0x${string}` }),
+      ctx(),
+    );
+    expect(r.failures).toContain("CALLDATA_SELECTOR_MISMATCH");
+  });
+
+  it("rejects the wrong chain", () => {
+    expect(validateOpaqueQuoteForIntent(quote(), ctx({ chainId: 1 })).failures).toContain(
+      "WRONG_CHAIN",
+    );
   });
 });
 

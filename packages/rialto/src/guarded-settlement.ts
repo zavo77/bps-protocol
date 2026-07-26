@@ -697,6 +697,88 @@ export interface OnchainDigestInput {
   readonly calldataHash: `0x${string}`; // bytes32
 }
 
+// ---------------------------------------------------------------------------------------------------
+// Opaque quote-validation boundary (TASK 10K-5).
+// The application validates an ALREADY-FETCHED Rialto allowance-mode quote before preparing a guarded
+// intent. It NEVER modifies or re-encodes `tx.data` and NEVER logs/returns the complete calldata — only
+// its keccak256 hash enters the authorized intent. This is a pure, offline check (no network, no key).
+// ---------------------------------------------------------------------------------------------------
+
+export const OPAQUE_SETTLEMENT_SELECTOR = "0x77963966"; // Rialto feature-2 allowance-settlement selector
+
+export interface OpaqueQuote {
+  readonly settlement: string;
+  readonly txTo: string;
+  readonly txValue: string;
+  readonly selector: string;
+  readonly callData: `0x${string}`; // full calldata — hashed here, never logged/returned
+  readonly sellToken: string;
+  readonly buyToken: string;
+  readonly taker: string;
+  readonly sellAmountRaw: bigint;
+  readonly minBuyAmountRaw: bigint;
+  readonly platformFeeBps: number;
+  readonly integratorFeePresent: boolean;
+  readonly allowanceSpender: string | null;
+  readonly expirySec: number | null;
+}
+
+export interface OpaqueQuoteContext {
+  readonly chainId: number;
+  readonly resolvedRouter: string; // registry.ownerOf(2)
+  readonly executor: string; // guarded executor (= taker + recipient)
+  readonly weth: string;
+  readonly nvda: string;
+  readonly maxPlatformFeeBps: number;
+  readonly nowSec: number;
+  readonly intentSellAmountRaw: bigint;
+  readonly intentMinBuyAmountRaw: bigint;
+}
+
+export interface OpaqueQuoteValidation {
+  readonly ok: boolean;
+  readonly failures: readonly string[];
+  /** keccak256(callData) — the ONLY calldata-derived value that may enter the authorized intent. */
+  readonly calldataHash: `0x${string}`;
+}
+
+/**
+ * Validate an opaque allowance-mode quote for building a guarded intent. Pure/offline; never modifies
+ * `tx.data`, never logs the complete calldata. Returns the calldata HASH (safe) plus a failure list.
+ */
+export function validateOpaqueQuoteForIntent(
+  q: OpaqueQuote,
+  ctx: OpaqueQuoteContext,
+): OpaqueQuoteValidation {
+  const failures: string[] = [];
+  const eq = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
+
+  if (ctx.chainId !== 4663) failures.push("WRONG_CHAIN");
+  if (q.settlement !== "allowance") failures.push("SETTLEMENT_NOT_ALLOWANCE");
+  if (!eq(q.txTo, ctx.resolvedRouter)) failures.push("TX_TO_NOT_ROUTER");
+  if (q.allowanceSpender !== null && !eq(q.allowanceSpender, ctx.resolvedRouter)) {
+    failures.push("ALLOWANCE_SPENDER_NOT_ROUTER");
+  }
+  if (q.txValue !== "0") failures.push("NONZERO_TX_VALUE");
+  if (!eq(q.selector, OPAQUE_SETTLEMENT_SELECTOR)) failures.push("WRONG_SELECTOR");
+  if (!eq(q.callData.slice(0, 10), OPAQUE_SETTLEMENT_SELECTOR))
+    failures.push("CALLDATA_SELECTOR_MISMATCH");
+  if (!eq(q.sellToken, ctx.weth)) failures.push("SELL_TOKEN_NOT_WETH");
+  if (!eq(q.buyToken, ctx.nvda)) failures.push("BUY_TOKEN_NOT_NVDA");
+  if (!eq(q.taker, ctx.executor)) failures.push("TAKER_NOT_EXECUTOR");
+  if (q.sellAmountRaw <= 0n || q.sellAmountRaw !== ctx.intentSellAmountRaw)
+    failures.push("SELL_AMOUNT_MISMATCH");
+  if (q.minBuyAmountRaw <= 0n || q.minBuyAmountRaw !== ctx.intentMinBuyAmountRaw) {
+    failures.push("MIN_BUY_MISMATCH");
+  }
+  if (q.platformFeeBps < 0 || q.platformFeeBps > ctx.maxPlatformFeeBps)
+    failures.push("PLATFORM_FEE_TOO_HIGH");
+  if (q.integratorFeePresent) failures.push("INTEGRATOR_FEE_PRESENT");
+  if (q.expirySec === null || q.expirySec <= ctx.nowSec) failures.push("QUOTE_EXPIRED");
+
+  return { ok: failures.length === 0, failures, calldataHash: keccak256(q.callData) };
+}
+
 /** Compute the on-chain guarded-settlement intent digest exactly as the Solidity executor does. */
 export function computeOnchainIntentDigest(i: OnchainDigestInput): `0x${string}` {
   return keccak256(
