@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-26T11:40:00Z",
+  "updatedUtc": "2026-07-26T12:10:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "be682e872cc8a8c333301b0729b63d0602cf740a (parent of the TASK 10K-8 commit); the commit 'ops(safe): record canonical controller deployment' advances HEAD by one — run 'git rev-parse HEAD' to read the exact new hash.",
+  "head": "b4d7eb3a5f9d18d9d8ee99a6317d477a66a5d604 (parent of the TASK 10K-9 commit); the commit 'ops(executor): prepare activation gate packet' advances HEAD by one — run 'git rev-parse HEAD' to read the exact new hash.",
   "workingTree": {
     "dirty": false,
-    "note": "TASK 10K-8 committed (sanitized evidence + continuity only; NO code change) as 'ops(safe): record canonical controller deployment'. forge-std v1.9.7 lives in gitignored packages/contracts/lib; run packages/contracts/tool/bootstrap-forge-std.{sh,ps1} on a fresh clone before forge test. Lists below = files this commit changed/added.",
+    "note": "TASK 10K-9 committed (sanitized evidence + continuity only; NO code change) as 'ops(executor): prepare activation gate packet'. forge-std v1.9.7 lives in gitignored packages/contracts/lib; run packages/contracts/tool/bootstrap-forge-std.{sh,ps1} on a fresh clone before forge test. Lists below = files this commit changed/added.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
@@ -15,11 +15,25 @@
     ],
     "deleted": [],
     "untracked": [
-      "docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.md",
-      "docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.evidence.json"
+      "docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.md",
+      "docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.evidence.json"
     ]
   },
   "phase": "post-canary",
+  "executorActivation": {
+    "externalReviewPacketReady": true,
+    "executorDeployed": false,
+    "candidateFrozenCommit": "5181f1b (source SHA-256 recorded in evidence)",
+    "gateStatus": {
+      "B-1_independentAudit": "OPEN — no independent audit; Claude's review is NOT independent",
+      "D-23_counsel": "COUNSEL-PENDING — B-2 unresolved; no counsel opinion in repo",
+      "D-24": "FULLY IN FORCE — not satisfied; requires D-1..D-23 approved + selector pinned + audit B-1 + legal B-2 + fresh independently-reviewed authorization",
+      "ballotReturned": false,
+      "D-3_note": "repo D-3 is a server-env key-scope policy ('never'), NOT the audit gate; the audit gate is B-1"
+    },
+    "status": "EXECUTOR_EXTERNAL_REVIEW_PACKET_READY — activation prohibited",
+    "evidence": "docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.*"
+  },
   "safeController": {
     "deployed": true,
     "address": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
@@ -38,11 +52,11 @@
     "activatedAsExecutorController": false,
     "note": "Safe deployed + verified (29/29 checks). NOT activated — no GuardedSettlementExecutor exists. Owns/controls nothing. Evidence docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.*"
   },
-  "latestCompletedMilestone": "TASK 10K-8 — canonical 2-of-3 Safe controller DEPLOYED + verified (read-only). Founder signed/broadcast one createProxyWithNonce via Owner 1's Rabby wallet; Claude verified only. Safe 0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62 (v1.4.1 SafeL2, 2-of-3, threshold 2, nonce 0, no modules/guard, balances zero). Deploy tx 0x09a4b2c1...ccbb0 block 19831992, status 1. 29/29 verification checks pass. Recorded as candidate controller; NOT activated (no executor). D-24 stands; Safe-creation authorization consumed",
-  "currentTask": "none — canonical 2-of-3 Safe controller deployed + verified; guarded-settlement executor still UNDEPLOYED; execution locked; live trading NOT enabled; D-24 stands (expired)",
+  "latestCompletedMilestone": "TASK 10K-9 — executor activation gate review + external review packet. Froze the executor candidate (commit 5181f1b; source SHA-256 recorded), re-ran full verification (513 Foundry / 252 rialto vitest; typecheck/lint/build/format clean), re-checked the Safe read-only. Produced sanitized auditor+counsel packet with a 20-row threat/control matrix. Gate finding: B-1 independent audit OPEN; D-23 counsel PENDING; ballot never returned (D-1..D-24 all PROPOSED); D-24 FULLY IN FORCE. Status EXECUTOR_EXTERNAL_REVIEW_PACKET_READY; activation prohibited; no mainnet/Safe action",
+  "currentTask": "none — executor external-review packet ready; executor UNDEPLOYED; Safe is a verified CANDIDATE controller (not active); D-24 in force; no executor deployment/config/transfer/settlement/canary authorized",
   "buildReadiness": "CANARY_BUILD_READY_EXECUTION_LOCKED",
-  "runtimeReadiness": "CANARY_NOT_READY (executor undeployed; feeds market-closed/low-volatility at last live check)",
-  "nextTask": "Controller now exists (Safe 0x62Ae5b22...5E62, verified). Remaining EXTERNAL HUMAN INPUTS: (1) independent security audit of guard + executor + counsel (D-3/D-23); (2) a NEW bounded founder authorization replacing the expired D-24; (3) explicit executor deployment + execution authorization. Then deploy GuardedSettlementExecutor (paused) -> configure -> transferOwnership(Safe) -> acceptOwnership (2-of-3) -> preflight -> unpause per packages/contracts/deploy/GUARDED_SETTLEMENT_RUNBOOK.md",
+  "runtimeReadiness": "CANARY_NOT_READY (executor undeployed; activation gated on B-1 audit + D-23 counsel + returned ballot + a new D-24-replacing authorization)",
+  "nextTask": "Activation is gated on EXTERNAL HUMAN INPUTS Claude cannot satisfy: (1) independent smart-contract audit of the frozen executor + guard (B-1); (2) counsel legal-eligibility approval (D-23/B-2); (3) founder-returned approval ballot (D-1..D-24) with D-8/D-16/D-17/D-18/D-20 values + feed ratification (D-9/D-10); (4) a NEW bounded, independently-reviewed authorization replacing D-24; (5) a funded deployer + resolved deploy strategy (UD-1/UD-2). Only then the NOT-AUTHORIZED deployment checklist in docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.* / runbook §5",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,

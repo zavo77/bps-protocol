@@ -1,0 +1,414 @@
+{
+  "schemaVersion": "1.0.0",
+  "task": "TASK 10K-9",
+  "title": "Executor activation gate review + external review packet",
+  "dateUtc": "2026-07-26",
+  "status": "EXECUTOR_EXTERNAL_REVIEW_PACKET_READY",
+  "repositoryCommit": "b4d7eb3a5f9d18d9d8ee99a6317d477a66a5d604",
+  "network": { "name": "Robinhood Chain Mainnet", "chainId": 4663 },
+  "authorizationScope": "This task authorized repository inspection, read-only verification, test/rehearsal execution, sanitized documentation, and one documentation-only commit. NO mainnet transaction, NO Safe transaction, NO deployment, NO funding, NO approval/transfer, NO ownership action, NO external communication. Claude's own review is NOT an independent audit and does NOT satisfy any audit/counsel gate.",
+  "reviewScope": {
+    "inScope": [
+      "packages/contracts/src/GuardedSettlementExecutor.sol",
+      "packages/contracts/src/ChainlinkSettlementPriceGuard.sol",
+      "packages/contracts/src/interfaces/IGuardedSettlementExecutor.sol",
+      "packages/contracts/src/interfaces/ISettlementPriceGuard.sol",
+      "packages/contracts/src/interfaces/AggregatorV3Interface.sol",
+      "packages/contracts/src/interfaces/IStockTokenOracleState.sol",
+      "packages/contracts/src/interfaces/IRialtoRouterRegistry.sol",
+      "packages/contracts/script/settlement/GuardedSettlementConfig.sol",
+      "packages/contracts/script/settlement/DeployGuardedSettlement.s.sol"
+    ],
+    "excludedScope": [
+      "Rialto router/registry internal implementation (external, opaque-call model; treated as untrusted)",
+      "Chainlink aggregator/proxy internals (external oracle; treated as trusted-with-freshness-checks)",
+      "Gnosis Safe v1.4.1 contracts (already audited upstream; verified live in TASK 10K-8)",
+      "The frozen BPS core (BPSToken/router/vault/coordinator/claim/lock) — separate audit scope B-1",
+      "TypeScript canary preflight (packages/rialto) — off-chain read-only helper, not an on-chain trust boundary"
+    ]
+  },
+  "frozenExecutorCandidate": {
+    "commit": "b4d7eb3a5f9d18d9d8ee99a6317d477a66a5d604",
+    "executorLastModifiedCommit": "5181f1b (TASK 10K-6; unchanged since; working tree clean)",
+    "compiler": {
+      "solc": "0.8.26",
+      "optimizer": true,
+      "optimizerRuns": 200,
+      "evmVersion": "NOT PINNED in foundry.toml (defaults to the solc 0.8.26 default) — SEE known-limitation KL-1"
+    },
+    "dependencies": {
+      "openzeppelin/contracts": "5.6.1 (production, via node_modules remap)",
+      "forge-std": "1.9.7 (test-only, gitignored lib)"
+    },
+    "sourceHashesSha256": {
+      "src/GuardedSettlementExecutor.sol": "14d8e7ed3f5bbe66d9856e8c61c10d1cbefdbd26e2196b71755c5631b750fe2f",
+      "src/ChainlinkSettlementPriceGuard.sol": "92b774c31cdc34ec017f8b5c7b1840dee5f20a83ae3f3d87580046c41543c670",
+      "src/interfaces/IGuardedSettlementExecutor.sol": "05777ca5b2faa4cffa43db14c73131bcddadb4e09dff746341a633823744a65d",
+      "src/interfaces/ISettlementPriceGuard.sol": "0e1c2855a429fd582df89a2b3b4b38f095faa340c37f0552b3059cfa7a7ef7f9",
+      "src/interfaces/AggregatorV3Interface.sol": "9def3dca8754d25bb3c1d5f6fe9bf98e898b4efee7d1bcca597ea42ba476ac25",
+      "src/interfaces/IStockTokenOracleState.sol": "d02421ad178187021649462ecc2028a5cc90a2b03196927a8126f47edaa22f89",
+      "src/interfaces/IRialtoRouterRegistry.sol": "014ab7bf074aecd00f7e9427c1ee89557d0a1ca2bd9b7df8e708766682f6a277",
+      "script/settlement/GuardedSettlementConfig.sol": "88bec534ad40cfd01e89d93c64eb0639436c0f7e05ed29bde57323a7005354a2",
+      "script/settlement/DeployGuardedSettlement.s.sol": "e331343bf80868c6bd2bec96d4abeb77f9c4cc915851df0c7aeddca1ab6512bd"
+    },
+    "constants": {
+      "ROBINHOOD_CHAIN_ID": 4663,
+      "SWAP_ROUTER_FEATURE_ID": 2,
+      "MAX_PLATFORM_FEE_BPS": 5,
+      "MAX_SLIPPAGE_BPS": 100,
+      "MAX_PRICE_DEVIATION_BPS": 100,
+      "CANARY_MAX_SELL_WETH_ceilingWei": "10000000000000000",
+      "MAX_DEADLINE_HORIZON_SEC": 300,
+      "GUARD_DOMAIN": "keccak256(\"BPS-GUARDED-SETTLEMENT/1\")"
+    },
+    "immutables": {
+      "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73 (verified live TASK 10K-7)",
+      "stockToken": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC (NVDA; verified live)",
+      "registry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E (verified live)"
+    },
+    "constructorArgs": ["controller_ (owner)", "weth_", "stock_", "registry_"],
+    "constructorChecks": "chain==4663; nonzero weth/stock/registry; controller not zero/dead/self; all system addresses distinct; weth/stock/registry have code; contract starts paused",
+    "requiredConfiguration": [
+      "setPriceGuard(ChainlinkSettlementPriceGuard) — nonzero, has code",
+      "setApprovedRouterCode(routerCodeHash=0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611, selector=0x77963966)",
+      "setMaxSellAmount(WETH, cap<=0.01 WETH ceiling; candidate 0.001 WETH)",
+      "setTokenPairAllowed(WETH, NVDA, true)",
+      "unpause() — reverts ConfigIncomplete until all of the above are set"
+    ],
+    "ownershipMechanism": "OpenZeppelin Ownable2Step; owner = controller Safe; transferOwnership rejects zero/dead/self and requires acceptOwnership by the new owner",
+    "privilegedRoles": {
+      "owner (controller Safe)": "setApprovedRouterCode, setTokenPairAllowed, setMaxSellAmount, setPriceGuard, pause, unpause, transferOwnership, recover, executeSettlement — the ONLY privileged role"
+    },
+    "externallyTrusted": [
+      "Rialto Router Registry ownerOf(2) (registry-locked target)",
+      "feature-2 router (code-hash-pinned to 0xa7041268...27611; opaque calldata)",
+      "ChainlinkSettlementPriceGuard (ETH/USD + NVDA/USD feeds; freshness-guarded)",
+      "WETH + NVDA ERC-20 tokens"
+    ],
+    "pauseEmergencyControls": "starts paused; owner pause()/unpause() (unpause config-gated); recover(token,amount) moves at most own balance to owner, nonReentrant; router rotation/code-hash change => fail closed; stale/paused feed => guard reverts",
+    "replayProtections": "domain-separated single-use intent digest + per-intent nonce, both marked BEFORE the external call so an atomic revert restores replay state; allowance forced to exact sell amount then reset to zero and asserted",
+    "expectedFlow": "GuardedSettlementConfig.deployPaused(cfg) -> configure (as controller) -> transferOwnership(Safe)+acceptOwnership (2-of-3) -> read-only preflight -> unpause. NOTE: the initial-owner choice (deploy with a temp deployer then transfer, vs deploy with the Safe as initial owner) is UNRESOLVED — see unresolvedDecisions.",
+    "unresolvedDecisions": [
+      "UD-1: initial deployer / initial owner strategy (temp deployer + transferOwnership(Safe) vs Safe-as-initial-owner) — the runbook §5 describes transferOwnership; GuardedSettlementConfig.deployPaused takes controller directly. Not finally decided.",
+      "UD-2: deployer address + its gas funding (D-1 dedicated ops wallet proposed, not finalized; no funded deployer exists — the 3 Safe owners hold 0 ETH)",
+      "UD-3: final per-acquisition WETH cap (D-17) and daily cap (D-18) — DEFERRED in the ballot",
+      "UD-4: quote slippage_bps (D-8) and independent-price deviation limit (D-16) — DEFERRED; code enforces a 100-bps ceiling but the operational values are unset",
+      "UD-5: max intent lifetime value (D-20) — code enforces a 300s horizon ceiling; the operational max-lifetime is DEFERRED",
+      "UD-6: formal ratification of feed identities (D-9/D-10) — feeds verified live in 10K-7 but not formally APPROVED as the authoritative price source",
+      "UD-7: WETH->ETH/USD wrap-parity mapping statement (D-11) — requires explicit approval (counsel only if legal characterization implicated)",
+      "UD-8: price-guard trust model + executor authority (D-22) — option B (guarded executor) implemented but not independently reviewed",
+      "UD-9: Rialto allowance-mode replay/execution-ID semantics (D-21) and SC-taker support (D-6) — awaiting written Rialto confirmation",
+      "UD-10: evmVersion pin for the Arbitrum-Nitro L2 (KL-1)"
+    ]
+  },
+  "buildAndTestEvidence": {
+    "foundry": {
+      "command": "forge test --offline",
+      "suites": 51,
+      "tests": 513,
+      "passed": 513,
+      "failed": 0,
+      "skipped": 0,
+      "includesFuzzAndInvariant": true
+    },
+    "rialtoVitest": {
+      "command": "npx vitest run packages/rialto",
+      "files": 10,
+      "tests": 252,
+      "passed": 252,
+      "failed": 0
+    },
+    "typecheck": "npm run typecheck — clean",
+    "lint": "npm run lint — clean",
+    "build": "npm run build — clean",
+    "format": "forge fmt --check clean; prettier --check . clean",
+    "deploymentRehearsal": "test/GuardedSettlementDeploy.t.sol::test_rehearsal_fullLifecycle (offline; vm.etch at pinned addresses) — paused-by-default, config-gate unpause, fresh-feed settlement returns oracle-floor delta, stale-feed failure leaves zero allowance + unconsumed digest + unused nonce, two-step controller transfer",
+    "mainnetForkReadOnly": "Foundry cannot deserialize Robinhood Chain Arbitrum-Nitro block/tx encoding (documented since TASK 10K-5); read-only verification performed via direct JSON-RPC (viem) instead — see TASK 10K-7 (feeds/router) and this task's Safe re-check. No broadcast, no live-state modification.",
+    "skips": [
+      {
+        "suite": "cast run full-tx fork replay",
+        "reason": "Robinhood Chain Arbitrum-Nitro block/tx encoding is not deserializable by foundry 1.7.1; substituted with read-only JSON-RPC state reads (tooling limitation, not missing state)"
+      }
+    ]
+  },
+  "safeControllerRecheck": {
+    "address": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
+    "version": "1.4.1",
+    "owners": [
+      "0x7116F2998e625651D310E97919a1c638a7F82ba2",
+      "0x006024ff3b9b707ad0779eD3586546440fAAC49f",
+      "0xd5Bb1534Efc88400f34A832D85D0939c0e2F1759"
+    ],
+    "threshold": 2,
+    "nonce": 0,
+    "singleton": "0x29fcB43b46531BcA003ddC8FCB67FFE91900C762",
+    "fallbackHandler": "0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99",
+    "guard": "0x0000000000000000000000000000000000000000",
+    "modules": [],
+    "runtimeLength": 171,
+    "runtimeHash": "0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c",
+    "nativeWethNvdaBalances": "all zero",
+    "role": "verified CANDIDATE controller — NOT active (owns/controls nothing; no executor deployed)"
+  },
+  "threatControlMatrix": [
+    {
+      "threat": "compromised deployer",
+      "mitigation": "executor starts paused; unpause config-gated; ownership is Ownable2Step to the Safe; a compromised deployer cannot unpause/settle once ownership is the 2-of-3 Safe",
+      "evidence": "constructor _pause(); unpause() ConfigIncomplete gate; transferOwnership+acceptOwnership tests",
+      "residualRisk": "deployer could deploy a wrong-config or malicious variant if the deployed bytecode is not verified against the frozen source",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "smart-contract auditor (bytecode-vs-source verification procedure)"
+    },
+    {
+      "threat": "compromised executor owner (Safe)",
+      "mitigation": "owner power is bounded: no arbitrary call, no delegatecall, no arbitrary approvals; recover() moves only own balance to owner; settlement still bounded by cap/guard/pair; 2-of-3 threshold raises the bar",
+      "evidence": "source review; recover() nonReentrant + own-balance-only; no arbitrary-call path",
+      "residualRisk": "a 2-of-3 owner-key compromise could pause/misconfigure/settle within envelope bounds or drain via recover() after funds arrive",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "smart-contract auditor + Safe key-custody review"
+    },
+    {
+      "threat": "compromised individual Safe owner",
+      "mitigation": "2-of-3 threshold: one key alone cannot act",
+      "evidence": "TASK 10K-8 getThreshold()==2; getOwners() exact 3-set",
+      "residualRisk": "two-key compromise defeats the multisig; owner-key custody is off-chain",
+      "blocksActivation": false,
+      "requiredIndependentReviewer": "operational/custody review (founder)"
+    },
+    {
+      "threat": "malicious or incorrect router",
+      "mitigation": "registry-locked target (ownerOf(2)); target runtime code-hash must equal approved pin; rotation/upgrade => CodeHashMismatch fail closed; router != registry/weth/stock/self/guard",
+      "evidence": "executeSettlement code-hash + registry + identity checks; malicious-router Foundry tests (10K-5)",
+      "residualRisk": "if the approved code hash is set to a malicious value by the owner",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "smart-contract auditor"
+    },
+    {
+      "threat": "malicious Rialto response",
+      "mitigation": "opaque calldata never decoded; output measured as the executor's OWN NVDA balance delta >= minBuyAmount (output routed elsewhere reverts); exact allowance then reset; tx.value 0",
+      "evidence": "own-balance-delta check; output-elsewhere/no-output/overpull malicious mocks (10K-5)",
+      "residualRisk": "economic (worse-but-above-minimum price) bounded by guard floor + minBuyAmount",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "smart-contract auditor"
+    },
+    {
+      "threat": "stale quote",
+      "mitigation": "deadline required + <=300s horizon; single-use digest+nonce; price guard freshness (<=900s feeds)",
+      "evidence": "deadline checks; ChainlinkSettlementPriceGuard staleness tests; live stale-feed rejection (10K-7)",
+      "residualRisk": "quote validity semantics from Rialto (D-21) unconfirmed",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "smart-contract auditor + Rialto written semantics"
+    },
+    {
+      "threat": "excessive slippage",
+      "mitigation": "MAX_SLIPPAGE_BPS 100 ceiling; MAX_PRICE_DEVIATION_BPS 100 oracle floor; minBuyAmount enforced against own delta",
+      "evidence": "slippage checks; price-guard deviation tests",
+      "residualRisk": "operational slippage/deviation values (D-8/D-16) not finalized",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "smart-contract auditor + founder policy"
+    },
+    {
+      "threat": "wrong token",
+      "mitigation": "WETH->NVDA only; setTokenPairAllowed restricted to that direction; executeSettlement checks sell/buy token equality to immutables",
+      "evidence": "WrongTokenOrDirection reverts; tests",
+      "residualRisk": "none identified within scope",
+      "blocksActivation": false,
+      "requiredIndependentReviewer": "smart-contract auditor (confirm)"
+    },
+    {
+      "threat": "wrong recipient",
+      "mitigation": "executor is the taker and recipient; output measured as its own balance delta; no external recipient parameter is trusted",
+      "evidence": "own-balance-delta; output-elsewhere malicious mock reverts",
+      "residualRisk": "none identified within scope",
+      "blocksActivation": false,
+      "requiredIndependentReviewer": "smart-contract auditor (confirm)"
+    },
+    {
+      "threat": "replay",
+      "mitigation": "domain-separated single-use intent digest + per-intent nonce, marked before external call; atomic revert restores state",
+      "evidence": "digest/nonce reverts; allowance-zero invariant; replay tests",
+      "residualRisk": "Rialto quote-level replay semantics (D-21) unconfirmed",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "smart-contract auditor + Rialto semantics"
+    },
+    {
+      "threat": "double settlement",
+      "mitigation": "digest + nonce consumed atomically; nonReentrant; whenNotPaused",
+      "evidence": "DigestUsed/NonceUsed reverts; ReentrancyGuard",
+      "residualRisk": "none identified within scope",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "smart-contract auditor"
+    },
+    {
+      "threat": "partial fill",
+      "mitigation": "received (own delta) must be >= minBuyAmount or the whole tx reverts (no partial acceptance)",
+      "evidence": "MinBuyNotMet revert; tests",
+      "residualRisk": "none identified within scope",
+      "blocksActivation": false,
+      "requiredIndependentReviewer": "smart-contract auditor (confirm)"
+    },
+    {
+      "threat": "fee-on-transfer / rebasing behavior",
+      "mitigation": "WETH and NVDA are standard tokens (verified 18dp, non-rebasing); output measured by actual balance delta (robust to transfer accounting)",
+      "evidence": "own-balance-delta measurement; live token symbol/decimals (10K-7)",
+      "residualRisk": "if a token is later swapped for a fee-on-transfer/rebasing one (immutable addresses prevent this)",
+      "blocksActivation": false,
+      "requiredIndependentReviewer": "smart-contract auditor (confirm token behavior)"
+    },
+    {
+      "threat": "oracle or decimal error",
+      "mitigation": "guard pins feed decimals + on-chain description + identity; reverts on decimals/identity change; NVDA multiplier not re-applied; ceil-rounded conservative floor",
+      "evidence": "ChainlinkSettlementPriceGuard tests; live feed decimals/description (10K-7)",
+      "residualRisk": "feed operator risk (external); mapping/parity approval (D-11) pending",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "smart-contract auditor + founder/counsel (D-11)"
+    },
+    {
+      "threat": "chain/RPC mismatch",
+      "mitigation": "constructor + executeSettlement require block.chainid==4663; preflight/config validate chain",
+      "evidence": "WrongChain reverts; config validate",
+      "residualRisk": "none identified within scope",
+      "blocksActivation": false,
+      "requiredIndependentReviewer": "smart-contract auditor (confirm)"
+    },
+    {
+      "threat": "configuration error",
+      "mitigation": "unpause() ConfigIncomplete gate requires all of price guard + code hash + selector + cap + pair; cap ceiling 0.01 WETH; fail-closed defaults",
+      "evidence": "config-gate tests; deploy validator tests",
+      "residualRisk": "operational values (cap/slippage/deviation/feeds) not finalized; deploy strategy (UD-1) unresolved",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "smart-contract auditor + founder policy"
+    },
+    {
+      "threat": "ownership-transfer failure",
+      "mitigation": "Ownable2Step two-step transfer; transferOwnership rejects zero/dead/self; new owner must acceptOwnership",
+      "evidence": "two-step transfer tests; 10K-8 Safe verified",
+      "residualRisk": "operational: transferring to the wrong Safe address (mitigated by preflight controller-code check)",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "smart-contract auditor + deployment procedure review"
+    },
+    {
+      "threat": "pause/recovery failure",
+      "mitigation": "starts paused; owner pause() always available; recover() bounded to own balance -> owner, nonReentrant",
+      "evidence": "Pausable tests; recover() review",
+      "residualRisk": "recovery depends on the Safe (2-of-3) being operational",
+      "blocksActivation": false,
+      "requiredIndependentReviewer": "smart-contract auditor + custody review"
+    },
+    {
+      "threat": "Safe threshold failure",
+      "mitigation": "2-of-3 verified on-chain (nonce 0, no modules, no guard)",
+      "evidence": "TASK 10K-8 + this task's Safe re-check",
+      "residualRisk": "off-chain key custody / signer availability",
+      "blocksActivation": true,
+      "requiredIndependentReviewer": "founder custody review"
+    },
+    {
+      "threat": "offchain/onchain reconciliation failure",
+      "mitigation": "SettlementExecuted event emits digest/nonce/router/tokens/amounts/selector; no raw calldata/quote-id in events; preflight reconciles config vs chain",
+      "evidence": "event review; preflight (10K-7)",
+      "residualRisk": "indexer/monitoring not yet built (INF-3)",
+      "blocksActivation": false,
+      "requiredIndependentReviewer": "auditor + ops review"
+    }
+  ],
+  "gateStatus": {
+    "note": "Authoritative D-numbering is the Rialto Access + Price/Risk Decision Pack (D-1..D-24). Prior BPS continuity artifacts loosely used 'D-3' to mean the audit gate; the AUTHORITATIVE audit gate is blocker B-1 (referenced by D-24). Both are reported here to avoid ambiguity. Every decision-pack row is 'PROPOSED — NOT APPROVED' (the founder approval ballot was NOT returned/filled in the repository).",
+    "D-3": {
+      "exactText": "D-3 — 'May a broader-scope key ever enter the BPS server env?' Conservative candidate: 'never — execution keys live only in the future authorized-settlement runbook.' Approver: Counsel + Founder.",
+      "requires": "A policy decision (never allow an execution-capable/swap:create key into the BPS server env outside a future authorized-settlement runbook).",
+      "evidenceThatSatisfies": "A recorded founder+counsel approval of the 'never' policy AND implementation evidence that no broader-scope key is present server-side.",
+      "currentStatus": "POLICY HONORED IN PRACTICE (QEX-1 consumed; live quote CLI retired; no execution key in env) but the ballot row is NOT formally returned/approved. This is NOT an independent security audit.",
+      "independentReviewExists": false,
+      "misconceptionFlag": "The task frames D-3 as 'independent review'; the repository's D-3 is a key-scope policy, NOT the audit gate. The independent smart-contract audit gate is B-1 (below)."
+    },
+    "B-1_independentAudit": {
+      "requires": "An independent smart-contract security audit of the frozen layer with findings resolved (HANDOVER §N B-1; referenced by D-24 as 'audit B-1').",
+      "evidenceThatSatisfies": "An external auditor's report on the frozen executor + guard with findings resolved; recorded in the repo.",
+      "currentStatus": "OPEN — no independent audit has been performed. Claude's internal review does NOT satisfy this. Founder's 10K-8 'security-review APPROVED FOR PAUSED DEPLOYMENT' was a Safe-only-deployment status, NOT an executor audit.",
+      "independentReviewExists": false
+    },
+    "D-23": {
+      "exactText": "D-23 — 'Legal eligibility gate.' Conservative candidate: 'REQUIRED before any real acquisition.' Approver: Counsel. Ballot template option: 'COUNSEL-APPROVED | COUNSEL-PENDING'.",
+      "requires": "Qualifying counsel approval of the legal eligibility of Stock-Token acquisition + distribution (resolves blocker B-2 / decision-pack items #1-7).",
+      "evidenceThatSatisfies": "A recorded counsel opinion/approval resolving B-2, per the governing decision.",
+      "currentStatus": "COUNSEL-PENDING — B-2 unresolved; NO qualifying counsel approval exists in the repository. The 10K-8 founder statement 'counsel gate approved' was for the Safe-only deployment and is NOT a recorded counsel opinion on executor acquisition/distribution.",
+      "qualifyingCounselApprovalExists": false
+    },
+    "D-24": {
+      "exactText": "D-24 — 'Conditions before ANY mainnet acquisition.' Conservative candidate: 'ALL preceding items + independently reviewed authorization.' Options: 'all of: D-1..D-23 approved, selector pinned, audit B-1, legal B-2, fresh authorization task.' Approver: Founder + Counsel + Security/Eng.",
+      "scope": "Prohibits ANY mainnet acquisition — and, fail-closed, executor deployment, configuration, controller transfer, funding, approvals, swaps, settlement, and canary — until all conditions are met.",
+      "effectiveStatus": "FULLY IN FORCE. Not satisfied. This TASK 10K-9 does NOT replace, weaken, expire, or reinterpret D-24.",
+      "replacementRequirement": "A NEW, bounded, independently-reviewed authorization task, granted only after: D-1..D-23 approved (ballot returned), selector pinned + approved, independent audit B-1 complete with findings resolved, legal B-2/D-23 counsel approval recorded."
+    },
+    "otherBlockingGates": {
+      "B-2_legal": "OPEN (= D-23) — legal entity/jurisdiction/eligibility unresolved",
+      "D-22_priceGuardTrustModel": "UNRESOLVED — option B (guarded executor) implemented but not independently reviewed; candidate is 'C (disabled)' unless A accepted or B implemented+reviewed",
+      "ballotReturned": "NO — the founder approval ballot (TASK 10I-2) was never returned/filled; all D-1..D-24 remain PROPOSED",
+      "deferredParameters": "D-8 (slippage), D-16 (deviation), D-17 (per-acq cap), D-18 (daily cap), D-20 (max lifetime) DEFERRED; D-9/D-10 feeds verified live but not formally ratified; D-11 mapping statement pending; D-5/D-6/D-21 await Rialto written semantics",
+      "deployerFunding": "no funded deployer exists (the 3 Safe owners hold 0 ETH); D-1 dedicated ops wallet not finalized",
+      "QEX-1": "consumed"
+    }
+  },
+  "externalIntegrationsAndTrust": {
+    "rialtoRouter": "registry-locked + code-hash-pinned; calldata opaque/untrusted; safety from envelope not payload comprehension",
+    "chainlinkFeeds": "trusted price source WITH freshness/identity/decimals/pause checks; feed operator risk is external; D-9/D-10/D-11 formal approval pending",
+    "gnosisSafe": "Safe v1.4.1 (upstream-audited); controller verified live 10K-8",
+    "tokens": "WETH + NVDA standard ERC-20 (verified 18dp, non-rebasing)"
+  },
+  "knownLimitations": [
+    "KL-1: foundry.toml does not pin evm_version; for Arbitrum-Nitro (Robinhood Chain 4663) the deployment build MUST pin a chain-supported evm_version and the deployed bytecode must be reproduced/verified against the frozen source before any deployment.",
+    "KL-2: Foundry cannot fork Robinhood Chain (Arbitrum-Nitro block/tx encoding); on-chain verification is via direct read-only JSON-RPC only.",
+    "KL-3: no on-chain indexer/monitoring for post-settlement reconciliation yet (INF-3).",
+    "KL-4: Rialto allowance-mode replay/execution-ID semantics (D-21) and SC-taker support (D-6) are not confirmed in writing by the venue.",
+    "KL-5: no official Chainlink L2 Sequencer Uptime Feed for Robinhood Chain; mitigated by strict dual-feed freshness (D-13 deferred)."
+  ],
+  "exactEvidenceStillNeeded": {
+    "fromIndependentAuditor": [
+      "Written audit report on the frozen executor + guard (source hashes above) with severity-rated findings and resolutions",
+      "Bytecode-vs-source reproducibility procedure and evm_version confirmation for chain 4663 (KL-1)",
+      "Confirmation of the opaque-call safety envelope, replay/nonce/allowance handling, and price-guard math"
+    ],
+    "fromCounsel": [
+      "Recorded legal-eligibility opinion for tokenized-equity (Stock-Token) acquisition + distribution resolving B-2/D-23",
+      "Approval (if legal characterization implicated) of the WETH->ETH/USD wrap-parity mapping statement (D-11)"
+    ],
+    "fromFounder": [
+      "Returned approval ballot (D-1..D-24) with explicit values for D-8/D-16/D-17/D-18/D-20 and ratification of D-9/D-10 feeds",
+      "Finalized deployer/ops wallet (D-1) + funding, and the initial-owner/deploy strategy (UD-1)",
+      "A NEW bounded, independently-reviewed authorization task replacing D-24 for executor deployment"
+    ]
+  },
+  "deploymentChecklist_NOT_AUTHORIZED": [
+    "NOT AUTHORIZED — requires audit B-1 + counsel D-23 + a new D-24-replacing authorization first.",
+    "1. Pin evm_version for chain 4663; reproduce + verify deployed bytecode against frozen source hashes.",
+    "2. Fund the finalized deployer (D-1) with bounded gas.",
+    "3. Deploy GuardedSettlementExecutor (paused) with controller = decided initial owner (UD-1); constructor args weth/NVDA/registry as pinned.",
+    "4. Configure (as controller): setPriceGuard, setApprovedRouterCode(0xa7041268...,0x77963966), setMaxSellAmount(WETH, approved cap), setTokenPairAllowed(WETH,NVDA,true).",
+    "5. transferOwnership(Safe 0x62Ae5b22...5E62) + acceptOwnership (2-of-3), if deployed via a temp owner.",
+    "6. Run the read-only canary preflight with CANARY_EXECUTOR_ADDRESS set -> must show EXECUTION_LOCKED while paused.",
+    "7. unpause() (config-gated) ONLY under the new bounded authorization.",
+    "Each step is a separate reviewed action; none is authorized by TASK 10K-9."
+  ],
+  "canaryChecklist_NOT_AUTHORIZED": [
+    "NOT AUTHORIZED — a live canary requires all deployment prerequisites PLUS an explicit execution authorization replacing D-24.",
+    "1. Confirm feeds fresh (<900s) at execution time (NVDA requires an open-market session).",
+    "2. Fund the executor with <= approved cap of WETH.",
+    "3. Execute a SINGLE <=0.001 WETH -> NVDA settlement via the controller Safe.",
+    "4. Verify the executor NVDA balance delta >= minimum and the router allowance returned to zero.",
+    "5. Re-pause pending review; reconcile the SettlementExecuted event.",
+    "Not authorized by TASK 10K-9; D-24 stands."
+  ],
+  "safetyAttestation": {
+    "mainnetTransaction": false,
+    "safeTransactionCreated": false,
+    "executorDeployedOrConfigured": false,
+    "ownershipActionPerformed": false,
+    "assetMovementApprovalSwapSettlementCanary": false,
+    "safeRemainsUnfundedAndInactive": true,
+    "externalPartyContacted": false,
+    "privateKeyMnemonicRpcOrApiKeyExposed": false,
+    "claudeReviewClaimedAsIndependentAudit": false,
+    "d24Weakened": false
+  }
+}

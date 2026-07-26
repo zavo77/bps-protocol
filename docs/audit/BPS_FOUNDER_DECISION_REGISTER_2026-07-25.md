@@ -207,6 +207,31 @@ required before any of those. Ballot **D-17 unchanged**; **QEX-1 consumed**. Evi
 `docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.*`. 29/29 post-deployment checks passed. No private
 key, mnemonic, or authenticated RPC URL was exposed.
 
+### Executor activation gate review + external review packet (2026-07-26, TASK 10K-9)
+
+A documentation-only review (no mainnet/Safe action, no external contact) froze the guarded-settlement
+executor candidate and produced a sanitized auditor+counsel packet
+(`docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.*`) with a 20-row threat/control matrix. Full
+verification re-ran green (513 Foundry / 252 rialto vitest; typecheck/lint/build/format clean) and the Safe
+was re-checked read-only (candidate controller, not active). **Authoritative gate status, quoted from the
+Rialto Access + Price/Risk Decision Pack (every row is `PROPOSED — NOT APPROVED`; the founder approval ballot
+was never returned):**
+
+- **D-3** — "May a broader-scope key ever enter the BPS server env?" candidate "**never** — execution keys
+  live only in the future authorized-settlement runbook." This is a **key-scope policy** (Counsel + Founder),
+  **not** an independent audit; honored in practice (QEX-1 consumed), not formally balloted. The independent
+  smart-contract **audit** gate is **B-1** (referenced by D-24), which is **OPEN** — no independent audit has
+  been performed and **Claude's own review does not satisfy it**.
+- **D-23** — "Legal eligibility gate ... REQUIRED before any real acquisition" (Counsel). **COUNSEL-PENDING**;
+  B-2 unresolved; **no qualifying counsel approval exists** in the repository.
+- **D-24** — "Conditions before ANY mainnet acquisition ... ALL preceding items + independently reviewed
+  authorization" (all of D-1..D-23 approved, selector pinned, audit B-1, legal B-2, fresh authorization task).
+  **FULLY IN FORCE; not satisfied.** TASK 10K-9 did not weaken, replace, expire, or reinterpret it.
+
+No auditor/counsel names, signatures, dates, or opinions were fabricated. No decision was approved by this
+task. Status `EXECUTOR_EXTERNAL_REVIEW_PACKET_READY` — executor activation remains prohibited; the Safe
+remains a verified **candidate** controller.
+
 ## Restricted Rialto access request (DRAFT — NOT SENT)
 
 The exact text is preserved in the ballot §5 and the decision pack. Decision: `SEND MANUALLY`.

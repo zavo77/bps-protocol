@@ -7,6 +7,39 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-26 — TASK 10K-9: executor activation gate review + external review packet
+
+- **Type:** Documentation/review only — repository inspection, read-only verification, test/rehearsal
+  execution, sanitized documentation, one documentation-only commit. **NO mainnet or Safe transaction, NO
+  deployment, NO funding, NO approval/transfer, NO ownership action (transferOwnership/acceptOwnership), NO
+  swap/settlement/canary, NO external communication.** No private key/mnemonic/RPC/API secret read or
+  exposed. **Claude's own review is explicitly NOT an independent audit.** D-24 not weakened/replaced/
+  reinterpreted. Start HEAD b4d7eb3 (10K-8).
+- **Frozen executor candidate:** commit 5181f1b (unchanged; tree clean). Source SHA-256:
+  GuardedSettlementExecutor.sol 14d8e7ed3f5bbe66d9856e8c61c10d1cbefdbd26e2196b71755c5631b750fe2f;
+  ChainlinkSettlementPriceGuard.sol 92b774c31cdc34ec017f8b5c7b1840dee5f20a83ae3f3d87580046c41543c670; plus
+  interfaces + GuardedSettlementConfig.sol + DeployGuardedSettlement.s.sol (all hashes in the evidence JSON).
+  solc 0.8.26, optimizer 200, evm_version NOT pinned (KL-1), OZ 5.6.1, forge-std 1.9.7 (test-only).
+- **Verification (from clean checkout):** forge test --offline 513/513 (51 suites, incl. fuzz + invariants);
+  rialto vitest 252/252; typecheck/lint/build clean; forge fmt + prettier clean; deployment rehearsal green.
+  One documented skip: `cast run` full-tx fork replay (Arbitrum-Nitro encoding, KL-2) — substituted with
+  read-only JSON-RPC. Safe read-only re-check: 0x62Ae5b22...5E62 v1.4.1, 3 approved owners, threshold 2,
+  nonce 0, singleton/fallback match, no modules, no guard, native/WETH/NVDA balances zero, runtime 171 B hash
+  0xd7d408...fb4c — verified CANDIDATE controller, not active.
+- **Packet produced:** docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.{md,evidence.json} — scope,
+  frozen identifiers, build/test evidence, 20-row threat/control matrix, deployment/ownership design,
+  external-integration trust, known limitations KL-1..KL-5, unresolved decisions UD-1..UD-10, exact evidence
+  still needed from auditor/counsel/founder, and NOT-AUTHORIZED deployment + canary checklists.
+- **Gate status (authoritative Rialto decision pack D-1..D-24; every row PROPOSED; ballot never returned):**
+  repo D-3 = server-env key-scope policy ('never'), honored, NOT an audit gate — flagged the task's 'D-3 =
+  independent review' framing as a naming divergence; the real independent-audit gate is B-1. B-1 OPEN (no
+  audit performed). D-23 COUNSEL-PENDING (B-2 unresolved; no counsel opinion). D-24 FULLY IN FORCE (requires
+  D-1..D-23 approved + selector pinned + audit B-1 + legal B-2 + fresh independently-reviewed authorization).
+  D-22 unresolved; D-8/D-16/D-17/D-18/D-20 deferred; D-9/D-10 verified-live-but-unratified; no funded deployer.
+  QEX-1 consumed.
+- Status EXECUTOR_EXTERNAL_REVIEW_PACKET_READY — activation prohibited; Safe remains a candidate controller.
+  Commit `ops(executor): prepare activation gate packet` (evidence + continuity only; no code change).
+
 ## 2026-07-26 — TASK 10K-8: deploy the canonical 2-of-3 Safe controller only
 
 - **Type:** One founder-signed on-chain Safe creation + Claude read-only verification + sanitized evidence +
