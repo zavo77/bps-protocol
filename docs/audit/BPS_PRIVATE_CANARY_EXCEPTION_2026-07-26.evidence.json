@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "1.0.0",
+  "task": "PCE-1 governance amendment + technical deployment packet",
+  "dateUtc": "2026-07-26",
+  "status": "PREPARED_NOT_EXECUTED",
+  "repositoryCommitParent": "d660421b83a47dafb98331e7ec6bca85a541a963",
+  "network": { "name": "Robinhood Chain Mainnet", "chainId": 4663 },
+  "authorizationScope": "Founder authorized PREPARATION + COMMIT of a governance amendment and an exact technical deployment packet for a one-time, $130-capped, private guarded-settlement canary. Explicitly NOT authorized: broadcast, fund, deploy, create a Safe transaction, or perform the canary. Claude performed no on-chain action.",
+  "exception": {
+    "id": "PCE-1",
+    "type": "one-time private canary exception; bounded carve-out from D-24",
+    "approver": "Founder (chat authorization 2026-07-26)",
+    "counselInput": "NOT obtained (B-2/D-23 incomplete) — legal risk accepted by the founder",
+    "bounds": {
+      "totalExposureUsdAllInclusive": 130,
+      "publicUsers": false,
+      "productionReuse": false,
+      "acquisitionCycles": 1,
+      "mandatoryPauseAndRecoveryAfter": true,
+      "singleUse": true
+    }
+  },
+  "gateStatusUnchanged": {
+    "B-1_independentAudit": "OPEN / INCOMPLETE — not satisfied by PCE-1",
+    "B-2_D-23_counsel": "INCOMPLETE / COUNSEL-PENDING — not satisfied by PCE-1",
+    "D-24_production": "FULLY IN FORCE for production — PCE-1 is a narrow canary-only carve-out; it does not replace, expire, weaken, or reinterpret D-24",
+    "QEX-1": "consumed (structural GET /quote); a live canary quote is a separate operator dependency"
+  },
+  "acceptedRisk": "The founder knowingly accepts the security risk (un-audited executor handling real, tiny funds) and legal risk (tokenized-equity acquisition without a completed eligibility opinion) for this single bounded private canary only, bounded by the $130 cap, private/no-public-users constraint, single cycle, and mandatory post-cycle pause + recovery.",
+  "frozenInputs": {
+    "controllerSafe": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
+    "safeVersion": "1.4.1",
+    "safeThreshold": 2,
+    "safeOwners": [
+      "0x7116F2998e625651D310E97919a1c638a7F82ba2",
+      "0x006024ff3b9b707ad0779eD3586546440fAAC49f",
+      "0xd5Bb1534Efc88400f34A832D85D0939c0e2F1759"
+    ],
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "nvda": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "registry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+    "featureId": 2,
+    "approvedRouterCodeHash": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611",
+    "approvedSelector": "0x77963966",
+    "ethUsdFeed": "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9",
+    "nvdaUsdFeed": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
+    "executorSourceSha256": "14d8e7ed3f5bbe66d9856e8c61c10d1cbefdbd26e2196b71755c5631b750fe2f",
+    "priceGuardSourceSha256": "92b774c31cdc34ec017f8b5c7b1840dee5f20a83ae3f3d87580046c41543c670",
+    "frozenExecutorCommit": "5181f1b",
+    "compiler": {
+      "solc": "0.8.26",
+      "optimizer": true,
+      "optimizerRuns": 200,
+      "evmVersionPinned": false
+    }
+  },
+  "canaryParameters": {
+    "perAcquisitionCapWei": "1000000000000000",
+    "perAcquisitionCapWeth": "0.001",
+    "executorHardCeilingWeth": "0.01",
+    "maxSlippageBps": 100,
+    "maxPriceDeviationBps": 100,
+    "maxDeadlineHorizonSec": 300,
+    "maxFeedAgeSec": 900,
+    "nonce": 1,
+    "note": "Per-acquisition cap is the reviewed GuardedSettlementConfig value (0.001 WETH), well under the 0.01 WETH executor ceiling and the $130 umbrella. WETH funded = exactly one acquisition's worth <= cap. evmVersion MUST be pinned + bytecode verified before build (KL-1)."
+  },
+  "operatorSequence": [
+    "0. Resolve evm_version (KL-1); build; verify deployed bytecode vs frozen source hashes.",
+    "1. Deploy ChainlinkSettlementPriceGuard + GuardedSettlementExecutor (controller=Safe); executor starts paused (funded deployer sends the create txs).",
+    "2. Configure via 2-of-3 Safe txs: setPriceGuard, setApprovedRouterCode, setMaxSellAmount(WETH,1e15), setTokenPairAllowed(WETH,NVDA,true).",
+    "3. Read-only preflight with CANARY_EXECUTOR_ADDRESS set -> must pass; executor still paused (EXECUTION_LOCKED); both feeds fresh (open NVDA session).",
+    "4. Fund executor with <= 0.001 WETH; total (WETH + gas) <= $130.",
+    "5. Under the separate execute go-signal: unpause() (Safe); fetch live Rialto allowance-mode quote; executeSettlement (Safe) — ONE cycle, nonce 1.",
+    "6. Verify: one SettlementExecuted; received NVDA >= min; allowance back to 0; nonce/digest consumed.",
+    "7. MANDATORY: pause() (Safe); recover(NVDA) + recover(WETH) to the Safe; confirm executor balances 0 and paused.",
+    "8. Record sanitized on-chain results; do NOT reuse for production; B-1/B-2 remain incomplete; D-24 in force."
+  ],
+  "hardPreconditions": [
+    "A new, bounded, founder EXECUTE go-signal (this packet authorizes preparation only; no auto-broadcast exists).",
+    "Both Chainlink feeds fresh (< 900s) => an OPEN NVDA trading session (us_equities_24/5).",
+    "A live Rialto allowance-mode quote obtained by the operator at execution (Claude fetches nothing).",
+    "Controller 2-of-3 Safe operational; owners can sign via interactive/hardware wallets.",
+    "Total exposure (WETH funded + gas) <= $130."
+  ],
+  "artifacts": {
+    "governanceAmendment": "docs/decisions/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.md",
+    "technicalDeployPacket": "packages/contracts/deploy/PRIVATE_CANARY_DEPLOY_PACKET_2026-07-26.md",
+    "runbook": "packages/contracts/deploy/GUARDED_SETTLEMENT_RUNBOOK.md",
+    "executorReadinessPacket": "docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.*"
+  },
+  "safetyAttestation": {
+    "signed": false,
+    "broadcast": false,
+    "funded": false,
+    "deployed": false,
+    "safeTransactionCreated": false,
+    "canaryPerformed": false,
+    "tokenApprovalOrTransfer": false,
+    "privateKeyMnemonicRpcOrApiKeyExposed": false,
+    "b1AuditSatisfied": false,
+    "b2CounselSatisfied": false,
+    "d24WeakenedForProduction": false,
+    "productionReuseAuthorized": false
+  }
+}

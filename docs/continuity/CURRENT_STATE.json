@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-26T12:10:00Z",
+  "updatedUtc": "2026-07-26T12:40:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "b4d7eb3a5f9d18d9d8ee99a6317d477a66a5d604 (parent of the TASK 10K-9 commit); the commit 'ops(executor): prepare activation gate packet' advances HEAD by one — run 'git rev-parse HEAD' to read the exact new hash.",
+  "head": "d660421b83a47dafb98331e7ec6bca85a541a963 (parent of the PCE-1 commit); the commit 'ops(canary): record private canary exception and deploy packet' advances HEAD by one — run 'git rev-parse HEAD' to read the exact new hash.",
   "workingTree": {
     "dirty": false,
-    "note": "TASK 10K-9 committed (sanitized evidence + continuity only; NO code change) as 'ops(executor): prepare activation gate packet'. forge-std v1.9.7 lives in gitignored packages/contracts/lib; run packages/contracts/tool/bootstrap-forge-std.{sh,ps1} on a fresh clone before forge test. Lists below = files this commit changed/added.",
+    "note": "PCE-1 committed (governance amendment + deploy packet + continuity; DOCS ONLY, no code change) as 'ops(canary): record private canary exception and deploy packet'. forge-std v1.9.7 lives in gitignored packages/contracts/lib; run packages/contracts/tool/bootstrap-forge-std.{sh,ps1} on a fresh clone before forge test. Lists below = files this commit changed/added.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
@@ -15,11 +15,30 @@
     ],
     "deleted": [],
     "untracked": [
-      "docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.md",
-      "docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.evidence.json"
+      "docs/decisions/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.md",
+      "packages/contracts/deploy/PRIVATE_CANARY_DEPLOY_PACKET_2026-07-26.md",
+      "docs/audit/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.evidence.json"
     ]
   },
   "phase": "post-canary",
+  "privateCanaryException": {
+    "id": "PCE-1",
+    "status": "PREPARED_NOT_EXECUTED (docs only)",
+    "authorizedBy": "founder (chat 2026-07-26)",
+    "bounds": "one WETH->NVDA cycle; <= $130 all-inclusive; no public users; no production reuse; mandatory pause + recovery after",
+    "perAcquisitionCapWeth": "0.001",
+    "controllerSafe": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
+    "b1AuditSatisfied": false,
+    "b2CounselSatisfied": false,
+    "d24WeakenedForProduction": false,
+    "executionPerformed": false,
+    "requiresSeparateExecuteGoSignal": true,
+    "artifacts": [
+      "docs/decisions/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.md",
+      "packages/contracts/deploy/PRIVATE_CANARY_DEPLOY_PACKET_2026-07-26.md",
+      "docs/audit/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.evidence.json"
+    ]
+  },
   "executorActivation": {
     "externalReviewPacketReady": true,
     "executorDeployed": false,
@@ -52,11 +71,11 @@
     "activatedAsExecutorController": false,
     "note": "Safe deployed + verified (29/29 checks). NOT activated — no GuardedSettlementExecutor exists. Owns/controls nothing. Evidence docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.*"
   },
-  "latestCompletedMilestone": "TASK 10K-9 — executor activation gate review + external review packet. Froze the executor candidate (commit 5181f1b; source SHA-256 recorded), re-ran full verification (513 Foundry / 252 rialto vitest; typecheck/lint/build/format clean), re-checked the Safe read-only. Produced sanitized auditor+counsel packet with a 20-row threat/control matrix. Gate finding: B-1 independent audit OPEN; D-23 counsel PENDING; ballot never returned (D-1..D-24 all PROPOSED); D-24 FULLY IN FORCE. Status EXECUTOR_EXTERNAL_REVIEW_PACKET_READY; activation prohibited; no mainnet/Safe action",
-  "currentTask": "none — executor external-review packet ready; executor UNDEPLOYED; Safe is a verified CANDIDATE controller (not active); D-24 in force; no executor deployment/config/transfer/settlement/canary authorized",
+  "latestCompletedMilestone": "PCE-1 — one-time private canary exception: governance amendment + exact technical deployment packet prepared and committed (DOCS ONLY). Founder-authorized bounded private canary (one WETH->NVDA cycle, <= $130 all-inclusive, no public users, no production reuse, mandatory pause+recovery). NO broadcast/fund/deploy/Safe-tx/canary performed. B-1 audit OPEN and B-2/D-23 counsel INCOMPLETE (explicitly NOT satisfied); D-24 in force for production. Founder accepts security+legal risk for this one canary. Prior: 10K-9 (d660421)",
+  "currentTask": "none — PCE-1 exception + deploy packet prepared (docs only, NOT executed); executor UNDEPLOYED; Safe is a verified CANDIDATE controller (not active); B-1/B-2 incomplete; D-24 in force for production; execution needs a separate founder EXECUTE go-signal",
   "buildReadiness": "CANARY_BUILD_READY_EXECUTION_LOCKED",
-  "runtimeReadiness": "CANARY_NOT_READY (executor undeployed; activation gated on B-1 audit + D-23 counsel + returned ballot + a new D-24-replacing authorization)",
-  "nextTask": "Activation is gated on EXTERNAL HUMAN INPUTS Claude cannot satisfy: (1) independent smart-contract audit of the frozen executor + guard (B-1); (2) counsel legal-eligibility approval (D-23/B-2); (3) founder-returned approval ballot (D-1..D-24) with D-8/D-16/D-17/D-18/D-20 values + feed ratification (D-9/D-10); (4) a NEW bounded, independently-reviewed authorization replacing D-24; (5) a funded deployer + resolved deploy strategy (UD-1/UD-2). Only then the NOT-AUTHORIZED deployment checklist in docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.* / runbook §5",
+  "runtimeReadiness": "CANARY_NOT_READY (executor undeployed; PCE-1 canary requires a separate execute go-signal + open NVDA session + live quote + funded deployer + 2-of-3 Safe)",
+  "nextTask": "Two tracks. (A) PCE-1 private canary IF the founder issues the separate EXECUTE go-signal: follow packages/contracts/deploy/PRIVATE_CANARY_DEPLOY_PACKET_2026-07-26.md (pin evm_version + verify bytecode KL-1; deploy Safe-as-owner paused; configure via 2-of-3 Safe; preflight; fund <= 0.001 WETH total <= $130; unpause; ONE settlement during open NVDA session; MANDATORY pause + recover). Claude does not perform it. (B) Production (still fully gated): independent audit B-1, counsel D-23/B-2, returned ballot, a new D-24-replacing authorization. B-1 and B-2/D-23 remain INCOMPLETE; D-24 in force for production",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,

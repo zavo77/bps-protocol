@@ -232,6 +232,24 @@ No auditor/counsel names, signatures, dates, or opinions were fabricated. No dec
 task. Status `EXECUTOR_EXTERNAL_REVIEW_PACKET_READY` — executor activation remains prohibited; the Safe
 remains a verified **candidate** controller.
 
+### PCE-1 — one-time private canary exception (2026-07-26)
+
+The founder authorized (via chat) **preparation and commit** of a governance amendment + exact technical
+deployment packet for a **single, bounded, private guarded-settlement canary**: **≤ $130 all-inclusive
+exposure, no public users, no production reuse, exactly one WETH→NVDA acquisition cycle, mandatory pause +
+recovery afterward.** Claude prepared documentation only — **no broadcast, fund, deploy, Safe transaction, or
+canary was performed.** **PCE-1 is a narrow carve-out from D-24 for this one canary only.** It **does NOT**
+satisfy or close **B-1** (independent audit — remains OPEN/INCOMPLETE) or **B-2/D-23** (counsel — remains
+INCOMPLETE/COUNSEL-PENDING), and **does NOT** weaken, replace, or reinterpret **D-24 for production**. The
+founder explicitly **accepts the security + legal risk** of proceeding without B-1/B-2 for this bounded
+private canary. Per-acquisition cap 0.001 WETH (reviewed `GuardedSettlementConfig` value; executor ceiling
+0.01 WETH); execution still requires a separate founder go-signal, an open NVDA session (fresh feeds), a live
+Rialto quote, and the 2-of-3 Safe. PCE-1 is single-use. Amendment:
+`docs/decisions/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.md`; packet
+`packages/contracts/deploy/PRIVATE_CANARY_DEPLOY_PACKET_2026-07-26.md`; record
+`docs/audit/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.evidence.json`. No auditor/counsel names, signatures, or
+opinions were fabricated. Ballot **D-17 unchanged**; **QEX-1 consumed**.
+
 ## Restricted Rialto access request (DRAFT — NOT SENT)
 
 The exact text is preserved in the ballot §5 and the decision pack. Decision: `SEND MANUALLY`.

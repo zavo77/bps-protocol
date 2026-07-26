@@ -7,6 +7,36 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-26 — PCE-1: one-time private canary exception (governance amendment + deploy packet)
+
+- **Type:** Documentation only — governance amendment + exact technical deployment packet + continuity. The
+  founder authorized (via chat) preparation + commit of a bounded, one-time, private guarded-settlement
+  canary. **Claude prepared documentation only: NO broadcast, NO fund, NO deploy, NO Safe transaction, NO
+  canary, NO token approval/transfer, NO external communication. No private key/mnemonic/RPC/API secret read
+  or exposed.** Start HEAD d660421 (10K-9).
+- **PCE-1 bounds:** exactly one WETH->NVDA acquisition cycle; **<= $130 all-inclusive exposure** (acquisition
+  - gas); no public users; no production reuse; **mandatory pause + recovery** immediately after; single-use.
+- **Gate handling (per explicit founder instruction):** **B-1 (independent audit) remains OPEN/INCOMPLETE**
+  and **B-2/D-23 (counsel) remains INCOMPLETE/COUNSEL-PENDING** — PCE-1 does NOT satisfy, close, or downgrade
+  either. **D-24 remains fully in force for production**; PCE-1 is a narrow carve-out for this one canary
+  only and does not replace/expire/weaken/reinterpret D-24. The founder explicitly accepts the security +
+  legal risk of proceeding without B-1/B-2 for this bounded private canary. No auditor/counsel names,
+  signatures, or opinions were fabricated.
+- **Technical bounds (frozen):** controller = the verified 2-of-3 Safe 0x62Ae5b22...5E62 as executor owner;
+  per-acquisition cap 0.001 WETH (reviewed GuardedSettlementConfig value; executor hard ceiling 0.01 WETH);
+  slippage <= 100 bps; oracle deviation 100 bps; deadline <= 300 s; feeds ETH/USD 0x78F3...d3A9 + NVDA/USD
+  0x379E...9F15; approved router code hash 0xa7041268...27611 + selector 0x77963966; executor source sha256
+  14d8e7ed...fe2f (commit 5181f1b); solc 0.8.26/opt 200. KL-1 (evm_version) must be pinned + bytecode verified
+  before any build.
+- **Execution preconditions (all human-performed, not by Claude):** a separate founder EXECUTE go-signal; an
+  open NVDA trading session (feeds fresh < 900 s); a live Rialto allowance-mode quote obtained by the
+  operator; a funded deployer; 2-of-3 Safe signatures. Then ONE cycle -> verify -> mandatory pause + recover
+  to the Safe. No auto-broadcast exists in the repo.
+- **Artifacts:** docs/decisions/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.md;
+  packages/contracts/deploy/PRIVATE_CANARY_DEPLOY_PACKET_2026-07-26.md;
+  docs/audit/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.evidence.json. Commit `ops(canary): record private canary
+exception and deploy packet` (docs only; no code change).
+
 ## 2026-07-26 — TASK 10K-9: executor activation gate review + external review packet
 
 - **Type:** Documentation/review only — repository inspection, read-only verification, test/rehearsal
