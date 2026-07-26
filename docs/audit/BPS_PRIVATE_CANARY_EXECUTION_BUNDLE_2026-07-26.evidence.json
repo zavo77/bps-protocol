@@ -1,0 +1,245 @@
+{
+  "schemaVersion": "1.0.0",
+  "task": "TASK 10K-10 — private canary execution-bundle finalization (PCE-1)",
+  "dateUtc": "2026-07-26",
+  "status": "PRIVATE_CANARY_EXECUTION_BUNDLE_READY",
+  "startingCommit": "02f1a213791fbec7fbe316e5e5ca73c5fa3b4466",
+  "network": { "name": "Robinhood Chain Mainnet", "chainId": 4663 },
+  "governing": "PCE-1 (docs/decisions/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.md) — one-time private canary; <= $130 all-inclusive; one WETH->NVDA cycle; no public users; no production reuse; mandatory pause + recovery; single-use.",
+  "authorizationScope": "Offline/read-only finalization only. NO signing, broadcast, deploy, fund, Safe transaction, approval, transfer, swap, settlement, canary, or external contact. This task is preparation, NOT the EXECUTE authorization.",
+  "kl1EvmVersion": {
+    "pinned": "paris",
+    "where": "packages/contracts/foundry.toml [profile.canary] evm_version = \"paris\" (narrow profile; default profile unchanged so the full test suite still compiles)",
+    "basis": "Robinhood Chain is an Arbitrum Dedicated Blockchain (Nitro/Orbit) L2, 'fully EVM-compatible' per official docs (docs.robinhood.com/chain), with the exact ArbOS/hardfork not published. 'paris' predates PUSH0 (shanghai) and MCOPY / transient storage (TSTORE/TLOAD) / blob opcodes (cancun). The frozen guarded-settlement contracts require none of those (OZ 5.6.1 non-transient ReentrancyGuard, Math.mulDiv, SafeERC20; their import graph excludes all 7 MCOPY-using OZ utils). paris-compiled bytecode is therefore guaranteed executable on every EVM >= paris, including all Arbitrum Nitro versions. Compiling under paris also forces solc to avoid emitting MCOPY in the executor's own calldata/memory handling, removing the pre-cancun-chain risk.",
+    "noContractLogicChange": true
+  },
+  "reproducibleBuild": {
+    "toolchain": {
+      "solc": "0.8.26+commit.8a97fa7a",
+      "optimizer": true,
+      "optimizerRuns": 200,
+      "evmVersion": "paris"
+    },
+    "command": "FOUNDRY_PROFILE=canary forge build --offline --skip '*.t.sol' --skip '*.s.sol'",
+    "twoCleanBuildsIdentical": true,
+    "guard": {
+      "creationBytecodeHash": "0x9385b6b4bb6a94d3d09a2cd23abf2d449ac481a2c9f62c66ebf900c3eea20b34",
+      "creationBytecodeLen": 6985,
+      "runtimeBytecodeHash": "0x4c5859271a39e5e9b86cff9932b433e292d79ba749ae3e6d66b8403ca5ea92e8",
+      "runtimeBytecodeLen": 4485,
+      "constructorArgsHash": "0xaf09a95d160abe21e7f4981509676953110bca8e05fd3f30b24f9ee3f1fcd5c3",
+      "constructorArgsLen": 256,
+      "deployDataHash": "0xbb4711ff30a36327dbf7e2bdc01ff9b1aa2f7492cea7dea07beeb26cede2dbb9",
+      "deployDataLen": 7241
+    },
+    "executor": {
+      "creationBytecodeHash": "0xbf0d3bb70372c0ed6598d451c7967a0f83b40c92ad219b1826c51cbb0d350fa0",
+      "creationBytecodeLen": 10564,
+      "runtimeBytecodeHash": "0x16c8afa9344bcbef44ceb073368d723ba7fba6f87fb83b74db9a9efded770908",
+      "runtimeBytecodeLen": 9256,
+      "constructorArgsHash": "0x50b636f83f31c7e6d00f1f797fa932161c383e62bf8e482f505b51dff79d89c3",
+      "constructorArgsLen": 128,
+      "deployDataHash": "0x9464507bc8462868deca5f62b90fd7eb9abb94903528c8c4c88036f3fba0d04a",
+      "deployDataLen": 10692
+    },
+    "sourceHashesSha256": {
+      "GuardedSettlementExecutor.sol": "14d8e7ed3f5bbe66d9856e8c61c10d1cbefdbd26e2196b71755c5631b750fe2f",
+      "ChainlinkSettlementPriceGuard.sol": "92b774c31cdc34ec017f8b5c7b1840dee5f20a83ae3f3d87580046c41543c670"
+    }
+  },
+  "deployerReadOnly": {
+    "address": "0x7116F2998e625651D310E97919a1c638a7F82ba2",
+    "isOwner1OfSafe": true,
+    "note": "Owner 1 of the Safe AND the deployment sender; the EOA and the Safe are NOT interchangeable.",
+    "chainId": 4663,
+    "nonce": 1,
+    "pendingNonce": 1,
+    "codeLen": 0,
+    "nativeBalanceWei": "483387107280000",
+    "nativeBalanceEth": "0.000483387107280",
+    "gasPriceWei": "51830000",
+    "sufficientForTwoDeployments": true,
+    "predictedAddressesValidOnlyWhileNonceEquals": 1,
+    "nonceChangeIsHardAbort": true
+  },
+  "predictedContracts": [
+    {
+      "name": "ChainlinkSettlementPriceGuard",
+      "nonce": 1,
+      "address": "0x57538680194D9E15Ba78bf243B10B440f663078d",
+      "currentCodeLen": 0
+    },
+    {
+      "name": "GuardedSettlementExecutor",
+      "nonce": 2,
+      "address": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+      "currentCodeLen": 0
+    }
+  ],
+  "frozenParameters": {
+    "initialOwner": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62 (the 2-of-3 Safe; deploy Safe-as-owner — no temp owner / no transferOwnership needed)",
+    "controllerSafe": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
+    "deployer": "0x7116F2998e625651D310E97919a1c638a7F82ba2 (EOA sends 2 CREATE txs; NOT the owner)",
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "nvda": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "registry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+    "featureId": 2,
+    "routerRuntimeCodeHash": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611",
+    "approvedSelector": "0x77963966",
+    "ethUsdFeed": "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9",
+    "nvdaUsdFeed": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
+    "priceGuardConfig": {
+      "sequencerUptimeFeed": "0x0000000000000000000000000000000000000000 (none officially published)",
+      "sequencerRecoveryGraceSec": 0,
+      "maxWethFeedAgeSec": 900,
+      "maxNvdaFeedAgeSec": 900
+    },
+    "tokenDecimals": { "weth": 18, "nvda": 18, "feeds": 8 },
+    "maxAcquisitionWei": "1000000000000000",
+    "maxAcquisitionWeth": "0.001",
+    "executorHardCeilingWeth": "0.01",
+    "aggregateExposureCapUsd": 130,
+    "maxSlippageBps": 100,
+    "maxPriceDeviationBps": 100,
+    "maxDeadlineHorizonSec": 300,
+    "recipient": "the executor itself (taker + purchased-token recipient)",
+    "recoveryRecipient": "the controller Safe (owner)",
+    "deploymentPauseState": "paused (constructor _pause())",
+    "replayProtections": "domain-separated single-use intent digest + per-intent nonce, marked before the external call; exact allowance forced then reset to zero and asserted",
+    "settlementIdentifierRules": "GUARD_DOMAIN keccak256(\"BPS-GUARDED-SETTLEMENT/1\"); digest binds chainId/executor/registry/featureId/target/selector/tokens/amounts/fees/slippage/taker/nonce/deadline/calldataHash",
+    "approvedTokensVenuesRouters": "WETH->NVDA only; registry-locked feature-2 router; opaque calldata bound to the pinned code hash + selector",
+    "privilegedRoles": "owner = controller Safe ONLY (config/pause/unpause/transferOwnership/recover/executeSettlement); no other role",
+    "initializationOrder": "deploy guard (nonce 1) -> deploy executor paused (nonce 2, owner=Safe) -> Safe: setPriceGuard -> setApprovedRouterCode -> setMaxSellAmount -> setTokenPairAllowed -> (read-only preflight) -> unpause",
+    "pauseEmergencyControls": "starts paused; owner pause()/unpause() (unpause config-gated); recover(token,amount) own-balance-only to owner, nonReentrant; router rotation/code-hash change or stale/paused feed => fail closed",
+    "unresolvedValues": "NONE that are safety-critical and derivable now. Execution-time-only unresolved (by design): the live Rialto quote (tx.to/tx.data/minBuyAmount/deadline), the NVDA market-session freshness, and the WETH funding source wallet."
+  },
+  "controlMatrix": {
+    "onchainEnforced": [
+      "chainId == 4663 (constructor + executeSettlement)",
+      "deploys paused; unpause reverts ConfigIncomplete until fully configured",
+      "WETH->NVDA direction only",
+      "per-tx sell amount <= configured cap and <= 0.01 WETH hard ceiling",
+      "registry ownerOf(2) target lock; router != registry/weth/stock/self/guard",
+      "router runtime code hash == pinned; approved leading selector; calldata hash bound",
+      "exact WETH allowance to router then reset to zero (asserted)",
+      "own NVDA balance delta >= minBuyAmount (output routed elsewhere reverts)",
+      "single-use digest + nonce (replay/duplicate revert)",
+      "deadline required, not expired, <= 300s horizon",
+      "slippage <= 100 bps; oracle deviation floor 100 bps; feed freshness/identity/decimals/pause checks",
+      "recover() moves only own balance to the owner Safe; nonReentrant",
+      "Ownable2Step owner-only privileged actions; ReentrancyGuard; non-payable (tx.value 0)"
+    ],
+    "operatorSideHardStops": [
+      "exactly ONE settlement cycle, then mandatory pause() (on-chain there is no hard one-cycle limit; enforced by operator doing one settlement then pausing — a second settlement after pause reverts EnforcedPause)",
+      "aggregate <= $130 all-inclusive exposure (deployment + Safe-op + funding + settlement + fees + recovery gas + reserve)",
+      "fund executor with <= 0.001 WETH (exactly one acquisition's worth)",
+      "execute only during an OPEN NVDA trading session (feeds fresh < 900s)",
+      "obtain a FRESH live Rialto quote immediately before the settlement (never pre-freeze/reuse)",
+      "no public users; no production reuse; PCE-1 single-use/consumed after the attempt",
+      "mandatory recovery of residual WETH + NVDA to the Safe after the cycle",
+      "abort if deployer nonce != 1 (predicted addresses invalid) or any post-stage verification fails"
+    ]
+  },
+  "lifecycleRehearsal": {
+    "kind": "offline local (Foundry, no live fork) + full test suite; a real Robinhood-Chain full-transaction fork replay is NOT possible (Foundry cannot deserialize the Arbitrum-Nitro block/tx encoding, documented since 10K-5) and was substituted with read-only JSON-RPC verification",
+    "coverageMap": {
+      "1_deploy_nonce_order": "test_deployPaused_startsPausedWithPinnedIdentities; test_rehearsal_fullLifecycle",
+      "2_starts_paused": "test_startsPaused; test_deployPaused_startsPausedWithPinnedIdentities",
+      "3_safe_as_owner": "test_deployPaused_startsPausedWithPinnedIdentities (owner==controller); test_onlyController_config_and_settle",
+      "4_configure_via_controller": "test_onlyController_config_and_settle; test_unpauseSucceedsWhenConfigComplete; test_rehearsal_fullLifecycle",
+      "5_verify_storage": "test_rehearsal_fullLifecycle",
+      "6_simulate_funding": "test_rehearsal_fullLifecycle (mints WETH to executor)",
+      "7_one_valid_settlement": "test_happyPath_settles; test_rehearsal_fullLifecycle",
+      "8_second_settlement_fails": "test_emergencyPauseBlocksSettlement (paused -> revert) + operator one-cycle+pause control",
+      "9_per_acq_cap_breach_fails": "test_amountAboveCapFails; testFuzz_amountAboveCapFails; test_setMaxSellAmount_capCeiling",
+      "10_aggregate_cap_breach": "OPERATOR-side hard stop (no single on-chain aggregate cap; enforced by 0.001 WETH per-tx cap + one-cycle + $130 budget)",
+      "11_unapproved_token_fails": "test_wrongDirectionFails",
+      "12_unapproved_router_or_selector_fails": "test_wrongApprovedCodeHashFails; test_registryRotationToDifferentCodeHaltsSettlement; test_selectorNotApprovedFails; test_calldataSelectorMustMatchDeclared",
+      "13_wrong_recipient_fails": "test_outputToOtherRecipientReverts; test_noOutputSuccessReverts; test_minBuyNotMetReverts",
+      "14_stale_quote_expired_deadline_fails": "test_expiredDeadlineFails; test_missingDeadlineFails; test_deadlineTooFarFails; test_staleNvdaFeedReverts; test_staleWethFeedReverts",
+      "15_replay_duplicate_fails": "test_reusedNonceFails; test_reusedDigestFails; test_digestMismatchFails; testFuzz_reusedNonceAlwaysFails; invariant_routerAllowanceAlwaysZero",
+      "16_pause": "test_emergencyPauseBlocksSettlement; test_startsPaused",
+      "17_recover_residual": "test_recover_sendsOnlyToControllerAndClamps",
+      "18_verify_final_state": "test_rehearsal_fullLifecycle; invariant_neverExceedsCapConfig; invariant_routerAllowanceAlwaysZero"
+    }
+  },
+  "verification": {
+    "foundry": {
+      "command": "forge test --offline",
+      "suites": 51,
+      "tests": 513,
+      "passed": 513,
+      "failed": 0,
+      "skipped": 0
+    },
+    "rialtoVitest": { "tests": 252, "passed": 252, "failed": 0 },
+    "typecheck": "clean",
+    "lint": "clean",
+    "build": "clean",
+    "format": "forge fmt --check clean; prettier --check . clean",
+    "skips": [
+      {
+        "suite": "cast run full-tx fork replay",
+        "reason": "Robinhood Chain Arbitrum-Nitro block/tx encoding not deserializable by foundry 1.7.1; substituted with read-only JSON-RPC verification (tooling limitation, not missing state)"
+      }
+    ]
+  },
+  "gasAndExposure": {
+    "gasPriceWei": "51830000",
+    "estDeployGasGuard": 1119595,
+    "estDeployGasExecutor": 2161377,
+    "estDeployGasTotal": 3280972,
+    "estLifecycleGasConservative": 2010000,
+    "estTotalGas": 5350972,
+    "gasPriceSafetyBuffer": "2x",
+    "minDeployerFundingEth": "0.000340106",
+    "maxNativeGasCostEth": "0.000554682",
+    "acquisitionNotionalEth": "0.001",
+    "ethUsdLive": 1885.00086357,
+    "maxTotalAllInclusiveExposureEth": "0.001554682",
+    "maxTotalAllInclusiveExposureUsd": "2.93",
+    "under130": true,
+    "does130CoverCompleteLifecycle": "YES — ~$2.93 worst-case vs $130 cap (~44x headroom); includes deployment, Safe-op, funding, settlement, fees, recovery gas + 2x gas reserve"
+  },
+  "offlineArtifacts": {
+    "unsignedDeployment": "packages/contracts/deploy/canary-bundle/unsigned-deployment.json",
+    "unsignedSafeTransactions": "packages/contracts/deploy/canary-bundle/unsigned-safe-transactions.json",
+    "verificationManifest": "packages/contracts/deploy/canary-bundle/verification-manifest.json",
+    "report": "docs/audit/BPS_PRIVATE_CANARY_EXECUTION_BUNDLE_2026-07-26.md",
+    "governanceAmendment": "docs/decisions/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.md",
+    "operatorPacket": "packages/contracts/deploy/PRIVATE_CANARY_DEPLOY_PACKET_2026-07-26.md"
+  },
+  "remainingExecutionTimeInputs": [
+    "Deployer gas funding IF required (deployer currently holds 0.000483387 ETH >= 0.000340106 ETH min for the two deployments; recommend topping up for buffer/price movement)",
+    "Human wallet signatures + broadcasts (deployer EOA for the 2 CREATE txs; 2-of-3 Safe signatures for config/unpause/settle/pause/recover; a WETH source wallet for the <= 0.001 WETH funding)",
+    "A FRESH live Rialto allowance-mode quote obtained immediately before the single settlement (never pre-frozen)",
+    "Confirmation the NVDA market session is OPEN (feeds fresh < 900s) at execution"
+  ],
+  "abortConditions": [
+    "deployer nonce != 1 at execution => predicted addresses invalid => regenerate + reverify the entire bundle",
+    "any predicted address already has code => abort",
+    "post-deploy verification mismatch (code hash / owner / paused / immutables) => abort; if only one contract deployed, redeploy the pair fresh (nonce advanced) and regenerate",
+    "post-configure verification mismatch => abort before unpause; the executor stays paused (safe); re-review",
+    "feeds stale / NVDA session closed at execution => do NOT unpause/settle; wait for an open session",
+    "no fresh live quote, or quote fails the envelope => do NOT settle",
+    "if funding occurred but settlement cannot safely proceed => pause() + recover() all WETH to the Safe; do not retry without re-review",
+    "settlement revert => it is atomic (no state change beyond consumed nonce/digest); pause() + recover(); PCE-1 is consumed by the attempt",
+    "total exposure trending toward $130 under abnormal gas => abort (do not weaken the cap)"
+  ],
+  "safetyAttestation": {
+    "signed": false,
+    "broadcast": false,
+    "funded": false,
+    "deployed": false,
+    "safeTransactionCreatedOrUploaded": false,
+    "ownershipActionPerformed": false,
+    "approvalTransferSwapSettlementCanary": false,
+    "externalPartyContacted": false,
+    "privateKeyMnemonicRpcOrApiKeyExposed": false,
+    "safeRemainsUnfundedAndInactive": true,
+    "b1AuditStatus": "OPEN / INCOMPLETE",
+    "b2AndD23CounselStatus": "COUNSEL-PENDING / INCOMPLETE",
+    "d24ProductionStatus": "FULLY IN FORCE — not weakened/replaced/reinterpreted",
+    "pce1": "single-use; not yet consumed (no attempt made)"
+  }
+}

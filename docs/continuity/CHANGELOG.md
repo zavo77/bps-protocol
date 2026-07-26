@@ -7,6 +7,48 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-26 — TASK 10K-10: private canary execution-bundle finalization (PCE-1)
+
+- **Type:** Offline/read-only technical finalization + reproducible build-config pin + non-broadcast rehearsal
+  - sanitized offline artifacts + continuity; one local commit. **NO signing, broadcast, deploy, fund, Safe
+    transaction (created or uploaded), approval, transfer, swap, settlement, canary, or external contact; no
+    private key/mnemonic/RPC/API secret read or exposed. Preparation only — NOT the EXECUTE authorization.**
+    Start HEAD 02f1a21 (PCE-1).
+- **KL-1 resolved:** pinned `evm_version = "paris"` in a narrow `[profile.canary]` in
+  packages/contracts/foundry.toml (default profile unchanged; a project-wide paris pin breaks the test/script
+  build because OZ 5.6.1's MCOPY-using Bytes.sol is pulled in via Strings). Basis: Robinhood Chain is an
+  Arbitrum Dedicated Blockchain (Nitro/Orbit), "fully EVM-compatible" per official docs, exact ArbOS/hardfork
+  unpublished; paris predates PUSH0/MCOPY/transient/blobs, the frozen contracts need none, so paris bytecode
+  is executable on every EVM >= paris and solc emits no MCOPY in the executor. No contract-logic change.
+- **Reproducible build (two clean builds byte-identical):** solc 0.8.26+commit.8a97fa7a, optimizer 200, evm
+  paris. Executor creation 0xbf0d3bb70372c0ed6598d451c7967a0f83b40c92ad219b1826c51cbb0d350fa0 (10564 B) /
+  runtime 0x16c8afa9344bcbef44ceb073368d723ba7fba6f87fb83b74db9a9efded770908 (9256 B); guard creation
+  0x9385b6b4bb6a94d3d09a2cd23abf2d449ac481a2c9f62c66ebf900c3eea20b34 (6985 B) / runtime
+  0x4c5859271a39e5e9b86cff9932b433e292d79ba749ae3e6d66b8403ca5ea92e8 (4485 B). Constructor-args + deploy-data
+  hashes recorded in the evidence.
+- **Deployer read-only:** 0x7116...2ba2 (Owner 1; not interchangeable with the Safe) nonce 1, balance
+  0.000483387 ETH, no code; predicted CREATE guard 0x57538680194D9E15Ba78bf243B10B440f663078d (nonce 1) +
+  executor 0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C (nonce 2), both empty. VALID ONLY while nonce == 1
+  (nonce change = hard abort + full bundle regeneration).
+- **Offline unsigned bundle:** packages/contracts/deploy/canary-bundle/{unsigned-deployment.json (creation
+  bytecode + ctor args + predicted addresses + gas), unsigned-safe-transactions.json (Safe TX Builder config/
+  unpause/settle-template/pause-recover; settle unresolved pending live quote), verification-manifest.json
+  (read-only checks + expected results per stage)}. Deploy Safe-as-owner (no temp owner). 12 human-confirmed
+  execution stages with per-stage abort conditions.
+- **Rehearsal + verification:** 18-step lifecycle mapped to existing passing tests (item 10 aggregate-cap =
+  operator-side stop, not a single on-chain cap). forge test --offline 513/513; rialto vitest 252/252;
+  typecheck/lint/build clean; forge fmt + prettier clean. One documented skip: cast run full-tx fork replay
+  (Robinhood Chain Arbitrum-Nitro encoding not deserializable by foundry 1.7.1; substituted with read-only
+  JSON-RPC — stated, not concealed). Safe re-checked read-only: unchanged, inactive.
+- **Gas/exposure:** gasPrice 0.05183 gwei; deploy gas guard 1,119,595 + executor 2,161,377; max
+  all-inclusive exposure ~0.001555 ETH ~ $2.93 at live $1885/ETH vs the $130 cap (~44x headroom) — $130
+  SAFELY covers the complete lifecycle (deploy + Safe-op + funding + settlement + fees + recovery gas +
+  reserve). Min deployer funding ~0.000340 ETH (deployer already sufficient).
+- **Governance unchanged:** B-1 OPEN/INCOMPLETE; B-2/D-23 COUNSEL-PENDING/INCOMPLETE; D-24 FULLY IN FORCE for
+  production; PCE-1 single-use, not yet consumed. Status PRIVATE_CANARY_EXECUTION_BUNDLE_READY. Evidence
+  docs/audit/BPS_PRIVATE_CANARY_EXECUTION_BUNDLE_2026-07-26.{md,evidence.json}. Commit `ops(canary): finalize
+private execution bundle`.
+
 ## 2026-07-26 — PCE-1: one-time private canary exception (governance amendment + deploy packet)
 
 - **Type:** Documentation only — governance amendment + exact technical deployment packet + continuity. The

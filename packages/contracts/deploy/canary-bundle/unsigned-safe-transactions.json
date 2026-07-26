@@ -1,0 +1,105 @@
+{
+  "order": ["1-config", "2-unpause", "3-settle(template)", "4-pause-recover"],
+  "config": {
+    "version": "1.0",
+    "chainId": "4663",
+    "createdAt": 0,
+    "meta": {
+      "name": "PCE-1 executor configuration (paused)",
+      "description": "PCE-1 private canary — UNSIGNED offline template; do NOT broadcast without the founder EXECUTE go-signal",
+      "txBuilderVersion": "1.16.5"
+    },
+    "transactions": [
+      {
+        "to": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+        "value": "0",
+        "data": "0x95e0f9fd00000000000000000000000057538680194d9e15ba78bf243b10b440f663078d",
+        "_description": "setPriceGuard(guard)"
+      },
+      {
+        "to": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+        "value": "0",
+        "data": "0x9eba7db9a7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef276117796396600000000000000000000000000000000000000000000000000000000",
+        "_description": "setApprovedRouterCode(routerCodeHash, 0x77963966)"
+      },
+      {
+        "to": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+        "value": "0",
+        "data": "0x10a1c38d0000000000000000000000000bd7d308f8e1639fab988df18a8011f41eacad7300000000000000000000000000000000000000000000000000038d7ea4c68000",
+        "_description": "setMaxSellAmount(WETH, 0.001 WETH)"
+      },
+      {
+        "to": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+        "value": "0",
+        "data": "0x8a36ed820000000000000000000000000bd7d308f8e1639fab988df18a8011f41eacad73000000000000000000000000d0601ce157db5bdc3162bbac2a2c8af5320d9eec0000000000000000000000000000000000000000000000000000000000000001",
+        "_description": "setTokenPairAllowed(WETH, NVDA, true)"
+      }
+    ]
+  },
+  "unpause": {
+    "version": "1.0",
+    "chainId": "4663",
+    "createdAt": 0,
+    "meta": {
+      "name": "PCE-1 unpause (requires EXECUTE go-signal + open NVDA session)",
+      "description": "PCE-1 private canary — UNSIGNED offline template; do NOT broadcast without the founder EXECUTE go-signal",
+      "txBuilderVersion": "1.16.5"
+    },
+    "transactions": [
+      {
+        "to": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+        "value": "0",
+        "data": "0x3f4ba83a",
+        "_description": "unpause()"
+      }
+    ]
+  },
+  "settle": {
+    "version": "1.0",
+    "chainId": "4663",
+    "createdAt": 0,
+    "meta": {
+      "name": "PCE-1 single settlement (UNRESOLVED — live Rialto quote)",
+      "description": "PCE-1 private canary — UNSIGNED offline template; do NOT broadcast without the founder EXECUTE go-signal",
+      "txBuilderVersion": "1.16.5"
+    },
+    "transactions": [
+      {
+        "to": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+        "value": "0",
+        "data": "0xUNRESOLVED_executeSettlement_pending_live_quote",
+        "_description": "executeSettlement(SettlementParams) — build from a FRESH live Rialto allowance-mode quote at execution: nonce=1, selector=0x77963966, sellAmount<=0.001 WETH, minBuyAmount>=oracle floor, deadline<=now+300s, calldataHash=keccak256(tx.data), intentDigest=computeIntentDigest(...). DO NOT pre-freeze."
+      }
+    ]
+  },
+  "shutdown": {
+    "version": "1.0",
+    "chainId": "4663",
+    "createdAt": 0,
+    "meta": {
+      "name": "PCE-1 mandatory pause + recovery",
+      "description": "PCE-1 private canary — UNSIGNED offline template; do NOT broadcast without the founder EXECUTE go-signal",
+      "txBuilderVersion": "1.16.5"
+    },
+    "transactions": [
+      {
+        "to": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+        "value": "0",
+        "data": "0x8456cb59",
+        "_description": "pause()"
+      },
+      {
+        "to": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+        "value": "0",
+        "data": "0x5705ae43000000000000000000000000d0601ce157db5bdc3162bbac2a2c8af5320d9eecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "_description": "recover(NVDA, uint256 max) -> Safe"
+      },
+      {
+        "to": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+        "value": "0",
+        "data": "0x5705ae430000000000000000000000000bd7d308f8e1639fab988df18a8011f41eacad73ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "_description": "recover(WETH, uint256 max) -> Safe"
+      }
+    ]
+  }
+}

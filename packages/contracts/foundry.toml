@@ -19,6 +19,17 @@ fs_permissions = [
     {access = "read-write", path = "./rehearsal-evidence"},
 ]
 
+# KL-1 (TASK 10K-10): narrow, reproducible build profile for the PRIVATE-CANARY deployment bytecode only.
+# Robinhood Chain is an Arbitrum Dedicated Blockchain (Nitro/Orbit) L2, "fully EVM-compatible" per official
+# docs, with the exact ArbOS/hardfork not published. "paris" predates PUSH0 (shanghai) and MCOPY / transient
+# storage / blob opcodes (cancun); the frozen guarded-settlement contracts require none of those, so
+# paris-compiled bytecode is guaranteed executable on every EVM >= paris including all Arbitrum Nitro
+# versions. Used ONLY to produce the canary deploy artifact (build with `--skip '*.t.sol' '*.s.sol'` so the
+# MCOPY-using OpenZeppelin utils pulled in by the deploy script/tests are excluded). The default profile
+# stays on the solc-0.8.26 default so the full test suite still compiles. No contract-logic change.
+[profile.canary]
+evm_version = "paris"
+
 [fmt]
 line_length = 100
 tab_width = 4

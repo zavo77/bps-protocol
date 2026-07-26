@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "1.0.0",
+  "task": "TASK 10K-10 PCE-1",
+  "chainId": 4663,
+  "note": "Read-only checks after each stage. All are eth_call/eth_getCode/eth_getStorageAt — no state change.",
+  "afterDeploy": [
+    {
+      "call": "eth_getCode(guard=0x57538680194D9E15Ba78bf243B10B440f663078d)",
+      "expect": "nonempty; keccak == 0x4c5859271a39e5e9b86cff9932b433e292d79ba749ae3e6d66b8403ca5ea92e8"
+    },
+    {
+      "call": "eth_getCode(executor=0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C)",
+      "expect": "nonempty; keccak == 0x16c8afa9344bcbef44ceb073368d723ba7fba6f87fb83b74db9a9efded770908"
+    },
+    {
+      "call": "executor.owner()",
+      "expect": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62"
+    },
+    {
+      "call": "executor.paused()",
+      "expect": "true"
+    },
+    {
+      "call": "executor.weth()/stockToken()/registry()",
+      "expect": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73 / 0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC / 0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E"
+    }
+  ],
+  "afterConfigure": [
+    {
+      "call": "executor.priceGuard()",
+      "expect": "0x57538680194D9E15Ba78bf243B10B440f663078d"
+    },
+    {
+      "call": "executor.approvedRouterCodeHash()",
+      "expect": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611"
+    },
+    {
+      "call": "executor.approvedSelector()",
+      "expect": "0x77963966"
+    },
+    {
+      "call": "executor.maxSellAmount(WETH)",
+      "expect": "1000000000000000"
+    },
+    {
+      "call": "executor.isTokenPairAllowed(WETH,NVDA)",
+      "expect": "true"
+    },
+    {
+      "call": "executor.paused()",
+      "expect": "true (still paused until unpause)"
+    }
+  ],
+  "afterUnpause": [
+    {
+      "call": "executor.paused()",
+      "expect": "false"
+    }
+  ],
+  "afterSettle": [
+    {
+      "call": "NVDA.balanceOf(executor) delta",
+      "expect": ">= minBuyAmount"
+    },
+    {
+      "call": "WETH.allowance(executor, router)",
+      "expect": "0"
+    },
+    {
+      "call": "executor.isNonceUsed(1)",
+      "expect": "true"
+    },
+    {
+      "call": "executor.isDigestConsumed(digest)",
+      "expect": "true"
+    }
+  ],
+  "afterPauseRecover": [
+    {
+      "call": "executor.paused()",
+      "expect": "true"
+    },
+    {
+      "call": "WETH.balanceOf(executor)",
+      "expect": "0"
+    },
+    {
+      "call": "NVDA.balanceOf(executor)",
+      "expect": "0"
+    },
+    {
+      "call": "attempt second executeSettlement",
+      "expect": "reverts (EnforcedPause)"
+    }
+  ]
+}
