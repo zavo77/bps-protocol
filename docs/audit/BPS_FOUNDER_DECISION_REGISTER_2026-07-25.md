@@ -143,6 +143,26 @@ Safe/taker approval and formal activation — not because Rialto support is unav
 production price-source decision (**D-22B**) remains separate. **D-5/D-8/D-21** remain candidate
 (approval/deployment-pending); **D-3/D-23** counsel-pending; **D-24 stands**; ballot **D-17 unchanged**.
 
+### Canary-ready build — Chainlink price guard + controller gate (2026-07-26, TASK 10K-6)
+
+The guarded-settlement stack is now **build-ready and UNDEPLOYED**, status
+`CANARY_BUILD_READY_EXECUTION_LOCKED`. It closes **no** decision; it makes the candidate safeguards
+concrete and testable. **D-22B** — the placeholder price guard is replaced by a real Chainlink dual-feed
+guard (`ChainlinkSettlementPriceGuard.sol`: ETH/USD `0x78F3…d3A9` + NVDA/USD `0x379E…9F15`, both 8dp;
+≤100 bps floor; fail-closed on stale/paused/decimals/identity/round/timestamp), but the **trusted
+production price source remains a separate founder/counsel decision** (the feed addresses are verified, not
+yet approved as authoritative). **D-6** — the executor deploys **paused**, cannot be unpaused until fully
+configured (`ConfigIncomplete`), and requires a **deployed-contract controller/Safe via a two-step
+transfer**; the final Safe/taker address is still open. **D-8** — the config enforces a canary cap ≤ 0.001
+WETH (validator rejects anything higher), but the production cap is unapproved. **D-5/D-21** — the executor
+enforces exact allowance + own-balance min-delta + replay guard; deployment-review pending. **D-3/D-23** —
+external audit + counsel still pending (now with a concrete artifact to audit). **D-24 stands and is
+expired** — a **new bounded, independently reviewed founder authorization** is required before any deploy,
+configure, unpause, or execute step. Ballot **D-17 unchanged**. Evidence:
+`docs/audit/BPS_RIALTO_CANARY_BUILD_2026-07-26.*`; runbook
+`packages/contracts/deploy/GUARDED_SETTLEMENT_RUNBOOK.md`. No Rialto request, no key, no signing, no
+broadcast, no deployment were performed.
+
 ## Restricted Rialto access request (DRAFT — NOT SENT)
 
 The exact text is preserved in the ballot §5 and the decision pack. Decision: `SEND MANUALLY`.

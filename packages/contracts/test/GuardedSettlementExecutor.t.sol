@@ -56,11 +56,11 @@ contract GuardedSettlementExecutorTest is Test {
     // --- helpers ---
 
     function _configure() internal {
-        exec.unpause();
         exec.setTokenPairAllowed(address(weth), address(nvda), true);
         exec.setMaxSellAmount(address(weth), CAP);
         exec.setPriceGuard(address(priceGuard));
         exec.setApprovedRouterCode(address(router).codehash, FAKE_SELECTOR);
+        exec.unpause();
     }
 
     function _cd(
@@ -280,15 +280,13 @@ contract GuardedSettlementExecutorTest is Test {
 
     // ============================ code-hash + selector approval (opaque model) ============================
 
-    function test_routerCodeUnsetFails() public {
-        exec.unpause();
+    function test_unpauseBlockedWhenRouterCodeUnset() public {
         exec.setTokenPairAllowed(address(weth), address(nvda), true);
         exec.setMaxSellAmount(address(weth), CAP);
         exec.setPriceGuard(address(priceGuard));
-        // NOTE: approved router code hash + selector NOT set.
-        IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
-        vm.expectRevert(IGuardedSettlementExecutor.RouterCodeUnset.selector);
-        exec.executeSettlement(p);
+        // approved router code hash + selector NOT set => cannot unpause.
+        vm.expectRevert(IGuardedSettlementExecutor.ConfigIncomplete.selector);
+        exec.unpause();
     }
 
     function test_wrongApprovedCodeHashFails() public {
@@ -372,12 +370,17 @@ contract GuardedSettlementExecutorTest is Test {
         exec.executeSettlement(p);
     }
 
-    function test_capUnsetFails() public {
-        exec.unpause();
+    function test_unpauseBlockedWhenCapUnset() public {
         exec.setTokenPairAllowed(address(weth), address(nvda), true);
         exec.setPriceGuard(address(priceGuard));
         exec.setApprovedRouterCode(address(router).codehash, FAKE_SELECTOR);
-        // cap not set
+        vm.expectRevert(IGuardedSettlementExecutor.ConfigIncomplete.selector);
+        exec.unpause();
+    }
+
+    function test_capZeroedAfterUnpauseFails() public {
+        _configure();
+        exec.setMaxSellAmount(address(weth), 0);
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
         vm.expectRevert(IGuardedSettlementExecutor.AmountCapUnset.selector);
         exec.executeSettlement(p);
@@ -434,15 +437,12 @@ contract GuardedSettlementExecutorTest is Test {
 
     // ============================ price guard ============================
 
-    function test_priceGuardUnsetFails() public {
-        exec.unpause();
+    function test_unpauseBlockedWhenPriceGuardUnset() public {
         exec.setTokenPairAllowed(address(weth), address(nvda), true);
         exec.setMaxSellAmount(address(weth), CAP);
         exec.setApprovedRouterCode(address(router).codehash, FAKE_SELECTOR);
-        // price guard not set
-        IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
-        vm.expectRevert(IGuardedSettlementExecutor.PriceGuardUnset.selector);
-        exec.executeSettlement(p);
+        vm.expectRevert(IGuardedSettlementExecutor.ConfigIncomplete.selector);
+        exec.unpause();
     }
 
     function test_priceGuardRejectingFails() public {
@@ -451,6 +451,45 @@ contract GuardedSettlementExecutorTest is Test {
         IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
         vm.expectRevert(MockSettlementPriceGuard.PriceRejected.selector);
         exec.executeSettlement(p);
+    }
+
+    function test_priceGuardRunsBeforeApprovalAndLeavesNoState() public {
+        // A rejecting price guard must revert BEFORE any allowance is granted and BEFORE replay state
+        // is persisted — proving the guard runs ahead of approval/router interaction.
+        _configure();
+        priceGuard.setAccept(false);
+        IGuardedSettlementExecutor.SettlementParams memory p = _valid(1);
+        vm.expectRevert(MockSettlementPriceGuard.PriceRejected.selector);
+        exec.executeSettlement(p);
+        assertEq(weth.allowance(address(exec), address(router)), 0);
+        assertFalse(exec.isDigestConsumed(p.intentDigest));
+        assertFalse(exec.isNonceUsed(1));
+    }
+
+    // ============================ controller gate (TASK 10K-6) ============================
+
+    function test_unpauseSucceedsWhenConfigComplete() public {
+        _configure(); // sets all config then unpauses
+        assertFalse(exec.paused());
+    }
+
+    function test_twoStepControllerTransfer() public {
+        address newController = address(new MockSettlementPriceGuard()); // any deployed contract
+        exec.transferOwnership(newController);
+        assertEq(exec.owner(), address(this)); // not yet transferred
+        assertEq(exec.pendingOwner(), newController);
+        vm.prank(newController);
+        exec.acceptOwnership();
+        assertEq(exec.owner(), newController);
+    }
+
+    function test_transferOwnershipRejectsInvalid() public {
+        vm.expectRevert(IGuardedSettlementExecutor.InvalidController.selector);
+        exec.transferOwnership(address(0));
+        vm.expectRevert(IGuardedSettlementExecutor.InvalidController.selector);
+        exec.transferOwnership(0x000000000000000000000000000000000000dEaD);
+        vm.expectRevert(IGuardedSettlementExecutor.InvalidController.selector);
+        exec.transferOwnership(address(exec));
     }
 
     function test_priceGuardDeviationFails() public {
@@ -534,11 +573,11 @@ contract GuardedSettlementExecutorTest is Test {
         );
         weth.mint(address(feeExec), 1e18);
         feeStock.mint(address(feeRouter), 1000e18);
-        feeExec.unpause();
         feeExec.setTokenPairAllowed(address(weth), address(feeStock), true);
         feeExec.setMaxSellAmount(address(weth), CAP);
         feeExec.setPriceGuard(address(priceGuard));
         feeExec.setApprovedRouterCode(address(feeRouter).codehash, FAKE_SELECTOR);
+        feeExec.unpause();
 
         IGuardedSettlementExecutor.SettlementParams memory p =
             _buildFor(feeExec, feeReg, feeRouter, address(feeStock), SELL, MINBUY, 5, 50, 1);
@@ -556,11 +595,11 @@ contract GuardedSettlementExecutorTest is Test {
         );
         trap.mint(address(trapExec), 1e18);
         nvda.mint(address(trapRouter), 1000e18);
-        trapExec.unpause();
         trapExec.setTokenPairAllowed(address(trap), address(nvda), true);
         trapExec.setMaxSellAmount(address(trap), CAP);
         trapExec.setPriceGuard(address(priceGuard));
         trapExec.setApprovedRouterCode(address(trapRouter).codehash, FAKE_SELECTOR);
+        trapExec.unpause();
 
         IGuardedSettlementExecutor.SettlementParams memory p =
             _buildFor(trapExec, trapReg, trapRouter, address(nvda), SELL, MINBUY, 5, 50, 1);
@@ -704,11 +743,11 @@ contract GuardedSettlementExecutorTest is Test {
         weth.mint(address(rexec), 1e18);
         nvda.mint(address(reRouter), 1000e18);
         vm.startPrank(address(reRouter));
-        rexec.unpause();
         rexec.setTokenPairAllowed(address(weth), address(nvda), true);
         rexec.setMaxSellAmount(address(weth), CAP);
         rexec.setPriceGuard(address(priceGuard));
         rexec.setApprovedRouterCode(address(reRouter).codehash, FAKE_SELECTOR);
+        rexec.unpause();
         vm.stopPrank();
 
         IGuardedSettlementExecutor.SettlementParams memory p = _buildFor(
@@ -890,11 +929,11 @@ contract GuardedSettlementHandler is Test {
         weth.mint(address(exec), 100e18);
         nvda.mint(address(router), 1_000_000e18);
         FAKE_SELECTOR = MockGuardedRouter.guardedSettle.selector;
-        exec.unpause();
         exec.setTokenPairAllowed(address(weth), address(nvda), true);
         exec.setMaxSellAmount(address(weth), CAP);
         exec.setPriceGuard(address(priceGuard));
         exec.setApprovedRouterCode(address(router).codehash, FAKE_SELECTOR);
+        exec.unpause();
     }
 
     function currentAllowance() external view returns (uint256) {

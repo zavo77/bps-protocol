@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "1.0.0",
+  "task": "TASK 10K-6",
+  "title": "BPS guarded-settlement canary build — Chainlink price guard, controller gate, deployment rehearsal",
+  "dateUtc": "2026-07-26",
+  "status": "CANARY_BUILD_READY_EXECUTION_LOCKED",
+  "executionLocked": true,
+  "deployed": false,
+  "network": { "name": "Robinhood Chain Mainnet", "chainId": 4663 },
+  "safetyAttestation": {
+    "rialtoQuoteRequested": false,
+    "rialtoApiKeyRead": false,
+    "signed": false,
+    "broadcast": false,
+    "deployed": false,
+    "mainnetWrite": false,
+    "qex1Consumed": true,
+    "d24InForce": true,
+    "noAutoBroadcastCommand": true
+  },
+  "pinnedIdentities": {
+    "registry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+    "featureId": 2,
+    "routerCodeHash": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611",
+    "settlementSelector": "0x77963966",
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "nvda": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "ethUsdFeed": "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9",
+    "ethUsdFeedDescription": "ETH / USD",
+    "nvdaUsdFeed": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
+    "nvdaUsdFeedDescription": "RHNVDA / USD",
+    "feedDecimals": 8,
+    "tokenDecimals": 18,
+    "sequencerUptimeFeed": null
+  },
+  "canaryPolicy": {
+    "canaryMaxSellWethWei": "1000000000000000",
+    "absoluteCapWethWei": "10000000000000000",
+    "maxDeviationBps": 100,
+    "maxFeedAgeSec": 900,
+    "startsPaused": true,
+    "controllerModel": "deployed-contract (Safe) via Ownable2Step two-step transfer; rejects zero/dead/self"
+  },
+  "priceGuard": {
+    "contract": "packages/contracts/src/ChainlinkSettlementPriceGuard.sol",
+    "reverts": [
+      "WrongChain",
+      "WrongPair",
+      "ZeroAmount",
+      "FeedDecimalsChanged",
+      "FeedIdentityChanged",
+      "InvalidAnswer",
+      "InvalidTimestamp",
+      "IncompleteRound",
+      "StaleFeed",
+      "StockOracleGloballyPaused",
+      "SequencerDown",
+      "GraceNotElapsed",
+      "MinBuyBelowOracleFloor"
+    ],
+    "note": "NVDA feed is the multiplier-adjusted Total Return Value/USD; uiMultiplier is NOT re-applied. No official Robinhood Chain sequencer uptime feed is published; mitigated by strict 15-minute dual-feed freshness."
+  },
+  "executorGate": {
+    "contract": "packages/contracts/src/GuardedSettlementExecutor.sol",
+    "unpauseRequires": [
+      "priceGuard set",
+      "approvedRouterCodeHash != 0",
+      "approvedSelector != 0",
+      "maxSellAmount[WETH] != 0",
+      "pairAllowed[WETH][NVDA]"
+    ],
+    "unpauseRevert": "ConfigIncomplete",
+    "controllerTransfer": "two-step transferOwnership + acceptOwnership (rejects zero/dead/self via InvalidController)"
+  },
+  "verification": {
+    "foundryOffline": {
+      "command": "forge test --offline",
+      "totalTests": 513,
+      "passed": 513,
+      "failed": 0
+    },
+    "settlementSuites": {
+      "ChainlinkSettlementPriceGuard.t.sol": 26,
+      "GuardedSettlementExecutor.t.sol": 60,
+      "GuardedSettlementDeploy.t.sol": 9
+    },
+    "rialtoVitest": {
+      "command": "vitest run packages/rialto",
+      "totalTests": 245,
+      "passed": 245,
+      "failed": 0
+    },
+    "canaryPreflightTests": {
+      "canary-preflight.test.ts": "core: happy path + 15 fail-closed cases + network tripwire + report",
+      "canary-preflight-cli.test.ts": "secret-env abort + missing-RPC + green exit0 + failing exit1 + tripwire"
+    },
+    "typecheck": "npm run typecheck — clean (all workspaces)",
+    "lint": "npm run lint — clean",
+    "build": "npm run build — clean (all workspaces)",
+    "format": "forge fmt --check clean; prettier --check . clean",
+    "secretScan": "no private keys, mnemonics, seed phrases, API keys, or rialto_live_ tokens in changed files",
+    "broadcastPathScan": "no vm.broadcast / wallet client / signing / sendTransaction path in changed code"
+  },
+  "rehearsalReceipt": {
+    "kind": "offline local lifecycle rehearsal (Foundry, no fork/RPC, no broadcast)",
+    "source": "packages/contracts/test/GuardedSettlementDeploy.t.sol::test_rehearsal_fullLifecycle",
+    "method": "vm.etch mock code at the pinned official addresses so the pinned config identities are exercised locally",
+    "proved": [
+      "deployPaused deploys the executor paused-by-default and owned by the controller",
+      "unpause is blocked by ConfigIncomplete until the full config is set, then succeeds",
+      "a fresh dual-feed settlement of 0.001 WETH -> NVDA returns the exact Chainlink oracle-floor NVDA delta",
+      "a stale feed reverts and leaves zero router allowance, an unconsumed digest, and an unused nonce",
+      "two-step controller transfer (transferOwnership + acceptOwnership) moves ownership"
+    ],
+    "sanitized": true
+  },
+  "controllerCheck": {
+    "performed": false,
+    "reason": "No controller/Safe address has been provided and no read-only RPC endpoint is configured; eth_getCode on the controller is enforced at run time by the deploy preflight (validate) and the TS canary preflight.",
+    "safeDeployed": false
+  },
+  "artifacts": {
+    "runbook": "packages/contracts/deploy/GUARDED_SETTLEMENT_RUNBOOK.md",
+    "deployConfigTemplate": "packages/contracts/deploy/guarded-settlement.env.example",
+    "configLibrary": "packages/contracts/script/settlement/GuardedSettlementConfig.sol",
+    "deployPreflight": "packages/contracts/script/settlement/DeployGuardedSettlement.s.sol",
+    "forgeStdBootstrap": [
+      "packages/contracts/tool/bootstrap-forge-std.sh",
+      "packages/contracts/tool/bootstrap-forge-std.ps1"
+    ],
+    "canaryPreflightCore": "packages/rialto/src/canary-preflight.ts",
+    "canaryPreflightCli": "packages/rialto/src/canary-preflight-cli.ts"
+  },
+  "forgeStdPin": { "version": "1.9.7", "commit": "77041d2ce690e692d6e03cc812b57d1ddaa4d505" },
+  "blockers": [
+    "Final deployed-contract controller/Safe address on chain 4663 (D-6)",
+    "External audit of the guard + executor and legal counsel sign-off (D-3/D-23)",
+    "A new bounded, independently reviewed founder authorization replacing the expired D-24 before any live step",
+    "Read-only Robinhood Chain RPC URL to run the one labelled read-only live preflight (operator-supplied)",
+    "Trusted production price-source confirmation (D-22B)"
+  ]
+}

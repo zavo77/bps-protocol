@@ -7,6 +7,54 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-26 — TASK 10K-6: final canary-ready build (Chainlink price guard, controller gate, rehearsal)
+
+- **Type:** Solidity (price guard + executor gate) + broadcast-free deploy tooling + tracked forge-std
+  bootstrap + read-only TS canary preflight + runbook + evidence + continuity. NO Rialto request, NO API
+  key read, NO signing/funding/approval/simulation/deployment/broadcast. All Foundry offline (no fork/RPC).
+  QEX-1 remains consumed. **Reconciliation note:** the prior CURRENT_STATE recorded head `164bec0` with
+  10K-5 "uncommitted"; actual HEAD at the start of this task was `fc896f7` (10K-5 committed). Corrected here.
+- **Price guard:** added `packages/contracts/src/ChainlinkSettlementPriceGuard.sol` (+ interfaces
+  `AggregatorV3Interface.sol`, `IStockTokenOracleState.sol`), replacing the placeholder. Dual-feed over the
+  verified Robinhood Chain Chainlink proxies (ETH/USD `0x78F3…d3A9` "ETH / USD" 8dp; NVDA/USD `0x379E…9F15`
+  "RHNVDA / USD" 8dp). Reverts unless `minBuyAmount` ≥ Chainlink fair output reduced by ≤100 bps; fails
+  closed on wrong chain/pair, zero amount, feed decimals/identity change, non-positive answer, zero/future
+  timestamp, incomplete round, stale feed (ceiling 900 s), globally paused stock oracle, and (if configured)
+  sequencer down/grace. NVDA feed is multiplier-adjusted Total Return Value/USD — `uiMultiplier` NOT
+  re-applied. No official sequencer feed published → strict 15-min dual-feed freshness.
+- **Executor gate:** `GuardedSettlementExecutor.unpause()` now reverts `ConfigIncomplete` unless the price
+  guard, approved code hash, approved selector, WETH cap, and WETH/NVDA pair are all set; deploys **paused**;
+  `transferOwnership` is a two-step `Ownable2Step` transfer rejecting zero/dead/self (`InvalidController`).
+- **Deploy tooling (broadcast-free):** `script/settlement/GuardedSettlementConfig.sol` (pinned identities +
+  fail-closed `validate` + `deployPaused`) and `script/settlement/DeployGuardedSettlement.s.sol` (writes a
+  sanitized manifest; no `vm.broadcast`, no key, no API key). Config template
+  `deploy/guarded-settlement.env.example`; runbook `deploy/GUARDED_SETTLEMENT_RUNBOOK.md` (phases A/B/C).
+- **Reproducible toolchain:** tracked `tool/bootstrap-forge-std.{sh,ps1}` pin forge-std v1.9.7
+  (`77041d2ce690e692d6e03cc812b57d1ddaa4d505`), verify commit + version, refuse on mismatch, never
+  overwrite. Both parse-checked (`bash -n` / PowerShell parser).
+- **Read-only TS preflight:** `packages/rialto/src/canary-preflight.ts` (pure DI core) +
+  `canary-preflight-cli.ts` (viem read-only client; **refuses to run if any key/secret env is present**;
+  emits `CANARY_BUILD_READY_EXECUTION_LOCKED`/`CANARY_NOT_READY`). Exported via `@bps/rialto/server`.
+- **Tests:** Foundry `forge test --offline` **513 pass / 0 fail** (new: price guard 26, deploy/rehearsal 9;
+  executor 60 incl. config-gate + two-step transfer). Rialto vitest **245 pass** (new: canary-preflight core
+  15 fail-closed cases + happy + report + network tripwire; CLI secret-abort + missing-RPC + green/failing
+  exit codes + tripwire). `npm run typecheck/lint/build` clean; `forge fmt --check` + `prettier --check .`
+  clean; secret scan + broadcast-path scan of changed files clean.
+- **Rehearsal receipt (sanitized):** `test/GuardedSettlementDeploy.t.sol::test_rehearsal_fullLifecycle`
+  (mock code etched at pinned addresses) proves paused-by-default, config-gate unpause, fresh-feed
+  0.001 WETH→NVDA settlement returning the exact oracle-floor NVDA delta, stale-feed failure leaving zero
+  allowance + unconsumed digest + unused nonce, and two-step controller transfer.
+- **Controller/Safe check:** NOT performed — no controller address supplied and no read-only RPC configured;
+  `eth_getCode` on the controller is enforced at run time by the deploy preflight (`validate`) and the TS
+  preflight. No Safe deployed.
+- **Governance:** closes no decision. **D-22B** guard is now real but the trusted production source is still
+  a separate decision; **D-6** Safe/controller open; **D-8** cap ≤ 0.001 WETH enforced but production cap
+  unapproved; **D-5/D-21** enforced, deployment-review pending; **D-3/D-23** counsel-pending; **D-24 stands
+  and is expired** — a new bounded authorization is required before any live step. Register row **D-017**
+  added; ballot **D-17 unchanged**. Evidence `docs/audit/BPS_RIALTO_CANARY_BUILD_2026-07-26.{md,evidence.json}`.
+- Status `CANARY_BUILD_READY_EXECUTION_LOCKED`; UNDEPLOYED. Commit `feat(settlement): add chainlink price
+guard and canary preflight`.
+
 ## 2026-07-26 — TASK 10K-5: remove the Rialto-ABI blocker via opaque-call validation
 
 - **Type:** Solidity refactor + read-only on-chain investigation + TS quote boundary + docs. NO Rialto

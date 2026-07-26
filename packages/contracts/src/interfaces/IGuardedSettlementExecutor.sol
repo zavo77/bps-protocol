@@ -76,6 +76,7 @@ interface IGuardedSettlementExecutor {
     error ZeroCodeHash();
     error ZeroSelector();
     error RouterCodeUnset();
+    error ConfigIncomplete();
     error SelectorUnapproved();
     error CodeHashMismatch(bytes32 actual, bytes32 approved);
     error RouterFeatureUninitialized();

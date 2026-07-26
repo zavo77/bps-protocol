@@ -1,37 +1,49 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-26T10:30:00Z",
+  "updatedUtc": "2026-07-26T12:00:00Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "164bec0b7e00b22b6259bcb475244fdd44442a61",
+  "head": "fc896f72abc695d0dc8eba31e45ba1bc88ce9e83 (parent of the TASK 10K-6 commit); the commit 'feat(settlement): add chainlink price guard and canary preflight' advances HEAD by one — run 'git rev-parse HEAD' to read the exact new hash. NOTE: the prior record's head 164bec0 was stale; TASK 10K-5 was committed as fc896f7.",
   "workingTree": {
-    "dirty": true,
-    "note": "TASK 10K-4 checkpoint 164bec0 committed. TASK 10K-5 (opaque-call executor + on-chain evidence) changes uncommitted at capture. forge-std v1.9.7 in gitignored packages/contracts/lib (not tracked). Deleted files: ISettlementCalldataValidator.sol + MockGuardedCalldataValidator.sol.",
+    "dirty": false,
+    "note": "TASK 10K-6 committed (code + docs + continuity together) as 'feat(settlement): add chainlink price guard and canary preflight'. forge-std v1.9.7 lives in gitignored packages/contracts/lib; run packages/contracts/tool/bootstrap-forge-std.{sh,ps1} on a fresh clone before forge test. Lists below = files this commit changed/added.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
       "docs/continuity/CHANGELOG.md",
       "docs/audit/BPS_FOUNDER_DECISION_REGISTER_2026-07-25.md",
-      "packages/rialto/src/guarded-settlement.ts",
-      "packages/rialto/src/guarded-settlement.test.ts",
       "packages/contracts/src/GuardedSettlementExecutor.sol",
       "packages/contracts/src/interfaces/IGuardedSettlementExecutor.sol",
       "packages/contracts/test/GuardedSettlementExecutor.t.sol",
-      "packages/contracts/test/mocks/MockGuardedRouter.sol"
+      "packages/rialto/src/server.ts"
     ],
-    "deleted": [
-      "packages/contracts/src/interfaces/ISettlementCalldataValidator.sol",
-      "packages/contracts/test/mocks/MockGuardedCalldataValidator.sol"
-    ],
+    "deleted": [],
     "untracked": [
-      "docs/audit/BPS_RIALTO_ROUTER_OPAQUE_CALL_2026-07-26.md",
-      "docs/audit/BPS_RIALTO_ROUTER_OPAQUE_CALL_2026-07-26.evidence.json"
+      "packages/contracts/src/ChainlinkSettlementPriceGuard.sol",
+      "packages/contracts/src/interfaces/AggregatorV3Interface.sol",
+      "packages/contracts/src/interfaces/IStockTokenOracleState.sol",
+      "packages/contracts/script/settlement/GuardedSettlementConfig.sol",
+      "packages/contracts/script/settlement/DeployGuardedSettlement.s.sol",
+      "packages/contracts/test/ChainlinkSettlementPriceGuard.t.sol",
+      "packages/contracts/test/GuardedSettlementDeploy.t.sol",
+      "packages/contracts/test/mocks/MockAggregatorV3.sol",
+      "packages/contracts/test/mocks/MockStockERC20.sol",
+      "packages/contracts/tool/bootstrap-forge-std.sh",
+      "packages/contracts/tool/bootstrap-forge-std.ps1",
+      "packages/contracts/deploy/guarded-settlement.env.example",
+      "packages/contracts/deploy/GUARDED_SETTLEMENT_RUNBOOK.md",
+      "packages/rialto/src/canary-preflight.ts",
+      "packages/rialto/src/canary-preflight-cli.ts",
+      "packages/rialto/src/canary-preflight.test.ts",
+      "packages/rialto/src/canary-preflight-cli.test.ts",
+      "docs/audit/BPS_RIALTO_CANARY_BUILD_2026-07-26.md",
+      "docs/audit/BPS_RIALTO_CANARY_BUILD_2026-07-26.evidence.json"
     ]
   },
   "phase": "post-canary",
-  "latestCompletedMilestone": "TASK 10K-5 — removed the Rialto-ABI blocker via opaque-call validation; executor binds approved runtime code hash + selector (no ABI decode); on-chain evidence recorded; 55 Foundry + TS opaque quote boundary (2026-07-26)",
-  "currentTask": "none — opaque-call executor implemented + tested locally (offline, no fork/RPC); UNDEPLOYED; live trading NOT enabled; D-24 stands",
-  "nextTask": "Missing Rialto ABI is NO LONGER a blocker. First-canary gates: (1) approve 0x77963966 paired with the observed router code hash 0xa7041268...27611; (2) trusted price source + freshness (D-22B); (3) production Safe controller/taker + activation (D-6); (4) per-token cap approval (D-8); (5) deployment script + external audit + counsel (D-3/D-23) + a new bounded founder authorization (D-24)",
+  "latestCompletedMilestone": "TASK 10K-6 — final canary-ready build: real Chainlink dual-feed price guard + executor ConfigIncomplete unpause gate + paused-by-default + two-step Ownable2Step controller + broadcast-free deploy tooling + tracked forge-std bootstrap + read-only TS canary preflight + runbook. Verified offline: 513 Foundry / 245 rialto vitest. Status CANARY_BUILD_READY_EXECUTION_LOCKED; UNDEPLOYED (2026-07-26)",
+  "currentTask": "none — guarded-settlement canary stack build-ready + tested locally (offline, no fork/RPC); UNDEPLOYED; execution locked; live trading NOT enabled; D-24 stands (expired)",
+  "nextTask": "Build is done. Clear the canary gates: (1) final deployed-contract Safe/controller address on chain 4663 (D-6); (2) external audit of guard + executor + counsel (D-3/D-23); (3) a NEW bounded, independently reviewed founder authorization replacing the expired D-24 before any live step; (4) read-only RPC URL to run the one labelled read-only canary preflight (packages/rialto/src/canary-preflight-cli.ts); (5) trusted price source (D-22B). Then controller-driven deploy->configure->preflight->unpause per packages/contracts/deploy/GUARDED_SETTLEMENT_RUNBOOK.md",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,

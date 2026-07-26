@@ -147,8 +147,26 @@ contract GuardedSettlementExecutor is
     }
 
     /// @inheritdoc IGuardedSettlementExecutor
+    /// @dev TASK 10K-6 controller gate: unpausing is IMPOSSIBLE until the deployment configuration is
+    ///      complete (price guard, approved router code hash + selector, per-token cap, and the
+    ///      WETH->NVDA pair all explicitly set). A freshly deployed executor therefore stays paused.
     function unpause() external onlyOwner {
+        if (
+            priceGuard == address(0) || approvedRouterCodeHash == bytes32(0)
+                || approvedSelector == bytes4(0) || maxSellAmount[weth] == 0
+                || !_pairAllowed[weth][stockToken]
+        ) revert ConfigIncomplete();
         _unpause();
+    }
+
+    /// @dev TASK 10K-6: harden the two-step controller transition — the proposed controller must be a
+    ///      plausible controller (nonzero, not the dead address, not the executor itself). The proposed
+    ///      controller must still explicitly accept via `acceptOwnership()` (Ownable2Step).
+    function transferOwnership(address newOwner) public override onlyOwner {
+        if (newOwner == address(0) || newOwner == DEAD_ADDRESS || newOwner == address(this)) {
+            revert InvalidController();
+        }
+        super.transferOwnership(newOwner);
     }
 
     /// @inheritdoc IGuardedSettlementExecutor

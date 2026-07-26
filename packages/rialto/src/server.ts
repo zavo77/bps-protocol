@@ -12,3 +12,5 @@ export * from "./boundary-status.js";
 export * from "./quote-eval-cli.js";
 export * from "./registry-structural.js";
 export * from "./guarded-settlement.js";
+export * from "./canary-preflight.js";
+export * from "./canary-preflight-cli.js";
