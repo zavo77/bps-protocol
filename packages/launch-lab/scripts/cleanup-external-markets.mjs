@@ -6,7 +6,7 @@
 //
 //   node packages/launch-lab/scripts/cleanup-external-markets.mjs            # dry run
 //   node packages/launch-lab/scripts/cleanup-external-markets.mjs --apply    # after founder approval
-/* global console, process */
+
 
 import { readFileSync } from "node:fs";
 import path from "node:path";

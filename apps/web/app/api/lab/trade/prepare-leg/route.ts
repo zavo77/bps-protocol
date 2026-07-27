@@ -29,7 +29,7 @@ import {
   verifySignedRequest,
 } from "../../../../../lib/lab/server";
 import { assertSignatureUnused } from "../../../../../lib/lab/store";
-import { quoteZeroExRoute } from "../../../../../lib/lab/zeroex";
+import { quoteAggregatorDirect } from "../../../../../lib/lab/trade-router";
 import {
   assertSameOrigin,
   clientKey,
@@ -43,7 +43,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const prepareLegSchema = z.object({
-  kind: z.enum(["zeroEx", "bpsDirect"]),
+  kind: z.enum(["rialto", "oneInch", "zeroEx", "bpsDirect"]),
   marketToken: z.string().refine(isAddress),
   inputToken: z.string().refine(isAddress),
   outputToken: z.string().refine(isAddress),
@@ -96,6 +96,9 @@ export async function POST(req: Request): Promise<Response> {
     let permit2Spender: Address | null = null;
     let expectedOutputWei = "0";
     let minimumOutputWei = "0";
+    // The venue that actually filled the leg (aggregator legs always run the
+    // frozen priority chain server-side, so this can differ from the hint).
+    let actualKind: "rialto" | "oneInch" | "zeroEx" | "bpsDirect" = payload.kind;
 
     if (payload.kind === "bpsDirect") {
       // Leg must be anchor<->marketToken through the verified rehype pool.
@@ -123,27 +126,55 @@ export async function POST(req: Request): Promise<Response> {
       expectedOutputWei = quote.buyAmount;
       minimumOutputWei = quote.minimumBuyAmount;
     } else {
-      // zeroEx leg: payment<->anchor or payment<->marketToken (one-step).
-      const inputIsPayment = getPaymentToken(inputToken) !== null || inputToken === NATIVE_ETH;
-      const outputIsPayment = getPaymentToken(outputToken) !== null;
-      if (!inputIsPayment && !outputIsPayment) {
-        return err("BAD_LEG", "0x legs must involve a supported payment token.");
+      // Aggregator leg. The server ALWAYS runs the frozen priority chain
+      // (Rialto → 1inch → 0x) regardless of the client's kind hint, and the
+      // response reports the venue actually used. Token binding: one side must
+      // be a supported payment token and the counter-side must be EXACTLY this
+      // market's token (one-step) or its anchor (composed). payment→payment and
+      // payment→arbitrary-token legs are rejected outright.
+      const inPay = getPaymentToken(inputToken);
+      const outPay = getPaymentToken(outputToken);
+      if ((inPay && outPay) || (!inPay && !outPay)) {
+        return err(
+          "BAD_LEG",
+          "Aggregator legs run between a payment token and the market token or its anchor.",
+        );
       }
-      const q = await quoteZeroExRoute({
+      const counterToken = inPay ? outputToken : inputToken;
+      if (
+        counterToken.toLowerCase() !== marketToken.toLowerCase() &&
+        counterToken.toLowerCase() !== anchor.toLowerCase()
+      ) {
+        return err(
+          "BAD_LEG",
+          "Aggregator legs run between a payment token and the market token or its anchor.",
+        );
+      }
+      const agg = await quoteAggregatorDirect({
         sellToken: inputToken,
+        // Anchor and market token are both 18dp; payment decimals from the registry.
+        sellDecimals: inPay ? inPay.decimals : 18,
         buyToken: outputToken,
         sellAmountWei: amountIn,
         taker,
         slippageBps: payload.slippageBps,
       });
-      if (!q) return err("ROUTE_UNAVAILABLE", "0x has no executable route for this leg.", 409);
-      to = q.transactionTarget;
-      data = q.transactionData as Hex;
-      value = BigInt(q.transactionValue);
-      gas = q.estimatedGas;
-      allowanceTarget = q.allowanceTarget;
-      expectedOutputWei = q.buyAmount;
-      minimumOutputWei = q.minimumBuyAmount;
+      if (!agg)
+        return err("ROUTE_UNAVAILABLE", "No executable aggregator route for this leg.", 409);
+      actualKind = agg.venue;
+      to = agg.transactionTarget;
+      data = agg.transactionData as Hex;
+      value = BigInt(agg.transactionValue);
+      allowanceTarget = agg.allowanceTarget;
+      expectedOutputWei = agg.buyAmountWei;
+      minimumOutputWei = agg.minBuyAmountWei;
+      // Value binding: a native-ETH input leg must attach EXACTLY the trade
+      // amount; an ERC-20 input leg must attach zero. Venue-returned values are
+      // never trusted past this check.
+      const nativeIn = inputToken.toLowerCase() === NATIVE_ETH.toLowerCase();
+      if (nativeIn ? value !== amountIn : value !== 0n) {
+        return err("BAD_VALUE", "Venue transaction value does not match the trade amount.", 409);
+      }
     }
 
     // Balance check. For native ETH the tx `value` carries the amount, so the
@@ -202,7 +233,7 @@ export async function POST(req: Request): Promise<Response> {
 
     return ok({
       leg: {
-        kind: payload.kind,
+        kind: actualKind,
         inputToken,
         outputToken,
         exactInputAmount: amountIn.toString(),

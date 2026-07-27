@@ -4,7 +4,7 @@
 // launch rows are exercised inside a rolled-back transaction; the replay probe
 // uses a self-cleaning sentinel row. Run from repo root:
 //   node packages/launch-lab/scripts/verify-db.mjs
-/* global console, crypto */
+
 
 import { readFileSync } from "node:fs";
 import process from "node:process";

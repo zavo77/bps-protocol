@@ -1,10 +1,9 @@
 // Read-only provenance report for currently tracked lab_launches rows.
 // Public data only; RPC/DB never printed. Proves whether each row is a genuine
 // BPS-frontend market or an externally-created Doppler market.
-/* global console, process */
+
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import process from "node:process";
 import pg from "pg";
 import { createPublicClient, http, defineChain, getAddress } from "viem";
 import { getAnchorByAddress } from "../src/anchors/registry.ts";
@@ -28,7 +27,7 @@ const chain = defineChain({
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } },
 });
-const client = createPublicClient({ chain, transport: http(env.ROBINHOOD_CHAIN_RPC_URL) });
+const _client = createPublicClient({ chain, transport: http(env.ROBINHOOD_CHAIN_RPC_URL) });
 const pool = new pg.Pool({ connectionString: env.DATABASE_URL, max: 1 });
 const explorer = "https://robinhoodchain.blockscout.com";
 

@@ -43,9 +43,11 @@ export function getPaymentToken(symbolOrAddress: string): PaymentToken | null {
   );
 }
 
+export type LegVenue = "rialto" | "oneInch" | "zeroEx" | "bpsDirect";
+
 /** A single leg of a user trade route. */
 export interface RouteLeg {
-  kind: "zeroEx" | "bpsDirect";
+  kind: LegVenue;
   label: string;
   inputToken: Address;
   outputToken: Address;

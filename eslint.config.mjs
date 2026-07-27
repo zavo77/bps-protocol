@@ -26,4 +26,21 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Node operational scripts (.mjs) use runtime globals natively.
+    files: ["**/scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        URL: "readonly",
+        fetch: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        AbortSignal: "readonly",
+        Buffer: "readonly",
+        crypto: "readonly",
+      },
+    },
+  },
 );

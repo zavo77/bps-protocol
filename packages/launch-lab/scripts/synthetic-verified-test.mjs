@@ -1,7 +1,7 @@
 // Item #11: prove a synthetic provenance_verified row is picked up by a RUNNING
 // indexer without restart, then removed cleanly. Read-only on the RPC; DB writes
 // are the single synthetic row + its removal. Values never printed.
-/* global console, process, fetch */
+
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";

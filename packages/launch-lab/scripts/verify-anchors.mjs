@@ -3,7 +3,7 @@
 // on-chain, and run the EXACT rehype multicurve launch simulation with that
 // anchor as numeraire. Only anchors whose simulation succeeds are enabled.
 // Read-only; RPC never printed. Run: node packages/launch-lab/scripts/verify-anchors.mjs
-/* global console, fetch, URL, process */
+
 
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";

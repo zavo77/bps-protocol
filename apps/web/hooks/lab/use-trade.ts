@@ -22,7 +22,7 @@
 // ESTIMATE: after leg 1 confirms we read the actual anchor received (balanceOf
 // delta) and re-prepare leg 2 with that exact amount. Every prepare-leg call
 // needs a FRESH signed envelope (server enforces single-use replay protection).
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   erc20Abi,
   formatUnits,
@@ -248,6 +248,9 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
   const [error, setError] = useState<string | null>(null);
   const [inputBalanceWei, setInputBalanceWei] = useState<bigint | null>(null);
   const [pendingRecovery, setPendingRecovery] = useState<PendingComposedTrade | null>(null);
+  // Re-entrancy guard: exactly ONE trade execution (full flow or resume) may be
+  // in flight at a time — React state (`busy`) lags async work and cannot gate this.
+  const executionInFlight = useRef(false);
 
   const wrongChain = isConnected && chainId !== CHAIN_ID;
 
@@ -541,6 +544,15 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
         return null;
       }
 
+      // NEVER request a wallet signature without a successful exact-calldata
+      // simulation. If the server still reports the simulation as skipped
+      // (e.g. an allowance read lagging the just-confirmed approval), stop.
+      if (prep.simulation !== "ok") {
+        setStatus("failure");
+        setError("The transaction was not successfully simulated — retry in a moment.");
+        return null;
+      }
+
       // (e) send
       setStatus("awaiting-signature");
       const hash = await sendTransactionAsync({
@@ -566,6 +578,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
   );
 
   const prepareAndTrade = useCallback(async (): Promise<Hex | null> => {
+    if (executionInFlight.current) return null; // one execution at a time
     setError(null);
     setTxHash(null);
     setLegHashes([]);
@@ -579,6 +592,13 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
       setError("Fetch a quote before trading.");
       return null;
     }
+    // A stale quote is REJECTED for execution and refreshed instead — the user
+    // reviews the fresh numbers and confirms again. Never trade on old pricing.
+    if (Date.now() > quote.quoteExpiry) {
+      await getQuote();
+      setError("The quote had expired and was refreshed — review the updated numbers and confirm again.");
+      return null;
+    }
     if (!publicClient) {
       setStatus("failure");
       setError("No RPC client available for confirmation.");
@@ -590,6 +610,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     const collected: Hex[] = [];
     let overrideInput: bigint | null = null;
 
+    executionInFlight.current = true;
     try {
       await ensureChain();
       for (let i = 0; i < legs.length; i++) {
@@ -665,6 +686,9 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
       setStatus("success");
       clearPendingTrade(address, quote.marketToken);
       setPendingRecovery(null);
+      // Retire the executed quote: the primary button returns to "Get quote"
+      // and a completed trade can never be re-submitted from stale pricing.
+      setQuote(null);
       void refreshBalance();
       onTraded?.();
       return collected[collected.length - 1] ?? null;
@@ -672,6 +696,8 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
       // Leg 2 interrupted → leave the pending record persisted for resume.
       mapTradeError(e);
       return null;
+    } finally {
+      executionInFlight.current = false;
     }
   }, [
     address,
@@ -683,6 +709,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     slippageBps,
     ensureChain,
     executeLeg,
+    getQuote,
     readRawBalance,
     refreshBalance,
     onTraded,
@@ -694,6 +721,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
   // re-quotes server-side, so an expired persisted quote is re-prepared fresh; the
   // persisted amount is used solely as the input size, never as calldata.
   const resumePendingTrade = useCallback(async (): Promise<Hex | null> => {
+    if (executionInFlight.current) return null; // one execution at a time
     setError(null);
     setTxHash(null);
     setLegHashes([]);
@@ -712,7 +740,10 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
       return null;
     }
 
-    // Buy: anchor → market token (BPS Direct). Sell: anchor → payment token (0x).
+    // Buy: anchor → market token (BPS Direct). Sell: anchor → payment token via
+    // an aggregator leg — the server ALWAYS re-runs the frozen priority chain
+    // (Rialto → 1inch → 0x) for aggregator kinds, so the hint below never pins
+    // the venue; the response reports the venue actually used.
     const payload: LegPayload =
       pending.side === "buy"
         ? {
@@ -725,7 +756,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
             taker: address,
           }
         : {
-            kind: "zeroEx",
+            kind: "rialto",
             marketToken: pending.marketToken,
             inputToken: pending.anchorAddress as Address,
             outputToken: pending.paymentAddress as Address,
@@ -734,6 +765,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
             taker: address,
           };
 
+    executionInFlight.current = true;
     try {
       await ensureChain();
       const hash = await executeLeg(payload, 2, 2);
@@ -742,12 +774,15 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
       setStatus("success");
       clearPendingTrade(address, pending.marketToken);
       setPendingRecovery(null);
+      setQuote(null); // any displayed quote predates the resumed execution
       void refreshBalance();
       onTraded?.();
       return hash;
     } catch (e) {
       mapTradeError(e);
       return null;
+    } finally {
+      executionInFlight.current = false;
     }
   }, [
     pendingRecovery,

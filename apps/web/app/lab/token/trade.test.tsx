@@ -142,6 +142,56 @@ const COMPOSED_BUY = {
   warnings: [],
 };
 
+/** Composed sell: PRINT → NVDA (BPS Direct), then NVDA → ETH (Rialto). Two wallet actions. */
+const COMPOSED_SELL = {
+  marketToken: TOKEN,
+  side: "sell",
+  anchorSymbol: "NVDA",
+  anchorAddress: NVDA,
+  userInputToken: TOKEN,
+  userOutputToken: NATIVE_ETH,
+  routeKind: "composed",
+  legs: [
+    {
+      kind: "bpsDirect",
+      label: "BPS Direct: PRINT → NVDA",
+      inputToken: TOKEN,
+      outputToken: NVDA,
+      inputAmountWei: WEI(100),
+      expectedOutputWei: WEI(2),
+      minimumOutputWei: WEI(2),
+      transactionTarget: ROUTER,
+      transactionData: "0x",
+      transactionValue: "0",
+      allowanceTarget: PERMIT2,
+      estimated: false,
+    },
+    {
+      kind: "rialto",
+      label: "Rialto: NVDA → ETH",
+      inputToken: NVDA,
+      outputToken: NATIVE_ETH,
+      inputAmountWei: WEI(2),
+      expectedOutputWei: WEI(1),
+      minimumOutputWei: WEI(1),
+      transactionTarget: ROUTER,
+      transactionData: null,
+      transactionValue: "0",
+      allowanceTarget: ROUTER,
+      estimated: true,
+    },
+  ],
+  expectedFinalOutputWei: WEI(1),
+  minimumFinalOutputWei: WEI(1),
+  totalPriceImpactBps: 100,
+  poolFeeUnits: 10_000,
+  zeroExFeeNote: "Rialto leg fee 5 bps.",
+  walletActionCount: 2,
+  approvalsRequired: [],
+  quoteExpiry: Date.now() + 60_000,
+  warnings: [],
+};
+
 function jsonResponse(status: number, body: unknown): Response {
   return { status, json: async () => body } as unknown as Response;
 }
@@ -296,8 +346,8 @@ describe("TradeCard — pay/receive assets (ETH / WETH / USDG)", () => {
   });
 });
 
-describe("TradeCard — honesty about composed routes", () => {
-  it("a composed (2-step) route shows the step count and 'not one-click' with route details collapsed", async () => {
+describe("TradeCard — frozen V1 primary UI (routing internals inside Trade details)", () => {
+  it("a composed (2-step) route keeps anchor/steps/venue inside collapsed Trade details; the summary and button stay generic", async () => {
     const user = userEvent.setup();
     stubFetch((url) => {
       if (url.includes("/api/lab/quote"))
@@ -312,17 +362,98 @@ describe("TradeCard — honesty about composed routes", () => {
     await user.type(screen.getByTestId("trade-amount"), "1");
     await user.click(screen.getByTestId("quote-button"));
 
-    await waitFor(() => expect(screen.getByTestId("route-details")).toBeInTheDocument());
-    // Route/legs are disclosed only inside a collapsed <details>.
-    expect(screen.getByTestId("route-details")).not.toHaveAttribute("open");
-    // The always-visible summary is honest: 2 steps, via the anchor, not one-click.
+    await waitFor(() => expect(screen.getByTestId("expected-output")).toBeInTheDocument());
+    // Routing internals live only inside the collapsed <details>.
+    const details = screen.getByTestId("route-details");
+    expect(details).not.toHaveAttribute("open");
+    // The always-visible summary is generic — no anchor, venue, or step count.
     const summary = screen.getByTestId("route-summary");
-    expect(summary).toHaveTextContent(/2 steps/);
-    expect(summary).toHaveTextContent(/via NVDA/);
-    expect(summary).toHaveTextContent(/not one-click/i);
-    // The primary button never implies a single atomic swap.
-    expect(screen.getByTestId("trade-button")).toHaveTextContent(/2 steps/);
+    expect(summary).toHaveTextContent(/^Trade details$/);
+    expect(summary).not.toHaveTextContent(/NVDA/);
+    // The primary button is just the action — no step count, and never "atomic".
+    expect(screen.getByTestId("trade-button")).toHaveTextContent(/^Buy$/);
     expect(screen.queryByText(/atomic/i)).toBeNull();
+    // Inside Trade details the breakdown stays fully honest.
+    expect(screen.getByTestId("internal-anchor")).toHaveTextContent("NVDA");
+    expect(screen.getByTestId("wallet-actions")).toHaveTextContent(/2/);
+    expect(screen.getByTestId("wallet-actions")).toHaveTextContent(/not one-click/i);
+    expect(screen.getByTestId("route-legs")).toHaveTextContent(/NVDA → PRINT/);
+    expect(screen.getByTestId("minimum-received")).toBeInTheDocument();
+    expect(screen.getByTestId("price-impact")).toBeInTheDocument();
+    expect(screen.getByTestId("pool-fee")).toBeInTheDocument();
+  });
+
+  it("primary surface never leaks the anchor before a quote; anchor pay option sits inside Trade details", async () => {
+    stubFetch(() => jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" }));
+
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" anchorAddress={NVDA} />,
+    );
+
+    // The pay pills are payment assets only — the anchor is not offered there.
+    const paySelector = screen.getByTestId("pay-selector");
+    expect(paySelector).not.toHaveTextContent("NVDA");
+    // The advanced anchor option exists, but inside the Trade details disclosure.
+    const advanced = screen.getByTestId("paytoken-advanced");
+    expect(screen.getByTestId("route-details")).toContainElement(advanced);
+    expect(advanced).toHaveTextContent(/you never need to own it/i);
+  });
+
+  it("the venue platform fee is displayed inside Trade details when the route reports one", async () => {
+    const user = userEvent.setup();
+    stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, {
+          ok: true,
+          data: { ...ONE_STEP_BUY, zeroExFeeNote: "Rialto fee 5 bps (in quoted output)." },
+        });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" />);
+
+    await user.type(screen.getByTestId("trade-amount"), "1");
+    await user.click(screen.getByTestId("quote-button"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("zeroex-fee-note")).toHaveTextContent(/Rialto fee 5 bps/),
+    );
+    // …and it lives inside the Trade details disclosure, not the primary surface.
+    expect(screen.getByTestId("route-details")).toContainElement(
+      screen.getByTestId("zeroex-fee-note"),
+    );
+  });
+
+  it("an expired quote is rejected for execution and refreshed instead — no wallet interaction", async () => {
+    const user = userEvent.setup();
+    const calls = stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, {
+          ok: true,
+          data: { ...ONE_STEP_BUY, quoteExpiry: Date.now() - 1_000 }, // already stale
+        });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" />);
+
+    await user.type(screen.getByTestId("trade-amount"), "1");
+    await user.click(screen.getByTestId("quote-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-button")).toBeInTheDocument());
+    await user.click(screen.getByTestId("trade-button"));
+
+    // The stale quote is refreshed (second /quote call), never executed.
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url.includes("/api/lab/quote")).length).toBeGreaterThanOrEqual(
+        2,
+      ),
+    );
+    expect(calls.some((c) => c.url.includes("/api/lab/trade/prepare-leg"))).toBe(false);
+    expect(h.fns.signMessageAsync).not.toHaveBeenCalled();
+    expect(h.fns.sendTransactionAsync).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByTestId("trade-note")).toHaveTextContent(/expired and was refreshed/i),
+    );
   });
 });
 
@@ -589,6 +720,210 @@ describe("TradeCard — composed-trade recovery", () => {
     expect(loadPendingTrade(TAKER, TOKEN)).toBeNull();
     expect(onTraded).toHaveBeenCalled();
     expect(screen.queryByTestId("recovery-banner")).toBeNull();
+  });
+});
+
+describe("TradeCard — final-gate additions (Rialto lane)", () => {
+  function prepLegFor(kind: string) {
+    return {
+      leg: {
+        kind,
+        inputToken: NATIVE_ETH,
+        outputToken: NVDA,
+        exactInputAmount: "0",
+        expectedOutputWei: "0",
+        minimumOutputWei: "0",
+      },
+      simulation: "ok",
+      approvals: {
+        erc20ApprovalNeeded: false,
+        erc20ApprovalTarget: null,
+        permit2ApprovalNeeded: false,
+        permit2SpenderTarget: null,
+      },
+      transaction: {
+        chainId: 4663,
+        from: TAKER,
+        to: ROUTER,
+        data: "0x",
+        value: "0",
+        gas: "500000",
+      },
+      staleAfter: Date.now() + 60_000,
+    };
+  }
+
+  it("in-session composed leg 2 is prepared from the ACTUAL measured amount, not the estimate", async () => {
+    const user = userEvent.setup();
+    h.fns.signMessageAsync.mockResolvedValue("0xsig");
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"55".repeat(32)}`);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    // Anchor (NVDA) balance: 0 before leg 1, then 3 NVDA received — the quote's
+    // leg-2 ESTIMATE is 2 NVDA, so the actual delta (3) must win.
+    let nvdaReads = 0;
+    h.fns.readContract.mockImplementation(
+      async ({ functionName, address }: { functionName: string; address: string }) => {
+        if (functionName === "decimals") return 18;
+        if (functionName === "balanceOf") {
+          if (address.toLowerCase() === NVDA.toLowerCase()) {
+            nvdaReads += 1;
+            return nvdaReads === 1 ? 0n : 3n * 10n ** 18n;
+          }
+          return 1000n * 10n ** 18n;
+        }
+        return 0n;
+      },
+    );
+    const calls = stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: COMPOSED_BUY });
+      if (url.includes("/api/lab/trade/prepare-leg"))
+        return jsonResponse(200, { ok: true, data: prepLegFor("zeroEx") });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" anchorAddress={NVDA} />,
+    );
+
+    await user.type(screen.getByTestId("trade-amount"), "1");
+    await user.click(screen.getByTestId("quote-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-button")).toBeInTheDocument());
+    await user.click(screen.getByTestId("trade-button"));
+
+    await waitFor(() => expect(screen.getByTestId("trade-success")).toBeInTheDocument());
+    const legBodies = calls
+      .filter((c) => c.url.includes("/api/lab/trade/prepare-leg"))
+      .map((c) => c.body!.payload as Record<string, unknown>);
+    expect(legBodies).toHaveLength(2);
+    expect(legBodies[1]!.kind).toBe("bpsDirect");
+    // The estimate was WEI(2); the measured delta WEI(3) is what leg 2 spends.
+    expect(legBodies[1]!.exactInputAmount).toBe(WEI(3));
+  });
+
+  it("SELL: first leg confirms, second leg fails → sale-recovery banner + ACTUAL amount persisted", async () => {
+    const user = userEvent.setup();
+    h.fns.signMessageAsync.mockResolvedValue("0xsig");
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"66".repeat(32)}`);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    let nvdaReads = 0;
+    h.fns.readContract.mockImplementation(
+      async ({ functionName, address }: { functionName: string; address: string }) => {
+        if (functionName === "decimals") return 18;
+        if (functionName === "balanceOf") {
+          if (address.toLowerCase() === NVDA.toLowerCase()) {
+            nvdaReads += 1;
+            return nvdaReads === 1 ? 0n : 2n * 10n ** 18n;
+          }
+          return 1000n * 10n ** 18n;
+        }
+        return 0n;
+      },
+    );
+    stubFetch((url, init) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: COMPOSED_SELL });
+      if (url.includes("/api/lab/trade/prepare-leg")) {
+        const body = init?.body ? JSON.parse(init.body as string) : {};
+        const kind = (body?.payload ?? {}).kind;
+        if (kind === "bpsDirect") return jsonResponse(200, { ok: true, data: prepLegFor("bpsDirect") });
+        // The aggregator second leg has no route right now.
+        return jsonResponse(409, { ok: false, error: "no route", code: "ROUTE_UNAVAILABLE" });
+      }
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" anchorAddress={NVDA} />,
+    );
+
+    await user.click(screen.getByTestId("tab-sell"));
+    await user.type(screen.getByTestId("trade-amount"), "100");
+    await user.click(screen.getByTestId("quote-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-button")).toBeInTheDocument());
+    await user.click(screen.getByTestId("trade-button"));
+
+    await waitFor(() => expect(screen.getByTestId("recovery-banner")).toBeInTheDocument());
+    expect(screen.getByTestId("recovery-heading")).toHaveTextContent("Sale partially completed");
+    const persisted = loadPendingTrade(TAKER, TOKEN);
+    expect(persisted).not.toBeNull();
+    expect(persisted!.side).toBe("sell");
+    expect(persisted!.actualReceivedAnchorWei).toBe(WEI(2));
+    // Cancel keeps the anchor — the user is never forced onward.
+    expect(screen.getByTestId("recovery-cancel")).toHaveTextContent(/keep NVDA/i);
+  });
+
+  it("SELL resume posts an aggregator leg (server runs the Rialto-first chain) with the ACTUAL amount", async () => {
+    const user = userEvent.setup();
+    h.fns.signMessageAsync.mockResolvedValue("0xsig");
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"77".repeat(32)}`);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    const FIXTURE_HASH = `0x${"cd".repeat(32)}`;
+    savePendingTrade(TAKER, {
+      v: 1,
+      side: "sell",
+      marketToken: TOKEN,
+      marketSymbol: "PRINT",
+      anchorSymbol: "NVDA",
+      anchorAddress: NVDA,
+      paymentSymbol: "ETH",
+      paymentAddress: NATIVE_ETH,
+      completedLegTxHash: FIXTURE_HASH,
+      actualReceivedAnchorWei: WEI(2),
+      pendingLegNumber: 2,
+      quoteExpiry: Date.now() + 60_000,
+      createdAt: Date.now(),
+    });
+    const calls = stubFetch((url) => {
+      if (url.includes("/api/lab/trade/prepare-leg"))
+        return jsonResponse(200, { ok: true, data: prepLegFor("rialto") });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" anchorAddress={NVDA} />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("recovery-banner")).toBeInTheDocument());
+    expect(screen.getByTestId("recovery-resume")).toHaveTextContent(/Continue converting NVDA/i);
+    await user.click(screen.getByTestId("recovery-resume"));
+
+    await waitFor(() => expect(screen.getByTestId("trade-success")).toBeInTheDocument());
+    const body = bodyFor(calls, "/api/lab/trade/prepare-leg");
+    const payload = body!.payload as Record<string, unknown>;
+    // Aggregator kind — the SERVER applies Rialto → 1inch → 0x; never a pinned 0x leg.
+    expect(payload.kind).toBe("rialto");
+    expect(payload.inputToken).toBe(NVDA);
+    expect(payload.outputToken).toBe(NATIVE_ETH);
+    expect(payload.exactInputAmount).toBe(WEI(2));
+    expect(loadPendingTrade(TAKER, TOKEN)).toBeNull();
+  });
+
+  it("after a successful trade the quote is retired — the button returns to Get quote", async () => {
+    const user = userEvent.setup();
+    h.fns.signMessageAsync.mockResolvedValue("0xsig");
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"88".repeat(32)}`);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_BUY });
+      if (url.includes("/api/lab/trade/prepare-leg"))
+        return jsonResponse(200, { ok: true, data: prepLegFor("zeroEx") });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" />);
+
+    await user.type(screen.getByTestId("trade-amount"), "1");
+    await user.click(screen.getByTestId("quote-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-button")).toBeInTheDocument());
+    await user.click(screen.getByTestId("trade-button"));
+
+    await waitFor(() => expect(screen.getByTestId("trade-success")).toBeInTheDocument());
+    // The executed quote cannot be re-submitted: the trade button is gone and
+    // the primary slot offers a fresh quote instead.
+    expect(screen.queryByTestId("trade-button")).not.toBeInTheDocument();
+    expect(screen.getByTestId("quote-button")).toHaveTextContent(/Get quote/i);
   });
 });
 

@@ -1,18 +1,19 @@
 "use client";
 // Embedded bidirectional trading card for a lab market.
 //
-// Users pay/receive ETH / WETH / USDG — the market's RWA anchor is INTERNAL
-// routing detail and appears only as an "advanced" pay/receive option and inside
-// the collapsed route breakdown. Two-step, wallet-signed:
-//   1. Get quote  → server returns an executable route (one-step 0x, or composed
-//                   via the anchor, or advanced direct-anchor)
-//   2. Trade      → sign prepare-leg, run any approvals, send each leg in order
+// V1 frozen UI: the PRIMARY surface shows ONLY Buy/Sell, You pay, You receive,
+// balance, expected output, and one primary action button. Everything else —
+// internal anchor, route legs, execution venue (Rialto / 1inch / 0x), platform
+// fee, pool fee, slippage, minimum received, price impact, wallet action count —
+// lives inside the collapsed "Trade details" disclosure. Ordinary users are
+// never asked to own or acquire the Stock-Token anchor; it appears only as an
+// advanced option inside Trade details.
 //
-// Everything is honest: quoting, no-route, wrong chain, insufficient balance,
-// signing, per-leg pending, success (with a Blockscout receipt link per leg).
-// A disconnected wallet can never reach a signature. When the route is composed
-// the card NEVER claims atomicity — it states plainly it takes N wallet actions.
-// Styled to the lab design system; the trade/switch button is the ONE primary action.
+// Flow stays wallet-signed and honest: quote → sign prepare-leg (server
+// re-quotes; client calldata is never trusted) → approvals → send each leg.
+// A disconnected wallet can never reach a signature. Multi-step execution
+// progress and composed-trade recovery remain fully visible in the status
+// area — runtime state is never hidden, only pre-trade routing internals.
 import { formatUnits } from "viem";
 import { EXPLORER_BASE_URL } from "@bps/launch-lab";
 import { PRICE_IMPACT_WARN_BPS, useTrade, type TradeSide } from "../../../../hooks/lab";
@@ -39,7 +40,9 @@ function pillStyle(active: boolean): React.CSSProperties {
     : {};
 }
 
-/** A row of pay/receive token pills. The anchor sits under an "advanced" toggle. */
+/** A row of pay/receive token pills — payment assets only (ETH / WETH / USDG).
+ *  The anchor appears here ONLY while the user has explicitly selected it via
+ *  the advanced option inside Trade details, so their choice stays visible. */
 function PayTokenSelector({
   tokens,
   anchor,
@@ -55,6 +58,7 @@ function PayTokenSelector({
   onSelect: (t: TradeToken) => void;
   testid: string;
 }) {
+  const anchorSelected = anchor !== null && selected.address === anchor.address;
   return (
     <div data-testid={testid}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -72,31 +76,12 @@ function PayTokenSelector({
             {t.symbol}
           </button>
         ))}
-      </div>
-      {anchor && (
-        <details
-          className="lab-disclosure"
-          style={{ marginTop: 8 }}
-          data-testid="paytoken-advanced"
-        >
-          <summary style={{ cursor: "pointer" }}>Advanced: route via the market anchor</summary>
-          <p className="lab-muted" style={{ fontSize: 12, margin: "8px 0" }}>
-            {anchor.symbol} is the market&apos;s internal anchor asset. Most users pay and receive
-            ETH, WETH, or USDG.
-          </p>
-          <button
-            type="button"
-            data-testid={`paytoken-${anchor.symbol}`}
-            aria-pressed={selected.address === anchor.address}
-            disabled={disabled}
-            onClick={() => onSelect(anchor)}
-            className="lab-pill"
-            style={{ cursor: "pointer", ...pillStyle(selected.address === anchor.address) }}
-          >
+        {anchorSelected && (
+          <span className="lab-pill" style={pillStyle(true)} data-testid="paytoken-anchor-active">
             {anchor.symbol}
-          </button>
-        </details>
-      )}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -165,7 +150,6 @@ export function TradeCard({
 
   const impactBps = quote?.totalPriceImpactBps ?? null;
   const highImpact = impactBps !== null && impactBps >= PRICE_IMPACT_WARN_BPS;
-  const composed = quote?.routeKind === "composed";
   const multiStep = (quote?.walletActionCount ?? 1) > 1;
 
   return (
@@ -233,6 +217,7 @@ export function TradeCard({
             role="tab"
             aria-selected={side === s}
             data-testid={`tab-${s}`}
+            disabled={busy}
             onClick={() => trade.setSide(s)}
             className="lab-btn lab-btn--ghost"
             style={{
@@ -353,137 +338,191 @@ export function TradeCard({
         )}
       </div>
 
-      {/* Slippage presets + custom */}
-      <div style={{ marginTop: 16 }}>
-        <span className="lab-label">Max slippage</span>
-        <div
-          style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}
-        >
-          {SLIPPAGE_PRESETS.map((p) => (
-            <button
-              key={p.bps}
-              type="button"
-              data-testid={`slippage-${p.bps}`}
-              aria-pressed={slippageBps === p.bps}
-              disabled={busy}
-              onClick={() => trade.setSlippageBps(p.bps)}
-              className="lab-pill"
-              style={{ cursor: "pointer", ...pillStyle(slippageBps === p.bps) }}
-            >
-              {p.label}
-            </button>
-          ))}
-          <label
-            className="lab-muted"
-            style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13 }}
-          >
-            Custom
-            <input
-              data-testid="slippage-custom"
-              className="lab-field"
-              type="number"
-              min={0.01}
-              max={50}
-              step={0.01}
-              disabled={busy}
-              value={(slippageBps / 100).toString()}
-              onChange={(e) => {
-                const pct = Number(e.target.value);
-                if (Number.isFinite(pct)) {
-                  trade.setSlippageBps(Math.max(1, Math.min(5000, Math.round(pct * 100))));
-                }
-              }}
-              style={{ width: "5rem", minHeight: 36, padding: "4px 8px" }}
-            />
-            %
-          </label>
-        </div>
-      </div>
-
-      {/* Quote result */}
+      {/* Expected output — the ONE quote number on the primary surface. */}
       {quote && (
-        <div style={{ marginTop: 16 }} data-testid="quote-result">
-          <div className="lab-kv">
-            <span>Expected output</span>
-            <span className="lab-data" data-testid="expected-output">
-              {fmt(quote.expectedFinalOutputWei, outputDecimals)} {outputSymbol}
-            </span>
-          </div>
-          <div className="lab-kv">
-            <span>Minimum received</span>
-            <span className="lab-data" data-testid="minimum-received">
-              {fmt(quote.minimumFinalOutputWei, outputDecimals)} {outputSymbol}
-            </span>
-          </div>
-          <div className="lab-kv">
-            <span>Price impact</span>
-            <span
-              className="lab-data"
-              data-testid="price-impact"
-              style={highImpact ? { color: "var(--bad)", fontWeight: 700 } : undefined}
-            >
-              {impactBps === null ? "—" : `${(impactBps / 100).toFixed(2)}%`}
-              {highImpact ? " ⚠" : ""}
-            </span>
-          </div>
-          <div className="lab-kv">
-            <span>Pool fee</span>
-            <span className="lab-data" data-testid="pool-fee">
-              {quote.poolFeeUnits === null ? "—" : `${(quote.poolFeeUnits / 10_000).toFixed(2)}%`}
-            </span>
-          </div>
-          {quote.zeroExFeeNote && (
-            <div className="lab-kv">
-              <span>0x fee</span>
-              <span className="lab-data" data-testid="zeroex-fee-note">
-                {quote.zeroExFeeNote}
-              </span>
-            </div>
-          )}
-
-          {/* Route/legs live ONLY inside this collapsed disclosure. The summary is
-              always visible and states the step count honestly — never atomic when
-              the route is composed. */}
-          <details className="lab-disclosure" style={{ marginTop: 10 }} data-testid="route-details">
-            <summary style={{ cursor: "pointer" }} data-testid="route-summary">
-              Route details —{" "}
-              {multiStep
-                ? `${quote.walletActionCount} steps (via ${quote.anchorSymbol}), not one-click`
-                : quote.routeKind === "direct-anchor"
-                  ? `direct via ${quote.anchorSymbol}`
-                  : "1 step (single transaction)"}
-            </summary>
-            <div style={{ marginTop: 8 }} data-testid="route-legs">
-              {multiStep && (
-                <p style={{ color: "var(--warn)", fontSize: 13, margin: "0 0 8px" }}>
-                  This trade routes via {quote.anchorSymbol} and takes {quote.walletActionCount}{" "}
-                  separate wallet actions — it is not a single one-click swap.
-                </p>
-              )}
-              <ol style={{ margin: 0, paddingLeft: "1.2rem" }}>
-                {quote.legs.map((leg, i) => (
-                  <li key={`${leg.label}-${i}`} style={{ fontSize: 13, marginBottom: 4 }}>
-                    {leg.label}
-                    {leg.estimated ? " (estimated until the prior step confirms)" : ""}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </details>
-
-          {quote.warnings.length > 0 && (
-            <ul data-testid="route-warnings" style={{ margin: "8px 0 0", paddingLeft: "1.1rem" }}>
-              {quote.warnings.map((w) => (
-                <li key={w} style={{ color: "var(--warn)", fontSize: 13 }}>
-                  {w}
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="lab-kv" style={{ marginTop: 10 }} data-testid="quote-result">
+          <span>Expected output</span>
+          <span className="lab-data" data-testid="expected-output">
+            {fmt(quote.expectedFinalOutputWei, outputDecimals)} {outputSymbol}
+          </span>
         </div>
       )}
 
-      {/* Actions — exactly ONE primary button (trade, or switch when wrong chain). */}
+      {/* -------- Trade details (collapsed) --------
+          Everything that is not the primary surface lives here: slippage,
+          minimum received, price impact, pool fee, venue fee, internal anchor,
+          route legs + venues, wallet action count, and the advanced anchor
+          pay/receive option. */}
+      {isConnected && (
+        <details className="lab-disclosure" style={{ marginTop: 12 }} data-testid="route-details">
+          <summary style={{ cursor: "pointer" }} data-testid="route-summary">
+            Trade details
+          </summary>
+
+          {/* Slippage presets + custom */}
+          <div style={{ marginTop: 10 }}>
+            <span className="lab-label">Max slippage</span>
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                marginTop: 6,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              {SLIPPAGE_PRESETS.map((p) => (
+                <button
+                  key={p.bps}
+                  type="button"
+                  data-testid={`slippage-${p.bps}`}
+                  aria-pressed={slippageBps === p.bps}
+                  disabled={busy}
+                  onClick={() => trade.setSlippageBps(p.bps)}
+                  className="lab-pill"
+                  style={{ cursor: "pointer", ...pillStyle(slippageBps === p.bps) }}
+                >
+                  {p.label}
+                </button>
+              ))}
+              <label
+                className="lab-muted"
+                style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13 }}
+              >
+                Custom
+                <input
+                  data-testid="slippage-custom"
+                  className="lab-field"
+                  type="number"
+                  min={0.01}
+                  max={50}
+                  step={0.01}
+                  disabled={busy}
+                  value={(slippageBps / 100).toString()}
+                  onChange={(e) => {
+                    const pct = Number(e.target.value);
+                    if (Number.isFinite(pct)) {
+                      trade.setSlippageBps(Math.max(1, Math.min(5000, Math.round(pct * 100))));
+                    }
+                  }}
+                  style={{ width: "5rem", minHeight: 36, padding: "4px 8px" }}
+                />
+                %
+              </label>
+            </div>
+          </div>
+
+          {/* Quote internals — only once a quote exists. */}
+          {quote && (
+            <div style={{ marginTop: 12 }}>
+              <div className="lab-kv">
+                <span>Minimum received</span>
+                <span className="lab-data" data-testid="minimum-received">
+                  {fmt(quote.minimumFinalOutputWei, outputDecimals)} {outputSymbol}
+                </span>
+              </div>
+              <div className="lab-kv">
+                <span>Price impact</span>
+                <span
+                  className="lab-data"
+                  data-testid="price-impact"
+                  style={highImpact ? { color: "var(--bad)", fontWeight: 700 } : undefined}
+                >
+                  {impactBps === null ? "—" : `${(impactBps / 100).toFixed(2)}%`}
+                  {highImpact ? " ⚠" : ""}
+                </span>
+              </div>
+              <div className="lab-kv">
+                <span>Pool fee</span>
+                <span className="lab-data" data-testid="pool-fee">
+                  {quote.poolFeeUnits === null
+                    ? "—"
+                    : `${(quote.poolFeeUnits / 10_000).toFixed(2)}%`}
+                </span>
+              </div>
+              {quote.zeroExFeeNote && (
+                <div className="lab-kv">
+                  <span>Venue fee</span>
+                  <span className="lab-data" data-testid="zeroex-fee-note">
+                    {quote.zeroExFeeNote}
+                  </span>
+                </div>
+              )}
+              <div className="lab-kv">
+                <span>Internal anchor</span>
+                <span className="lab-data" data-testid="internal-anchor">
+                  {quote.anchorSymbol}
+                </span>
+              </div>
+              <div className="lab-kv">
+                <span>Wallet actions</span>
+                <span className="lab-data" data-testid="wallet-actions">
+                  {quote.walletActionCount}
+                  {multiStep ? " — separate steps, not one-click" : ""}
+                </span>
+              </div>
+
+              <div style={{ marginTop: 8 }} data-testid="route-legs">
+                {multiStep && (
+                  <p style={{ color: "var(--warn)", fontSize: 13, margin: "0 0 8px" }}>
+                    This trade routes via {quote.anchorSymbol} and takes {quote.walletActionCount}{" "}
+                    separate wallet actions — it is not a single one-click swap.
+                  </p>
+                )}
+                <ol style={{ margin: 0, paddingLeft: "1.2rem" }}>
+                  {quote.legs.map((leg, i) => (
+                    <li key={`${leg.label}-${i}`} style={{ fontSize: 13, marginBottom: 4 }}>
+                      {leg.label}
+                      {leg.estimated ? " (estimated until the prior step confirms)" : ""}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              {quote.warnings.length > 0 && (
+                <ul
+                  data-testid="route-warnings"
+                  style={{ margin: "8px 0 0", paddingLeft: "1.1rem" }}
+                >
+                  {quote.warnings.map((w) => (
+                    <li key={w} style={{ color: "var(--warn)", fontSize: 13 }}>
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Advanced: pay/receive the anchor Stock Token directly. Ordinary
+              users never need to own or acquire it — this is opt-in only. */}
+          {anchorToken && (
+            <div style={{ marginTop: 12 }} data-testid="paytoken-advanced">
+              <span className="lab-label">Advanced</span>
+              <p className="lab-muted" style={{ fontSize: 12, margin: "6px 0" }}>
+                {anchorToken.symbol} is the market&apos;s internal anchor asset. Most users pay and
+                receive ETH, WETH, or USDG — you never need to own it.
+              </p>
+              <button
+                type="button"
+                data-testid={`paytoken-${anchorToken.symbol}`}
+                aria-pressed={payToken.address === anchorToken.address}
+                disabled={busy}
+                onClick={() => trade.setPayToken(anchorToken)}
+                className="lab-pill"
+                style={{
+                  cursor: "pointer",
+                  ...pillStyle(payToken.address === anchorToken.address),
+                }}
+              >
+                {isBuy ? `Pay with ${anchorToken.symbol}` : `Receive ${anchorToken.symbol}`}
+              </button>
+            </div>
+          )}
+        </details>
+      )}
+
+      {/* Action — exactly ONE primary button: get quote → trade (or switch chain). */}
       <div style={{ marginTop: 16 }}>
         {!isConnected ? (
           <p className="lab-muted" data-testid="trade-connect" style={{ fontSize: 13 }}>
@@ -499,33 +538,44 @@ export function TradeCard({
           >
             Switch to Robinhood Chain (4663)
           </button>
+        ) : !quote ? (
+          <button
+            type="button"
+            data-testid="quote-button"
+            className="lab-btn lab-btn--primary"
+            style={{ width: "100%" }}
+            disabled={busy || amountWei <= 0n}
+            onClick={() => void trade.getQuote()}
+          >
+            {status === "quoting" ? "Quoting…" : "Get quote"}
+          </button>
         ) : (
           <>
             <button
               type="button"
-              data-testid="quote-button"
-              className="lab-btn lab-btn--ghost"
+              data-testid="trade-button"
+              className="lab-btn lab-btn--primary"
               style={{ width: "100%" }}
-              disabled={busy || amountWei <= 0n}
-              onClick={() => void trade.getQuote()}
+              disabled={busy || insufficient || amountWei <= 0n}
+              onClick={() => void trade.prepareAndTrade()}
             >
-              {status === "quoting" ? "Quoting…" : quote ? "Refresh quote" : "Get quote"}
+              {tradeButtonLabel(status, isBuy, insufficient, legIndex, legCount)}
             </button>
             <button
               type="button"
-              data-testid="trade-button"
-              className="lab-btn lab-btn--primary"
-              style={{ width: "100%", marginTop: 8 }}
-              disabled={busy || !quote || insufficient || amountWei <= 0n}
-              onClick={() => void trade.prepareAndTrade()}
+              data-testid="quote-button"
+              className="lab-btn lab-btn--ghost"
+              style={{ width: "100%", marginTop: 8, fontSize: 13 }}
+              disabled={busy}
+              onClick={() => void trade.getQuote()}
             >
-              {tradeButtonLabel(status, isBuy, insufficient, composed, legIndex, legCount)}
+              {status === "quoting" ? "Quoting…" : "Refresh quote"}
             </button>
           </>
         )}
       </div>
 
-      {/* Explicit state / status line */}
+      {/* Explicit state / status line — runtime execution state stays visible. */}
       <StatusLine
         status={status}
         insufficient={insufficient}
@@ -544,7 +594,6 @@ function tradeButtonLabel(
   status: string,
   isBuy: boolean,
   insufficient: boolean,
-  composed: boolean,
   legIndex: number,
   legCount: number,
 ): string {
@@ -562,7 +611,6 @@ function tradeButtonLabel(
     case "success":
       return "Traded";
     default:
-      if (composed) return isBuy ? "Buy (2 steps)" : "Sell (2 steps)";
       return isBuy ? "Buy" : "Sell";
   }
 }

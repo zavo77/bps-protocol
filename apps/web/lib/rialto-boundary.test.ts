@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-// §G: the client-consumable application code must NEVER import the server-only Rialto quote client, the
-// server subpath, or reference the API key. This scans the browser-reachable source (lib + app) and
-// fails if any forbidden symbol appears. Operator/quote handling stays server-only by construction.
+// §G: the RIALTO_API_KEY and the Rialto quote client must never reach the browser.
+// The enforced invariant is: any file that references the key MUST be server-only
+// (import "server-only" — Next.js throws at build if such a module is pulled into a
+// client bundle). Client-reachable source (no server-only marker) must reference
+// neither the key nor the server quote client. This scanner walks lib + app and:
+//   - exempts files marked `import "server-only"` (cannot be client-bundled), and
+//   - fails if any client-reachable file references a forbidden symbol.
 const FORBIDDEN = [
   "fetchRialtoAllowanceQuote",
   "@bps/rialto/server",
@@ -12,21 +16,27 @@ const FORBIDDEN = [
   "RIALTO_API_KEY",
 ];
 
+const SERVER_ONLY_MARKERS = ['import "server-only"', "import 'server-only'"];
+
 function walk(dir: string): string[] {
   const out: string[] = [];
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) {
       out.push(...walk(p));
-    } else if (/\.(ts|tsx|js|jsx)$/.test(name) && !/\.test\.ts$/.test(name)) {
+    } else if (/\.(ts|tsx|js|jsx)$/.test(name) && !/\.test\.tsx?$/.test(name)) {
       out.push(p);
     }
   }
   return out;
 }
 
+function isServerOnly(src: string): boolean {
+  return SERVER_ONLY_MARKERS.some((m) => src.includes(m));
+}
+
 describe("Rialto server-only import boundary (§G)", () => {
-  it("no browser-reachable source imports the quote client or references the API key", () => {
+  it("no client-reachable source references the API key or the quote client", () => {
     const roots = ["lib", "app"].map((d) => join(process.cwd(), d));
     const offenders: string[] = [];
     for (const root of roots) {
@@ -38,6 +48,7 @@ describe("Rialto server-only import boundary (§G)", () => {
       }
       for (const file of files) {
         const src = readFileSync(file, "utf8");
+        if (isServerOnly(src)) continue; // server-only cannot be bundled into the client
         for (const term of FORBIDDEN) {
           if (src.includes(term)) offenders.push(`${file}: ${term}`);
         }
@@ -46,11 +57,17 @@ describe("Rialto server-only import boundary (§G)", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("the Rialto adapter that reads the key is marked server-only", () => {
+    const adapter = readFileSync(join(process.cwd(), "lib", "lab", "rialto.ts"), "utf8");
+    expect(adapter.includes("RIALTO_API_KEY")).toBe(true); // it does read the key
+    expect(isServerOnly(adapter)).toBe(true); // ...but only server-side
+  });
+
   it("the forbidden-term scanner actually works (self-check)", () => {
-    // Guard against a broken scanner silently passing: the term list is non-empty and matched literally.
     expect(FORBIDDEN).toContain("RIALTO_API_KEY");
-    expect("const x = fetchRialtoAllowanceQuote()".includes("fetchRialtoAllowanceQuote")).toBe(
-      true,
-    );
+    // A non-server-only file with the term must be caught: no server-only marker here.
+    const sample = "const k = process.env.RIALTO_API_KEY";
+    expect(isServerOnly(sample)).toBe(false);
+    expect(sample.includes("RIALTO_API_KEY")).toBe(true);
   });
 });
