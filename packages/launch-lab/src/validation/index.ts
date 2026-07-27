@@ -12,7 +12,7 @@ export const feePresetSchema = z.enum(["BALANCED_1", "CREATOR_2", "DEGEN_3", "DY
 /** Signed request envelope. The message the wallet signs is canonical JSON of `message`. */
 export const signedRequestSchema = z.object({
   message: z.object({
-    action: z.enum(["metadata-upload", "prepare-launch"]),
+    action: z.enum(["metadata-upload", "prepare-launch", "prepare-trade"]),
     wallet: addressSchema,
     chainId: z.literal(4663),
     payloadHash: z.string().regex(/^0x[0-9a-f]{64}$/),
