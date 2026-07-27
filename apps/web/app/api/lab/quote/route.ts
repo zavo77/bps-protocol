@@ -1,13 +1,13 @@
-// POST /api/lab/quote — embedded bidirectional trading quotes.
-// Always computes the mandatory bpsDirectV4 route; adds the optional 0x route
-// when configured and valid; selects the better executable output. Read-only:
-// no signature required, but origin-bound and rate-limited.
+// POST /api/lab/quote — user-facing trade quotes. Users pay/receive
+// ETH / WETH / USDG (the market's RWA anchor is internal routing detail;
+// it remains available as an advanced input/output). Priority: one-transaction
+// 0x route end-to-end, else the composed fallback (0x payment leg + verified
+// BPS Direct rehype-pool leg) as explicit sequential wallet actions.
 
 import { getAddress, isAddress } from "viem";
 import { z } from "zod";
-import { quoteDirectRoute, type RouteQuote } from "@bps/launch-lab";
 import { getLabClient } from "../../../../lib/lab/server";
-import { quoteZeroExRoute } from "../../../../lib/lab/zeroex";
+import { quoteUserTrade } from "../../../../lib/lab/trade-router";
 import {
   assertSameOrigin,
   clientKey,
@@ -20,9 +20,11 @@ import {
 export const dynamic = "force-dynamic";
 
 const quoteInputSchema = z.object({
-  tokenAddress: z.string().refine(isAddress, "Invalid token address"),
+  marketToken: z.string().refine(isAddress, "Invalid market token"),
   side: z.enum(["buy", "sell"]),
-  amountInWei: z.string().regex(/^[0-9]{1,36}$/),
+  inputToken: z.string().refine(isAddress, "Invalid input token"),
+  outputToken: z.string().refine(isAddress, "Invalid output token"),
+  exactInputAmount: z.string().regex(/^[0-9]{1,36}$/),
   taker: z.string().refine(isAddress, "Invalid taker address"),
   slippageBps: z.number().int().min(1).max(5_000).default(100),
 });
@@ -35,51 +37,38 @@ export async function POST(req: Request): Promise<Response> {
       return err("RATE_LIMITED", "Too many requests.", 429);
 
     const input = quoteInputSchema.parse(await req.json());
-    const amountIn = BigInt(input.amountInWei);
+    const amountIn = BigInt(input.exactInputAmount);
     if (amountIn <= 0n) return err("AMOUNT_REQUIRED", "Amount must be positive.");
-    const token = getAddress(input.tokenAddress);
-    const taker = getAddress(input.taker);
-    const client = getLabClient();
 
-    // Mandatory direct route (fails closed on non-lab/non-anchor pools).
-    const { quote: direct, ctx } = await quoteDirectRoute(
-      client,
-      token,
-      input.side,
-      amountIn,
-      input.slippageBps,
-    );
-
-    // Optional 0x route on the market's ACTUAL anchor; absence is never failure.
-    const sellToken = input.side === "buy" ? ctx.anchorAddress : token;
-    const buyToken = input.side === "buy" ? token : ctx.anchorAddress;
-    const zeroEx = await quoteZeroExRoute({
-      sellToken,
-      buyToken,
-      sellAmountWei: amountIn,
-      taker,
+    const quote = await quoteUserTrade(getLabClient(), {
+      marketToken: getAddress(input.marketToken),
+      side: input.side,
+      inputToken: getAddress(input.inputToken),
+      outputToken: getAddress(input.outputToken),
+      exactInputAmountWei: amountIn,
+      taker: getAddress(input.taker),
       slippageBps: input.slippageBps,
     });
-
-    const routes: RouteQuote[] = zeroEx ? [direct, zeroEx] : [direct];
-    const selected =
-      zeroEx && BigInt(zeroEx.buyAmount) > BigInt(direct.buyAmount)
-        ? zeroEx.routeId
-        : direct.routeId;
-
-    return ok({
-      routes,
-      selected,
-      side: input.side,
-      tokenAddress: token,
-      taker,
-      anchorSymbol: ctx.anchorSymbol,
-      anchorAddress: ctx.anchorAddress,
-    });
+    return ok(quote);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
     if (msg === "NOT_A_GOOGL_MARKET" || msg === "TOKEN_NOT_IN_POOL") {
-      return err("NOT_A_LAB_MARKET", "That token is not a Launch Lab GOOGL market.", 404);
+      return err("NOT_A_LAB_MARKET", "That token is not a Launch Lab market.", 404);
+    }
+    if (msg === "MARKET_TOKEN_MISMATCH")
+      return err(msg, "The trade must buy or sell the market token.");
+    if (msg === "UNSUPPORTED_PAYMENT_TOKEN") {
+      return err(
+        msg,
+        "Pay or receive with ETH, WETH, or USDG (or the market anchor as an advanced option).",
+      );
+    }
+    if (msg === "NO_ROUTE_FOR_PAYMENT_TOKEN") {
+      return err(
+        msg,
+        "No executable conversion route is currently available for that payment token.",
+        409,
+      );
     }
     if (msg === "AMOUNT_REQUIRED" || msg === "INVALID_SLIPPAGE")
       return err(msg, "Invalid quote input.");

@@ -13,6 +13,7 @@ export { GENESIS_MARKET, type GenesisMarketRecord } from "./registry/genesis-mar
 export { listLaunchesOnChain } from "./registry/launches";
 export * from "./swaps/index";
 export * from "./fees/index";
+export * from "./payments/index";
 export {
   APPROVED_ANCHORS,
   DEFAULT_ANCHOR_SYMBOL,
