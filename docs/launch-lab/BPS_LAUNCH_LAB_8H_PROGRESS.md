@@ -16,6 +16,18 @@ Newest entries at the top. No secrets ever recorded here.
 - Launch: authorized after final review; hard stops before broadcast-enable, kill-switch-disable, and every signature (create/buy/sell/fee-collection).
 - Caps: $50 per canary trade; $250 total economic exposure.
 
+## Deployment state (2026-07-27, commit b06eceb)
+
+- **Public production LIVE (fail-closed): https://bps-launch-lab.vercel.app/lab** — access mode
+  `public` (any wallet may create once broadcast is enabled), broadcast **disabled**, kill switch
+  **active**, GOOGL anchor verifying live, launches list honest-empty, guardrails 2/wallet + 3600s
+  cooldown + 25/day, commit provenance baked via `--build-env BPS_SOURCE_COMMIT`.
+- Public access retrofit COMPLETE: ACCESS_MODE modes, terms acknowledgement (required, in signed
+  payload), replay protection, per-wallet/IP limits, chain-reconstructed launch registry +
+  `/api/lab/launches` + Postgres mirror awaiting `DATABASE_URL`. 44 package + 189 web tests green.
+- Open founder inputs: RPC endpoint upgrade (LL-1 quota), `DATABASE_URL` (LL-2), Claude Design session
+  (styling + print-token.png), wallet funding, then the launch-gate approval.
+
 ## Milestones
 
 - [x] Consolidated blocker question asked and answered
