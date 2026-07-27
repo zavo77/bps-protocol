@@ -150,3 +150,44 @@ export async function assertSignatureUnused(sigHash: string, ttlMs: number): Pro
   }
   usedSignatures.set(sigHash, now);
 }
+
+// ---- indexed swap history (read-only view over the indexer's lab_swaps) ----
+export interface IndexedSwap {
+  id: string;
+  poolId: string;
+  blockNumber: string;
+  txHash: string;
+  amount0: string;
+  amount1: string;
+  sqrtPriceX96: string;
+  tick: number;
+  fee: number;
+  occurredAt: string | null;
+}
+
+/** Recent swaps for a token from the indexer's table; null when the DB view is unavailable. */
+export async function getRecentSwaps(token: string, limit = 200): Promise<IndexedSwap[] | null> {
+  const pg = await getPg();
+  if (!pg) return null;
+  try {
+    const res = await pg.query(
+      `SELECT id, pool_id, block_number, tx_hash, amount0, amount1, sqrt_price_x96, tick, fee, occurred_at
+       FROM lab_swaps WHERE token_address = $1 ORDER BY block_number DESC, id DESC LIMIT $2`,
+      [token.toLowerCase(), Math.min(Math.max(limit, 1), 500)],
+    );
+    return (res.rows as Record<string, unknown>[]).map((r) => ({
+      id: String(r.id),
+      poolId: String(r.pool_id),
+      blockNumber: String(r.block_number),
+      txHash: String(r.tx_hash),
+      amount0: String(r.amount0),
+      amount1: String(r.amount1),
+      sqrtPriceX96: String(r.sqrt_price_x96),
+      tick: Number(r.tick),
+      fee: Number(r.fee),
+      occurredAt: r.occurred_at ? new Date(r.occurred_at as string).toISOString() : null,
+    }));
+  } catch {
+    return null;
+  }
+}
