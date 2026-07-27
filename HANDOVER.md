@@ -15,6 +15,13 @@
 > `docs/continuity/CHANGELOG.md`; machine state: `launchLab` key in `docs/continuity/CURRENT_STATE.json`).
 > It does NOT modify the Capital Engine, frozen contracts, canary artifacts, or the Stage-A lane below.
 > Everything in the SNAPSHOT below continues to describe the Capital Engine lane on `master`.
+>
+> **Lane state (2026-07-27, commit `01c8cfd`, deployed):** frozen V1 payment routing live — Rialto is the
+> primary payment↔Stock-Token venue (priority Rialto → 1inch → 0x; composed Rialto payment↔anchor +
+> BPS Direct anchor↔token; anchor-direct advanced only), frozen primary trade UI, adversarial-review
+> hardening (13 confirmed findings fixed). Preview + Production fail-closed (public / broadcast false /
+> kill true). **Blocker LL-4:** `RIALTO_API_KEY` is local-only — NOT in Vercel — so deployed Rialto
+> routing stays dormant until the founder adds it (server-side, Sensitive) and redeploys.
 
 ## SNAPSHOT (verified)
 

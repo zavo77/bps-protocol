@@ -7,6 +7,46 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-27 — LAUNCH LAB LANE: Rialto primary RWA routing + frozen V1 trade UI (commit 01c8cfd, deployed)
+
+- **Type:** Lane source change + Vercel Preview/Production deployment (fail-closed). No mainnet transaction,
+  no launch/trade signature requested, broadcast disabled, kill switch active. Branch
+  `feature/bps-launch-lab-8h-vercel`, HEAD `01c8cfd02da6382d472d582b5a605018714f97fc`, pushed to origin.
+- **Frozen V1 routing (founder gate):** BUY = payment (ETH/WETH/USDG) → Rialto → RWA anchor → BPS Direct →
+  market token; SELL reversed. One-step aggregator routes attempted first through the frozen priority chain
+  **Rialto → 1inch → 0x**; never depended on for brand-new BPS pools. New server-only adapters
+  `apps/web/lib/lab/rialto.ts` (settlement=allowance enforced, chain-4663 guard, exact returned spender,
+  human-decimal sell_amount, fail-closed, no integrator fee) and `apps/web/lib/lab/oneinch.ts` (dormant
+  until ONEINCH_API_KEY; fails closed if /approve/spender yields no address). `trade-router.ts` rewritten
+  around the priority chain; `RouteLeg.kind` widened to rialto|oneInch|zeroEx|bpsDirect.
+- **Adversarial review (17-agent workflow) — 13 confirmed findings, ALL fixed pre-deploy:** prepare-leg now
+  (a) always re-runs the priority chain server-side (client kind is only a hint; response reports the venue
+  used — also fixes the sell-resume 0x pinning), (b) binds aggregator legs to the market token or its anchor
+  (payment→payment and payment→arbitrary-token rejected), (c) binds venue tx value (native leg
+  value===amountIn, ERC-20 leg value===0 → BAD_VALUE). Router: one-step SELL approves the MARKET token;
+  composed SELL minimum uses the venue-enforced minimum (no double slippage). Hook: stale quotes are
+  rejected + auto-refreshed before preparation; a wallet signature is NEVER requested without a successful
+  exact-calldata simulation; re-entrancy guard on execute/resume; executed quotes retired after success.
+  1inch spender fallback removed (fail closed).
+- **Frozen V1 UI:** primary surface = Buy/Sell, You pay, You receive, balance, expected output, one primary
+  action button. Collapsed "Trade details" holds slippage, minimum received, price impact, pool fee, venue
+  fee, internal anchor, wallet-action count, route legs/venues, warnings, and the advanced anchor option.
+  Runtime execution status and composed-trade recovery banners remain fully visible.
+- **Live Rialto probe (authenticated, local key, 2026-07-27):** all 5 anchors × ETH/WETH/USDG executable in
+  BOTH directions; settlement=allowance; platform fee 5 bps in quotes; router spender `0xc94135b6…59bd`;
+  native ETH sells need no approval; WETH→NVDA fills on Rialto where 0x returns 422 — Rialto closes the
+  payment↔RWA gap.
+- **Verification:** 307 web vitest (40 files) + 53 launch-lab + 9 lab-indexer; monorepo lint/typecheck
+  clean; production build clean; client bundles contain no RIALTO/ZEROX/ONEINCH key names and no venue base
+  URLs (scan + strengthened rialto-boundary test enforcing server-only key referencing).
+- **Deployment:** Vercel Preview (Ready) + Production (Ready) at commit 01c8cfd. Production health:
+  status ok, accessMode public, broadcastEnabled false, killSwitchActive true, rpc ok, database ok,
+  commit 01c8cfd02da6.
+- **NEW BLOCKER LL-4:** `RIALTO_API_KEY` exists locally but is NOT configured in Vercel (Preview or
+  Production) — deployed Rialto routing is dormant (fail-closed; composed payment routes 409 in production
+  until the founder adds the key server-side/Sensitive and redeploys). LL-5 (dormant by design):
+  ONEINCH_API_KEY not configured anywhere.
+
 ## 2026-07-27 — LAUNCH LAB LANE: 8H Vercel-first build (founder-authorized new product lane)
 
 - **Type:** New separate product lane (BPS RWA Launch Lab) implemented on branch

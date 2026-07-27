@@ -118,3 +118,15 @@ Newest entries at the top. No secrets ever recorded here.
 - Committed Stage-A continuity checkpoint `06ff34b` on master (dedicated, unmixed, exact).
 - Verified `.env.local` readiness (names only).
 - Next: commit planning docs, branch, then the integration spike.
+
+## 2026-07-27 — Rialto primary RWA routing + frozen V1 UI + final completion gate (commit 01c8cfd)
+
+- Frozen V1 routing implemented and deployed: Rialto → 1inch → 0x one-step first, composed
+  Rialto payment↔anchor + BPS Direct anchor↔token as the normal path, anchor-direct advanced only.
+- 17-agent adversarial review before deploy; 13 confirmed findings all fixed (token/value binding in
+  prepare-leg, server-side priority chain, 1inch spender fail-closed, sell one-step approvals, sell
+  composed minimum, stale-quote refresh, simulation-required signing, re-entrancy guard, success-state
+  quote retirement, tab locking, sell-recovery coverage, ACTUAL-delta pinning test, fee display test).
+- Gate: 307 web + 53 pkg + 9 indexer tests, lint/typecheck/build clean, client-bundle secret scan clean.
+- Preview + Production deployed fail-closed (public / broadcast false / kill true), health verified at
+  commit 01c8cfd. BLOCKER LL-4: RIALTO_API_KEY not in Vercel → deployed Rialto dormant until founder adds it.

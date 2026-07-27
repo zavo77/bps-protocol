@@ -1,600 +1,605 @@
 {
-  "schemaVersion": "1.0.0",
-  "launchLab": {
-    "lane": "BPS RWA Launch Lab (separate product lane; Capital Engine untouched)",
-    "authorization": "founder 8H authorization (chat 2026-07-27); spec docs/launch-lab/BPS_LAUNCH_LAB_8H_VERCEL_MASTER_PROMPT.md",
-    "branch": "feature/bps-launch-lab-8h-vercel (master checkpoints 06ff34b Stage-A continuity, dec2794 planning docs)",
-    "laneLog": "docs/launch-lab/BPS_LAUNCH_LAB_8H_PROGRESS.md",
-    "hardGate": "PASSED — rehype multicurve PRINT/GOOGL creation simulated on live 4663 (docs/launch-lab/SPIKE_LAUNCH_PROOF.json); standard/scheduled/decay multicurve initializers absent on 4663",
-    "sdk": "@whetstone-research/doppler-sdk@1.0.33 (pinned)",
-    "vercel": {
-      "project": "bps-launch-lab (team zavo1, root apps/web, Node 24.x)",
-      "state": "Preview + Production deployed FAIL-CLOSED (broadcast disabled, kill switch active)",
-      "previewProtection": "team-auth wall on preview URLs; QA performed on local prod server of identical build"
-    },
-    "genesisLaunch": "NOT executed; requires founder launch-gate approval + founder wallet signatures",
-    "blockers": {
-      "LL-1": "CLOSED 2026-07-27 — healthy RPC configured (local + Vercel); hard-gate re-run green; public-RPC fallback retained",
-      "LL-2": "CLOSED 2026-07-27 — Railway bps-production/bps-postgres (PostgreSQL 18.4); connectivity, idempotent schema, mirror idempotency, cross-instance replay, and failure fallback all verified (scripts/verify-db.mjs)",
-      "LL-3": "Vercel preview deployment protection blocks external preview QA (production URL is public; low priority)"
-    },
-    "publicAccessRetrofit": "COMPLETE: ACCESS_MODE disabled|allowlist|public (fail-closed), guardrail env knobs, terms acknowledgement, chain-reconstructed launch registry + Postgres mirror (LL-2 verified)",
-    "webHealth": "GET /api/lab/health live 200 (sanitized; Better Stack incident resolved)",
-    "indexer": "apps/lab-indexer deployed on Railway bps-production; /health 200, restart-resume verified; GET /api/lab/history/[address] live",
-    "embeddedTrading": "P0 COMPLETE (code): bpsDirectV4 (mandatory, Universal Router V4_SWAP, hook-aware V4 Quoter, token-order-resolved, Permit2 approvals) + zeroEx (optional, server-only key, Settler-approval rejected). POST /api/lab/quote (no longer 501) + POST /api/lab/trade/prepare (signed envelope, balance/allowance/simulation, no server signer). Trade card + real-swap chart on the token page; Matcha secondary. LIVE PROOF of buy/sell/indexed-swaps/chart DEFERRED to the launch sequence — requires an on-chain lab market, which only the Genesis launch creates. Broadcast still disabled, kill switch active.",
-    "multiAnchor": "COMPLETE (backend): approved-anchor registry GOOGL/NVDA/AAPL/TSLA/SPCX — each resolved from Robinhood /assets, on-chain verified, and proven via exact rehype launch simulation (docs/launch-lab/ANCHOR_VERIFICATION.json). Selection by approved symbol only; arbitrary addresses rejected. Propagates through resolver/manifest/simulation/tx/receipt/registry(+anchor_symbol col)/listing/token-page/swap-routing/0x/indexer(OR-filter discovery). GET /api/lab/anchors. UI anchor picker + simplified Token→Pair→Launch wizard in progress (agent).",
-    "marketsProfileFees": "COMPLETE: GET /api/lab/profile/[wallet], GET /api/lab/fees/[token]?beneficiary= (contract-backed), POST /api/lab/fees/claim/prepare (unsigned collectFees(poolId), beneficiary-authority-gated). /api/lab/tokens + /lab/profile UI shipped. Immutable 85/10/5; fee destination via creatorFeeAddress.",
-    "provenanceHotfix": "COMPLETE + DEPLOYED (commit 882f66e): authoritative BPS market set = provenance_verified lab_launches rows only, written when POST /api/lab/launches matches the created token to an UNCONSUMED manifest THIS server issued at /api/lab/prepare (single-use consumed_at; idempotent re-registration). Approved-anchor + generic DopplerHookInitializer is NOT a BPS fingerprint. Additive migration (launch_source, provenance_verified default false, provenance_verified_at, manifest_hash, lab_prepared ledger). Web store listLaunches selects verified rows only (guardrails/profile/tokens/history inherit). Indexer rewritten: loads verified markets from Postgres, enriches poolId, indexes only those, reloads every poll (new market tracked WITHOUT restart — synthetic test 0->1->0), knownPools counts verified pools (production=0 pre-launch, verified live). listLaunchesOnChain marked recovery-only/unused. 6 external GOOGL/Doppler markets classified unverified (creators 0x97Db/0xB4d7/0x6315, not BPS) — PROVENANCE_REPORT_2026-07-27.txt; targeted dry-run cleanup script awaits founder approval (no broad DELETE). 51 pkg + 9 indexer + 219 web tests; migration idempotent 2x; plain-node import OK; dist clean; no secrets. Broadcast off / kill switch on.",
-    "claudeDesignV4": "COMPLETE + DEPLOYED (commit bf62164): V4 design system (lab.css .lab-root scoped, runtime fonts with system fallbacks — no build-time font network dependency), routes /lab→/lab/tokens, /lab/create→/lab/launch, /lab/dashboard→/lab/profile, /lab/profile→connected, token/[tokenAddress], NEW /lab/proof/[tokenAddress]. All sample data stripped; honest empty states verified in production (No BPS markets have launched yet). DC runtime/support.js not shipped. All functional wiring preserved. QA: 51+9+215 tests, lint/typecheck/build clean, no secrets/sample values in bundles, zero console errors desktop+mobile, no 375px overflow. Rollback tag pre-design-v4-integration pushed to origin.",
-    "tradingAcceptanceGate": "The first real market IS the trading acceptance test: at the founder launch gate, enable broadcast → founder signs Genesis launch → embedded buy + partial sell on the token page (<=$50/trade, <=$250 total) → verify indexer records both swaps + chart populates. Only then is the bidirectional gate passed.",
-    "paymentRouting": "COMPLETE + DEPLOYED (commit 566ae99): users pay/receive ETH/WETH/USDG; the RWA anchor is INTERNAL routing (advanced-only + collapsed route details). Verified canonical payment tokens on 4663: WETH 0x0Bd7…AD73 18dp, USDG Global Dollar 0x5fc5…d168 6dp, native ETH sentinel. POST /api/lab/quote reshaped {marketToken,side,inputToken,outputToken,exactInputAmount,taker,slippageBps} → full route (legs, min/expected, impact, fee, approvals, wallet-action count, expiry, warnings). One-transaction 0x route first, else composed fallback (0x payment↔anchor + verified BPS Direct anchor↔token) as explicit sequential wallet actions — NEVER claimed atomic. New POST /api/lab/trade/prepare-leg (per-leg signed envelope, balance incl native ETH, allowance, exact-calldata simulation, no server signer). Trade card + use-trade reworked (payment selectors, composed leg N+1 uses ACTUAL received amount). Composed-trade RECOVERY: trade-recovery.ts localStorage persists only non-secret public state (hard allow-list rejects any signature/calldata on save+load); on refresh/interruption shows Trade/Sale partially completed banner + leg-1 Blockscout link + resume (re-quotes leg 2 from ACTUAL amount, never auto-submit) + cancel-and-keep-anchor. 234 web + 53 pkg + 9 indexer tests.",
-    "zeroEx": "ACTIVE + DEPLOYED (ZEROX_API_KEY in .env.local + Vercel Preview/Prod; server-only, never in bundles). Live 0x v2 probe (chainId 4663, 0x-api-key + 0x-version headers): ETH→WETH and ETH→USDG return liquidity; WETH→NVDA and USDG→GOOGL return 422 (0x has NO payment↔RWA-anchor liquidity on 4663 yet). FIX: removed a wrong spender==to rejection — in the allowance-holder flow the AllowanceHolder is correctly both spender and tx target; we approve exactly issues.allowance.spender, never a Settler; native ETH needs no approval. Errors/no-route sanitized; key absent from served HTML/JS/API responses (verified on production). CONSEQUENCE: one-transaction and composed ETH/WETH/USDG routes activate only as 0x indexes a market; until then the anchor-direct BPS route is offered honestly (no faked route)."
+ "schemaVersion": "1.0.0",
+ "launchLab": {
+  "lane": "BPS RWA Launch Lab (separate product lane; Capital Engine untouched)",
+  "authorization": "founder 8H authorization (chat 2026-07-27); spec docs/launch-lab/BPS_LAUNCH_LAB_8H_VERCEL_MASTER_PROMPT.md",
+  "branch": "feature/bps-launch-lab-8h-vercel @ 01c8cfd02da6382d472d582b5a605018714f97fc (master checkpoints 06ff34b Stage-A continuity, dec2794 planning docs)",
+  "laneLog": "docs/launch-lab/BPS_LAUNCH_LAB_8H_PROGRESS.md",
+  "hardGate": "PASSED — rehype multicurve PRINT/GOOGL creation simulated on live 4663 (docs/launch-lab/SPIKE_LAUNCH_PROOF.json); standard/scheduled/decay multicurve initializers absent on 4663",
+  "sdk": "@whetstone-research/doppler-sdk@1.0.33 (pinned)",
+  "vercel": {
+   "project": "bps-launch-lab (team zavo1, root apps/web, Node 24.x)",
+   "state": "Preview + Production deployed FAIL-CLOSED at commit 01c8cfd (broadcast disabled, kill switch active, access public). Production URL https://bps-launch-lab.vercel.app — health 200, commit 01c8cfd02da6, rpc ok, database ok. Client bundles verified free of RIALTO/ZEROX/ONEINCH key names and venue base URLs.",
+   "previewProtection": "team-auth wall on preview URLs; QA performed on local prod server of identical build"
   },
-  "updatedUtc": "2026-07-27T05:44:12Z",
-  "repositoryPath": "C:\\Projects\\bps-experiment",
-  "branch": "master",
-  "head": "5f71acc2ddc178a4aca95a8eae42bf08033389e3 (ops(canary): finalize private execution bundle)",
-  "workingTree": {
-    "dirty": true,
-    "note": "Only continuity/doc files modified by the Stage-A guard-verification + launcher-repair task (HANDOVER.md + these continuity files). NO source/contract/bundle change. The repaired ephemeral launcher and the scratch paris rebuild live OUTSIDE the repo (in the OS temp dir) and are not tracked. forge-std v1.9.7 lives in gitignored packages/contracts/lib; run packages/contracts/tool/bootstrap-forge-std.{sh,ps1} on a fresh clone before forge test.",
-    "modified": [
-      "HANDOVER.md",
-      "docs/continuity/CURRENT_STATE.json",
-      "docs/continuity/CHANGELOG.md"
-    ],
-    "deleted": [],
-    "untracked": [
-      "docs/launch-lab/ (pre-existing; not created or modified by this task)"
-    ]
+  "genesisLaunch": "NOT executed; requires founder launch-gate approval + founder wallet signatures",
+  "blockers": {
+   "LL-1": "CLOSED 2026-07-27 — healthy RPC configured (local + Vercel); hard-gate re-run green; public-RPC fallback retained",
+   "LL-2": "CLOSED 2026-07-27 — Railway bps-production/bps-postgres (PostgreSQL 18.4); connectivity, idempotent schema, mirror idempotency, cross-instance replay, and failure fallback all verified (scripts/verify-db.mjs)",
+   "LL-3": "Vercel preview deployment protection blocks external preview QA (production URL is public; low priority)",
+   "LL-4": "OPEN — RIALTO_API_KEY is configured LOCALLY only; it is NOT present in Vercel (Preview or Production), so deployed Rialto routing is dormant (adapter fail-closes; chain falls through to 0x, which has NO payment↔anchor liquidity on 4663 → composed routes 409 NO_ROUTE in production). Smallest resolution: founder adds RIALTO_API_KEY (server-side, Sensitive) to Vercel Preview+Production and redeploys. Claude must never handle the secret value.",
+   "LL-5": "OPEN (dormant-by-design) — ONEINCH_API_KEY not configured anywhere; 1inch adapter is dormant-but-ready per routing order (priority 2)."
   },
-  "phase": "stage-a-in-progress (guard DEPLOYED+verified; executor NOT yet deployed)",
-  "privateCanaryExecutionBundle": {
-    "task": "TASK 10K-10",
-    "status": "PRIVATE_CANARY_EXECUTION_BUNDLE_READY",
-    "evmVersionPinned": "paris ([profile.canary] in foundry.toml)",
-    "reproducibleTwoBuildsIdentical": true,
-    "executorCreationHash": "0xbf0d3bb70372c0ed6598d451c7967a0f83b40c92ad219b1826c51cbb0d350fa0",
-    "executorRuntimeHash": "0x16c8afa9344bcbef44ceb073368d723ba7fba6f87fb83b74db9a9efded770908",
-    "guardCreationHash": "0x9385b6b4bb6a94d3d09a2cd23abf2d449ac481a2c9f62c66ebf900c3eea20b34",
-    "guardRuntimeHash": "0x4c5859271a39e5e9b86cff9932b433e292d79ba749ae3e6d66b8403ca5ea92e8",
-    "runtimeHashesArePreImmutableTemplates": "CRITICAL: executorRuntimeHash and guardRuntimeHash above are Foundry deployedBytecode TEMPLATES with ZEROED immutable placeholders. The ON-CHAIN runtime has constructor immutables spliced in, so its keccak DIFFERS. Never compare a deployed runtime against these template hashes — use resolvedRuntimeHashes below.",
-    "resolvedRuntimeHashes": {
-      "guard": "0xfcb2694b60737532d4d44ede77750068cfb0c0756263c1aaceede57fc74857f4",
-      "executor": "0xf864233b76b77d05fd95250a3641839941fc00fc4aed3ac736458be957273a8d",
-      "derivedUtc": "2026-07-27",
-      "methods": "guard: reconstruct(template + solc immutableReferences + frozen args + live-read feed/token values)==LIVE runtime, AND masked byte-compare confirms every live/template diff is confined to immutable ranges; executor: identical AST-splice AND a read-only eth_call creation-simulation against mainnet state — both methods agree."
-    },
-    "deployer": "0x7116F2998e625651D310E97919a1c638a7F82ba2",
-    "deployerNonceAtBundleGen": 1,
-    "deployerNonceNow": 2,
-    "predictedGuard": "0x57538680194D9E15Ba78bf243B10B440f663078d",
-    "predictedExecutor": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
-    "guardDeployedAtNonce1": true,
-    "executorDeploysAtNonce2": true,
-    "maxAllInclusiveExposureUsd": 2.93,
-    "exposureCapUsd": 130,
-    "usd130CoversLifecycle": true,
-    "remainingExecutionTimeInputs": [
-      "deployer gas funding if required",
-      "human signatures/broadcasts",
-      "fresh live Rialto quote",
-      "open NVDA session"
-    ],
-    "artifacts": [
-      "docs/audit/BPS_PRIVATE_CANARY_EXECUTION_BUNDLE_2026-07-26.md",
-      "docs/audit/BPS_PRIVATE_CANARY_EXECUTION_BUNDLE_2026-07-26.evidence.json",
-      "packages/contracts/deploy/canary-bundle/unsigned-deployment.json",
-      "packages/contracts/deploy/canary-bundle/unsigned-safe-transactions.json",
-      "packages/contracts/deploy/canary-bundle/verification-manifest.json"
-    ]
-  },
-  "stageAExecution": {
-    "authorization": "founder 'EXECUTE STAGE A' under PCE-1 — deploy+verify ONLY the frozen guard and executor; NO Safe config, unpause, WETH funding, approval, quote, or settlement.",
-    "guard": {
-      "status": "DEPLOYED_AND_VERIFIED",
-      "address": "0x57538680194D9E15Ba78bf243B10B440f663078d",
-      "deployTx": "0xc3095c2ed7d4b8365dde2b6a7d76220a75806c552e4f3e17361fa2aedbb4256f",
-      "deployerNonce": 1,
-      "block": 20167604,
-      "blockTimeUtc": "2026-07-26T20:44:17Z",
-      "gasUsed": 1121401,
-      "liveRuntimeHash": "0xfcb2694b60737532d4d44ede77750068cfb0c0756263c1aaceede57fc74857f4",
-      "verification": "Read-only RPC: receipt status success, from deployer, contractAddress==predicted, nonce 1, value 0, to null. Live runtime keccak == resolved guard hash. Masked byte-compare vs paris template: every difference confined to solc immutable reference ranges. All 14 immutables (each consistent across its reference sites) equal the frozen constructor args + live-read feed/token values. All 14 public immutable getters match. Reconstructed(template+expected immutables)==live runtime exactly."
-    },
-    "executor": {
-      "status": "NOT_DEPLOYED — expected runtime hash derived offline; awaiting human broadcast via repaired launcher",
-      "predictedAddress": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
-      "deploysAtNonce": 2,
-      "expectedResolvedRuntimeHash": "0xf864233b76b77d05fd95250a3641839941fc00fc4aed3ac736458be957273a8d",
-      "immutables": {
-        "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
-        "stockToken": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
-        "registry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
-        "note": "controller (Safe 0x62Ae...5E62) is NOT immutable — it is Ownable storage set at construction."
-      },
-      "derivationCrossCheck": "AST-splice offline == read-only eth_call creation-simulation against live mainnet state == 0xf864233b...273a8d (both agree; differs from template 0x16c8af...0908). Simulation also confirms the executor constructor does not revert against live state."
-    },
-    "preExecutorChainState": {
-      "checkedUtc": "2026-07-27T05:44:12Z",
-      "deployerLatestNonce": 2,
-      "deployerPendingNonce": 2,
-      "guardCodePresent": true,
-      "executorAddressEmpty": true,
-      "deployerBalanceWei": "427902428602000",
-      "gasPriceWei": "48972000",
-      "balanceSufficientForExecutor": true
-    },
-    "launcher": {
-      "location": "OS temp (NOT in repo): %TEMP%/bps-stage-a-launcher/server.mjs",
-      "repairedUtc": "2026-07-27",
-      "sha256": "d2c5d5d3bfd18e5cd9cce160335af82f3ea85d6fac9d1ffa72dc1eb4d5ebe731",
-      "changes": "Now EXECUTOR-ONLY (guard already deployed). Post-deploy runtime validation compares the deployed code hash against the IMMUTABLE-RESOLVED expected hashes (guard 0xfcb2694b..., executor 0xf864233b...), NOT the pre-immutable template hashes (previous defect — would have failed every deploy). Preflight enforces the founder recheck: latest & pending nonce==2, guard present AND its live runtime hash == resolved guard hash, executor empty, balance >= executor gas*price. Binds 127.0.0.1:8799; no key; single eth_sendTransaction; read-only RPC allowlist; server-side viem keccak; startup self-checks (viem, bundle deploy-data, resolved!=template).",
-      "notRunning": "server was smoke-tested read-only then stopped; human restarts it to broadcast the executor",
-      "broadcastPerformed": false
-    }
-  },
-  "privateCanaryException": {
-    "id": "PCE-1",
-    "status": "PREPARED_NOT_EXECUTED (bundle ready; not yet consumed)",
-    "authorizedBy": "founder (chat 2026-07-26)",
-    "bounds": "one WETH->NVDA cycle; <= $130 all-inclusive; no public users; no production reuse; mandatory pause + recovery after",
-    "perAcquisitionCapWeth": "0.001",
-    "controllerSafe": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
-    "b1AuditSatisfied": false,
-    "b2CounselSatisfied": false,
-    "d24WeakenedForProduction": false,
-    "executionPerformed": false,
-    "requiresSeparateExecuteGoSignal": true,
-    "artifacts": [
-      "docs/decisions/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.md",
-      "packages/contracts/deploy/PRIVATE_CANARY_DEPLOY_PACKET_2026-07-26.md",
-      "docs/audit/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.evidence.json"
-    ]
-  },
-  "executorActivation": {
-    "externalReviewPacketReady": true,
-    "executorDeployed": false,
-    "candidateFrozenCommit": "5181f1b (source SHA-256 recorded in evidence)",
-    "gateStatus": {
-      "B-1_independentAudit": "OPEN — no independent audit; Claude's review is NOT independent",
-      "D-23_counsel": "COUNSEL-PENDING — B-2 unresolved; no counsel opinion in repo",
-      "D-24": "FULLY IN FORCE — not satisfied; requires D-1..D-23 approved + selector pinned + audit B-1 + legal B-2 + fresh independently-reviewed authorization",
-      "ballotReturned": false,
-      "D-3_note": "repo D-3 is a server-env key-scope policy ('never'), NOT the audit gate; the audit gate is B-1"
-    },
-    "status": "EXECUTOR_EXTERNAL_REVIEW_PACKET_READY — activation prohibited",
-    "evidence": "docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.*"
-  },
-  "safeController": {
-    "deployed": true,
-    "address": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
-    "safeVersion": "1.4.1",
-    "type": "SafeL2 2-of-3 multisig",
-    "owners": [
-      "0x7116F2998e625651D310E97919a1c638a7F82ba2",
-      "0x006024ff3b9b707ad0779eD3586546440fAAC49f",
-      "0xd5Bb1534Efc88400f34A832D85D0939c0e2F1759"
-    ],
-    "threshold": 2,
-    "nonce": 0,
-    "deployTx": "0x09a4b2c179da9b1ab2abfc0c2b8067a07fe5850f026d8f8aa89af4d5451ccbb0",
-    "block": 19831992,
-    "role": "verified CANDIDATE contract controller",
-    "activatedAsExecutorController": false,
-    "note": "Safe deployed + verified (29/29 checks). NOT activated — no GuardedSettlementExecutor exists. Owns/controls nothing. Evidence docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.*"
-  },
-  "latestCompletedMilestone": "STAGE A (step 1 of 2) — guard DEPLOYED + independently verified, and executor expected runtime hash derived offline (2026-07-26/27). Guard ChainlinkSettlementPriceGuard live at 0x5753...078d (tx 0xc3095c2e..., nonce 1, block 20167604). CRITICAL CORRECTION: the bundle runtimeBytecodeHash fields (guard 0x4c5859...92e8, executor 0x16c8af...0908) are PRE-IMMUTABLE Foundry templates; the immutable-RESOLVED runtime hashes are guard 0xfcb2694b...857f4 (== live) and executor 0xf864233b...273a8d (derived by two agreeing methods). Live guard proven: masked byte-compare shows every live/template diff confined to solc immutable ranges; all 14 immutables + getters match frozen args + live feed/token reads; reconstruct==live. Ephemeral Rabby launcher repaired to executor-only + immutable-resolved validation. NO Safe config/unpause/fund/approve/quote/settle; executor NOT yet broadcast. Prior: TASK 10K-10 (5f71acc)",
-  "currentTask": "Stage A step 2 pending: executor NOT yet deployed. Repaired launcher (%TEMP%/bps-stage-a-launcher/server.mjs) is ready for the human to broadcast the single executor CREATE at nonce 2; it validates the deployed runtime against the resolved hash 0xf864233b...273a8d. Claude does not broadcast. After broadcast, run read-only Stage-A executor verification + continuity update.",
-  "buildReadiness": "CANARY_BUILD_READY_EXECUTION_LOCKED",
-  "runtimeReadiness": "STAGE_A_GUARD_DEPLOYED_EXECUTOR_PENDING (guard live+verified; executor awaiting human broadcast via repaired launcher; NO Safe/unpause/fund/approve/quote/settle authorized — later PCE-1 stages need a separate go-signal + open NVDA session + fresh live quote)",
-  "nextTask": "(A) Stage A step 2: human broadcasts the executor CREATE (nonce 2) via the repaired launcher; then Claude runs read-only executor verification (receipt/addr/nonce/value; deployed runtime hash == 0xf864233b...273a8d; owner==Safe 0x62Ae...5E62; paused==true; weth/stockToken/registry immutables) and updates continuity. Executor deploys PAUSED/fail-closed. (B) Later PCE-1 stages (Safe config, unpause, WETH fund, approve, quote, settle) each require a separate bounded founder go-signal — NOT authorized now. (C) Production (still fully gated): B-1 audit, D-23/B-2 counsel, returned ballot, a new D-24-replacing authorization.",
-  "chain": {
-    "name": "Robinhood Chain Mainnet",
-    "chainId": 4663,
-    "chainIdHex": "0x1237",
-    "nativeAsset": "ETH",
-    "explorer": "https://robinhoodchain.blockscout.com",
-    "verifiedAtBlock": 18821299,
-    "verifiedUtc": "2026-07-25T07:10:56Z"
-  },
-  "productionStatus": {
-    "deployed": false,
-    "verdict": "NO-GO (TASK 7/9). Canonical BPS production is NOT deployed and requires a fresh, separately authorized deployment.",
-    "bpscIsProduction": false
-  },
-  "canaryStatus": {
-    "kind": "BPSC-TEST canary (NOT canonical BPS production)",
-    "complete": true,
-    "reconciled": true,
-    "plannedTransactions": 19,
-    "completedTransactions": 19,
-    "deployerNonce": {
-      "latest": 16,
-      "pending": 16
-    },
-    "testerNonce": {
-      "latest": 8,
-      "pending": 8
-    },
-    "testerNonce8Executed": false,
-    "testerNonce8Authorized": false,
-    "delayedWithdrawalUnlockUtc": "2026-07-31T23:02:26Z",
-    "lpPositionTokenId": 371728,
-    "pool": "0x4A429194dC4E4A1f3b1cD24bBaf7754f65ABc5EF",
-    "realizedGasAll19Wei": "1881602384200000",
-    "acquisitionBudgetAccruedWei": "31435920663381",
-    "bpscBurnedTotal": "19075555916145897703744",
-    "lifecycleFullyDemonstrated": false,
-    "lifecycleForkRehearsal": {
-      "classification": "REHEARSAL PASS",
-      "date": "2026-07-25",
-      "pinnedForkBlock": 18791290,
-      "pinnedForkBlockHash": "0x2d332bb08395b53f571015af9959d1a0e9c68baec300265b08fe77b38ef1516f",
-      "mockedBoundary": "Rialto feature-2 settlement venue (dev-only MockRialtoRouter via fork-local vm.mockCall of registry.ownerOf(2))",
-      "evidence": [
-        "docs/audit/BPS_DISTRIBUTION_LIFECYCLE_FORK_REHEARSAL_2026-07-25.md",
-        "docs/audit/BPS_DISTRIBUTION_LIFECYCLE_FORK_REHEARSAL_2026-07-25.evidence.json"
-      ],
-      "provesProductionReadiness": false,
-      "realRwaSettlementOccurred": false,
-      "evidenceSha256": "2557a3d782bd38b2c679902578f7bc5519b7b0e5f82f9fdea85e28a77d5cb065",
-      "checkpointCommit": "d699f7aea2d8ec7ebf47de8a9d2789791b8da92f"
-    }
-  },
-  "deployedCanaryContracts": {
-    "note": "Actual on-chain addresses (authoritative). The deploy registry predicted map is offset and its actual map is null (see HANDOVER.md DOC-1).",
-    "canaryToken": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
-    "lockingVault": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
-    "claimManager": "0x5EcbADf1cF050F1B86D44B979416A8e859Fb2574",
-    "rialtoAdapter": "0xbe2C8c6CB7CeeED24708419F5aaEEF8d949866AE",
-    "coordinator": "0xE3Bd9e1D58d16A31912f804f931Cc6bfcD702205",
-    "stockVault": "0x9a5a55361BcFDD6Ded4A6EAa02D997F1108EdeC6",
-    "uniswapAdapter": "0x5891Dcc2BACD1ADC8b5a9C30B365931290d7E5E1",
-    "tradeRouter": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6"
-  },
-  "wallets": {
-    "deployer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
-    "controlledTester": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
-    "productionOperatorSafe": "UNRESOLVED"
-  },
-  "canonicalArtifacts": {
-    "economicsPolicy": "BPS-ECON-2.0",
-    "acquisitionMandate": "BPS-FRONTIER-10-1.0 (basket PROPOSED, pending approval + registry re-verification)",
-    "restrictedPolicy": "BPS-RESTRICTED-1.0 (draft)",
-    "acceptedExecutionZip": "canary-rabby-recovery-execution-review-v9.zip",
-    "acceptedExecutionZipBytes": 578871,
-    "acceptedExecutionZipSha256": "0c958a58b8684878c4dfce4a15cdba3b2fc0e39680d46902430ab6e78a09b74d",
-    "recoveryAuthorizationDigest": "0xc50d97d780c48308667d17366e383be0b70556e0d0bfbab69225222e228d8314",
-    "evidenceManifestSha256": "d6005083b20e5188ce783cde5b30159b56228398d5bf204746b536e9e36b8ec3",
-    "expiredArtifactsAreEvidenceOnly": true
-  },
-  "deploymentRegistryReferences": [
-    "packages/contracts/deploy/robinhood-mainnet.canary.json",
-    "packages/contracts/deploy/robinhood-mainnet.dryrun.json",
-    "packages/contracts/deploy/manifest.schema.json",
-    "packages/contracts/deploy/RUNBOOK.md",
-    "docs/audit/BPS_CANARY_MAINNET_COMPLETION_2026-07-25.md",
-    "docs/audit/BPS_CANARY_MAINNET_COMPLETION_2026-07-25.evidence.json"
+  "publicAccessRetrofit": "COMPLETE: ACCESS_MODE disabled|allowlist|public (fail-closed), guardrail env knobs, terms acknowledgement, chain-reconstructed launch registry + Postgres mirror (LL-2 verified)",
+  "webHealth": "GET /api/lab/health live 200 (sanitized; Better Stack incident resolved)",
+  "indexer": "apps/lab-indexer deployed on Railway bps-production; /health 200, restart-resume verified; GET /api/lab/history/[address] live",
+  "embeddedTrading": "P0 COMPLETE (code): bpsDirectV4 (mandatory, Universal Router V4_SWAP, hook-aware V4 Quoter, token-order-resolved, Permit2 approvals) + zeroEx (optional, server-only key, Settler-approval rejected). POST /api/lab/quote (no longer 501) + POST /api/lab/trade/prepare (signed envelope, balance/allowance/simulation, no server signer). Trade card + real-swap chart on the token page; Matcha secondary. LIVE PROOF of buy/sell/indexed-swaps/chart DEFERRED to the launch sequence — requires an on-chain lab market, which only the Genesis launch creates. Broadcast still disabled, kill switch active.",
+  "multiAnchor": "COMPLETE (backend): approved-anchor registry GOOGL/NVDA/AAPL/TSLA/SPCX — each resolved from Robinhood /assets, on-chain verified, and proven via exact rehype launch simulation (docs/launch-lab/ANCHOR_VERIFICATION.json). Selection by approved symbol only; arbitrary addresses rejected. Propagates through resolver/manifest/simulation/tx/receipt/registry(+anchor_symbol col)/listing/token-page/swap-routing/0x/indexer(OR-filter discovery). GET /api/lab/anchors. UI anchor picker + simplified Token→Pair→Launch wizard in progress (agent).",
+  "marketsProfileFees": "COMPLETE: GET /api/lab/profile/[wallet], GET /api/lab/fees/[token]?beneficiary= (contract-backed), POST /api/lab/fees/claim/prepare (unsigned collectFees(poolId), beneficiary-authority-gated). /api/lab/tokens + /lab/profile UI shipped. Immutable 85/10/5; fee destination via creatorFeeAddress.",
+  "provenanceHotfix": "COMPLETE + DEPLOYED (commit 882f66e): authoritative BPS market set = provenance_verified lab_launches rows only, written when POST /api/lab/launches matches the created token to an UNCONSUMED manifest THIS server issued at /api/lab/prepare (single-use consumed_at; idempotent re-registration). Approved-anchor + generic DopplerHookInitializer is NOT a BPS fingerprint. Additive migration (launch_source, provenance_verified default false, provenance_verified_at, manifest_hash, lab_prepared ledger). Web store listLaunches selects verified rows only (guardrails/profile/tokens/history inherit). Indexer rewritten: loads verified markets from Postgres, enriches poolId, indexes only those, reloads every poll (new market tracked WITHOUT restart — synthetic test 0->1->0), knownPools counts verified pools (production=0 pre-launch, verified live). listLaunchesOnChain marked recovery-only/unused. 6 external GOOGL/Doppler markets classified unverified (creators 0x97Db/0xB4d7/0x6315, not BPS) — PROVENANCE_REPORT_2026-07-27.txt; targeted dry-run cleanup script awaits founder approval (no broad DELETE). 51 pkg + 9 indexer + 219 web tests; migration idempotent 2x; plain-node import OK; dist clean; no secrets. Broadcast off / kill switch on.",
+  "claudeDesignV4": "COMPLETE + DEPLOYED (commit bf62164): V4 design system (lab.css .lab-root scoped, runtime fonts with system fallbacks — no build-time font network dependency), routes /lab→/lab/tokens, /lab/create→/lab/launch, /lab/dashboard→/lab/profile, /lab/profile→connected, token/[tokenAddress], NEW /lab/proof/[tokenAddress]. All sample data stripped; honest empty states verified in production (No BPS markets have launched yet). DC runtime/support.js not shipped. All functional wiring preserved. QA: 51+9+215 tests, lint/typecheck/build clean, no secrets/sample values in bundles, zero console errors desktop+mobile, no 375px overflow. Rollback tag pre-design-v4-integration pushed to origin.",
+  "tradingAcceptanceGate": "The first real market IS the trading acceptance test: at the founder launch gate, enable broadcast → founder signs Genesis launch → embedded buy + partial sell on the token page (<=$50/trade, <=$250 total) → verify indexer records both swaps + chart populates. Only then is the bidirectional gate passed.",
+  "paymentRouting": "SUPERSEDED by rialtoRouting/frozenV1UI (commit 01c8cfd); baseline (commit 566ae99): users pay/receive ETH/WETH/USDG; the RWA anchor is INTERNAL routing (advanced-only + collapsed route details). Verified canonical payment tokens on 4663: WETH 0x0Bd7…AD73 18dp, USDG Global Dollar 0x5fc5…d168 6dp, native ETH sentinel. POST /api/lab/quote reshaped {marketToken,side,inputToken,outputToken,exactInputAmount,taker,slippageBps} → full route (legs, min/expected, impact, fee, approvals, wallet-action count, expiry, warnings). One-transaction 0x route first, else composed fallback (0x payment↔anchor + verified BPS Direct anchor↔token) as explicit sequential wallet actions — NEVER claimed atomic. New POST /api/lab/trade/prepare-leg (per-leg signed envelope, balance incl native ETH, allowance, exact-calldata simulation, no server signer). Trade card + use-trade reworked (payment selectors, composed leg N+1 uses ACTUAL received amount). Composed-trade RECOVERY: trade-recovery.ts localStorage persists only non-secret public state (hard allow-list rejects any signature/calldata on save+load); on refresh/interruption shows Trade/Sale partially completed banner + leg-1 Blockscout link + resume (re-quotes leg 2 from ACTUAL amount, never auto-submit) + cancel-and-keep-anchor. 234 web + 53 pkg + 9 indexer tests.",
+  "zeroEx": "ACTIVE + DEPLOYED (ZEROX_API_KEY in .env.local + Vercel Preview/Prod; server-only, never in bundles). Live 0x v2 probe (chainId 4663, 0x-api-key + 0x-version headers): ETH→WETH and ETH→USDG return liquidity; WETH→NVDA and USDG→GOOGL return 422 (0x has NO payment↔RWA-anchor liquidity on 4663 yet). FIX: removed a wrong spender==to rejection — in the allowance-holder flow the AllowanceHolder is correctly both spender and tx target; we approve exactly issues.allowance.spender, never a Settler; native ETH needs no approval. Errors/no-route sanitized; key absent from served HTML/JS/API responses (verified on production). CONSEQUENCE: one-transaction and composed ETH/WETH/USDG routes activate only as 0x indexes a market; until then the anchor-direct BPS route is offered honestly (no faked route).",
+  "rialtoRouting": "COMPLETE + DEPLOYED (commit 01c8cfd): Rialto is the PRIMARY payment↔Stock-Token venue. Frozen V1 architecture — BUY: payment(ETH/WETH/USDG) → Rialto → RWA anchor → BPS Direct → market token; SELL reversed. One-step aggregator routes tried first via the frozen priority chain Rialto → 1inch → 0x (never depended on for new BPS pools). Adapters: apps/web/lib/lab/rialto.ts (server-only; GET /quote Bearer RIALTO_API_KEY; settlement=allowance enforced; chain_id 4663 guard; issues.allowance.spender used EXACTLY; human-decimal sell_amount via formatUnits; native ETH → no approval; fail-closed) and oneinch.ts (v6, Router 0x5A705DE8982235a7fa45bB83dCaCf03a211389C7; DORMANT until ONEINCH_API_KEY exists; FAILS CLOSED if /approve/spender yields no address — never approves tx.to). prepare-leg hardened after adversarial review (17-agent workflow, 13 confirmed findings ALL fixed): server always re-runs the priority chain regardless of the client kind hint (response reports the venue used — fixes sell-resume 0x pinning); aggregator token binding (counter-side must be the market token or its anchor; payment→payment rejected); venue tx value bound (native leg value===amountIn, ERC-20 leg value===0 → BAD_VALUE). trade-router: one-step SELL approves the MARKET token; composed SELL minimum uses the venue-enforced minimum (no double slippage). use-trade: stale quote rejected+auto-refreshed before preparation; NEVER signs without simulation=ok; re-entrancy guard; quote retired after success. Live Rialto probe (2026-07-27, authenticated, local key): all 5 anchors × ETH/WETH/USDG executable both directions, settlement=allowance, platform fee 5 bps, router spender 0xc94135b6…59bd, WETH→NVDA fills where 0x 422s. No BPS integrator fee in V1.",
+  "frozenV1UI": "COMPLETE + DEPLOYED (commit 01c8cfd): primary surface = Buy/Sell tabs (disabled while busy), You pay, You receive, balance, expected output, ONE primary action button (Get quote → Buy/Sell). Collapsed 'Trade details' holds: slippage control, minimum received, price impact, pool fee, venue fee, internal anchor, wallet-action count, route legs + venues, warnings, and the advanced pay/receive-the-anchor option. Ordinary users never need to own the Stock Token. Runtime execution status (step progress, receipts, recovery banners) stays visible — only pre-trade routing internals are folded away.",
+  "testSummary": "2026-07-27 full gate: 307 web vitest (40 files) + 53 @bps/launch-lab + 9 @bps/lab-indexer, monorepo lint + typecheck clean, apps/web production build clean, client-asset secret scan clean. New coverage: Rialto/1inch adapters, priority order, 5-anchor × 3-payment matrix both directions, composed buy/sell routing, prepare-leg rejection matrix (taker/chain/token-binding/value), sell-side recovery + resume, in-session ACTUAL-delta leg-2 pinning, expired-quote refresh, venue-fee display, frozen-UI compliance."
+ },
+ "updatedUtc": "2026-07-27T18:09:50.127Z",
+ "repositoryPath": "C:\\Projects\\bps-experiment",
+ "branch": "master",
+ "head": "5f71acc2ddc178a4aca95a8eae42bf08033389e3 (ops(canary): finalize private execution bundle)",
+ "workingTree": {
+  "dirty": true,
+  "note": "Only continuity/doc files modified by the Stage-A guard-verification + launcher-repair task (HANDOVER.md + these continuity files). NO source/contract/bundle change. The repaired ephemeral launcher and the scratch paris rebuild live OUTSIDE the repo (in the OS temp dir) and are not tracked. forge-std v1.9.7 lives in gitignored packages/contracts/lib; run packages/contracts/tool/bootstrap-forge-std.{sh,ps1} on a fresh clone before forge test.",
+  "modified": [
+   "HANDOVER.md",
+   "docs/continuity/CURRENT_STATE.json",
+   "docs/continuity/CHANGELOG.md"
   ],
-  "testSummary": {
-    "lastFullRunUtc": "2026-07-25",
-    "npmRunCheck": "PASS",
-    "foundry": {
-      "passed": 418,
-      "failed": 0,
-      "suites": 47,
-      "note": "incl. fork lifecycle rehearsal + probe (skip-gated on ROBINHOOD_FORK_RPC)"
-    },
-    "webVitest": {
-      "passed": 177,
-      "files": 25
-    },
-    "sharedVitest": {
-      "passed": 52
-    },
-    "pilotVitest": {
-      "passed": 30
-    },
-    "rialtoVitest": {
-      "passed": 79,
-      "files": 5,
-      "note": "corrected two-feed price guard (20 required cases + sequencer)"
-    },
-    "canaryVerifyAll": "PASS (9 suites)",
-    "playwrightE2E": "PASS (historical ~2026-07-24; single smoke flow; rerun before relying)",
-    "externalSecurityAudit": "NOT_PERFORMED",
-    "indexerVitest": {
-      "passed": 37,
-      "files": 6,
-      "note": "lock-snapshot pipeline suites added in 10G-1"
-    }
+  "deleted": [],
+  "untracked": [
+   "docs/launch-lab/ (pre-existing; not created or modified by this task)"
+  ]
+ },
+ "phase": "stage-a-in-progress (guard DEPLOYED+verified; executor NOT yet deployed)",
+ "privateCanaryExecutionBundle": {
+  "task": "TASK 10K-10",
+  "status": "PRIVATE_CANARY_EXECUTION_BUNDLE_READY",
+  "evmVersionPinned": "paris ([profile.canary] in foundry.toml)",
+  "reproducibleTwoBuildsIdentical": true,
+  "executorCreationHash": "0xbf0d3bb70372c0ed6598d451c7967a0f83b40c92ad219b1826c51cbb0d350fa0",
+  "executorRuntimeHash": "0x16c8afa9344bcbef44ceb073368d723ba7fba6f87fb83b74db9a9efded770908",
+  "guardCreationHash": "0x9385b6b4bb6a94d3d09a2cd23abf2d449ac481a2c9f62c66ebf900c3eea20b34",
+  "guardRuntimeHash": "0x4c5859271a39e5e9b86cff9932b433e292d79ba749ae3e6d66b8403ca5ea92e8",
+  "runtimeHashesArePreImmutableTemplates": "CRITICAL: executorRuntimeHash and guardRuntimeHash above are Foundry deployedBytecode TEMPLATES with ZEROED immutable placeholders. The ON-CHAIN runtime has constructor immutables spliced in, so its keccak DIFFERS. Never compare a deployed runtime against these template hashes — use resolvedRuntimeHashes below.",
+  "resolvedRuntimeHashes": {
+   "guard": "0xfcb2694b60737532d4d44ede77750068cfb0c0756263c1aaceede57fc74857f4",
+   "executor": "0xf864233b76b77d05fd95250a3641839941fc00fc4aed3ac736458be957273a8d",
+   "derivedUtc": "2026-07-27",
+   "methods": "guard: reconstruct(template + solc immutableReferences + frozen args + live-read feed/token values)==LIVE runtime, AND masked byte-compare confirms every live/template diff is confined to immutable ranges; executor: identical AST-splice AND a read-only eth_call creation-simulation against mainnet state — both methods agree."
   },
-  "blockers": [
-    {
-      "id": "B-1",
-      "severity": "high",
-      "summary": "No independent smart-contract security audit",
-      "owner": "external auditor"
-    },
-    {
-      "id": "B-2",
-      "severity": "high",
-      "summary": "Legal entity/jurisdiction/eligibility placeholders unresolved",
-      "owner": "founder+counsel"
-    },
-    {
-      "id": "B-3",
-      "severity": "high",
-      "summary": "Rialto boundary PARTIAL: fail-closed machinery shipped (10H-1); remaining: authorized API access, selector pinning, approved price/risk policies, venue replay semantics",
-      "owner": "founder+Rialto/issuer"
-    },
-    {
-      "id": "B-4",
-      "severity": "high",
-      "summary": "Founder authorizations: seed size, valuation/float, Safe m-of-n, real-money go",
-      "owner": "founder"
-    },
-    {
-      "id": "INF-1",
-      "severity": "medium",
-      "summary": "Postgres schema + @bps/db not implemented",
-      "owner": "engineering"
-    },
-    {
-      "id": "INF-2",
-      "severity": "medium",
-      "summary": "Production RPC + monitoring/alerting unresolved",
-      "owner": "founder"
-    },
-    {
-      "id": "INF-3",
-      "severity": "low",
-      "summary": "Indexer enumeration CLOSED for pinned snapshots (10G-1); worker skeleton + persistent-DB indexer remain (see INF-1)",
-      "owner": "engineering"
-    },
-    {
-      "id": "DOC-1",
-      "severity": "medium",
-      "summary": "Deploy registry predicted addresses offset vs actual; actual map null",
-      "owner": "engineering"
-    }
+  "deployer": "0x7116F2998e625651D310E97919a1c638a7F82ba2",
+  "deployerNonceAtBundleGen": 1,
+  "deployerNonceNow": 2,
+  "predictedGuard": "0x57538680194D9E15Ba78bf243B10B440f663078d",
+  "predictedExecutor": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+  "guardDeployedAtNonce1": true,
+  "executorDeploysAtNonce2": true,
+  "maxAllInclusiveExposureUsd": 2.93,
+  "exposureCapUsd": 130,
+  "usd130CoversLifecycle": true,
+  "remainingExecutionTimeInputs": [
+   "deployer gas funding if required",
+   "human signatures/broadcasts",
+   "fresh live Rialto quote",
+   "open NVDA session"
   ],
-  "requiredEnvVarNames": [
-    "APP_ENV",
-    "PORT",
-    "DATABASE_URL",
-    "DATABASE_MIGRATION_URL",
-    "ROBINHOOD_CHAIN_RPC_URL",
-    "ROBINHOOD_CHAIN_ID",
-    "WALLET_AUTH_SESSION_SECRET",
-    "WALLET_AUTH_DOMAIN",
-    "RIALTO_API_URL",
-    "RIALTO_API_KEY",
-    "PILOT_ALLOWLIST",
-    "PILOT_ACCESS_CODE",
-    "BPS_TOKEN_ADDRESS",
-    "BPS_STAKING_ADDRESS",
-    "TX_MAX_VALUE",
-    "TX_MAX_PER_DAY"
-  ],
-  "secrets": "NONE stored here. All secret VALUES live only in a local .env / encrypted secret store, never in the repo.",
-  "readBeforeActing": [
-    "CLAUDE.md",
-    "HANDOVER.md",
-    "docs/continuity/CURRENT_STATE.json",
-    "docs/continuity/CHANGELOG.md"
-  ],
-  "backup": {
-    "checkpointCommit": "6ace4803b5b637a58c122e2c89d5216a76dfe48d",
-    "localArchive": {
-      "file": "bps-experiment-checkpoint-2026-07-25-6ace4803.tar.gz",
-      "sizeBytes": 149713634,
-      "sha256": "a971760fa0748b6eeebb8f8ee3a196735e4163890fa3d673c8c8ddf8136f374d",
-      "note": "Off-device copy confirmed by the USER on 2026-07-25 (user-verified; not independently inspected by Claude)."
-    },
-    "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25",
-    "rehearsalCheckpointArchive": {
-      "file": "bps-experiment-rehearsal-2026-07-25-d699f7ae.tar.gz",
-      "path": "C:Projects\bps-backups\bps-experiment-rehearsal-2026-07-25-d699f7ae.tar.gz",
-      "sizeBytes": 149833975,
-      "sha256": "6e68525824a3fb18e56604a91ef5c5117b53c12af03d3bc05fc4fa41e0e81039",
-      "checkpointCommit": "d699f7aea2d8ec7ebf47de8a9d2789791b8da92f",
-      "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25",
-      "note": "User-verified confirmation of the off-device copy; not independently inspected by Claude."
-    },
-    "snapshotPipelineArchive": {
-      "file": "bps-experiment-snapshot-pipeline-2026-07-25-9043476.tar.gz",
-      "path": "C:Projects\bps-backups\bps-experiment-snapshot-pipeline-2026-07-25-9043476.tar.gz",
-      "sizeBytes": 149996786,
-      "sha256": "5b45c966d83029ddcfcc44e949dc77ba14575c9e4d5ed92c81b448b894d6e6d0",
-      "checkpointCommit": "9043476509a9c7f662c5cf580f50e5ae1e0a382d",
-      "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25",
-      "note": "User-verified destination-side evidence; not independently inspected by Claude."
-    },
-    "rialtoBoundaryArchive": {
-      "file": "bps-experiment-rialto-boundary-2026-07-25-adaddceb.tar.gz",
-      "offDeviceEncryptedTransfer": "PENDING",
-      "note": "path/size/SHA in task report + CHANGELOG"
-    },
-    "oracleSemanticsArchive": {
-      "file": "bps-experiment-oracle-semantics-2026-07-25-6cb33745.tar.gz",
-      "offDeviceEncryptedTransfer": "PENDING",
-      "note": "path/size/SHA in task report + CHANGELOG"
-    },
-    "oracleDecisionReviewArchive": {
-      "file": "bps-experiment-rialto-decision-review-2026-07-25-535e7534.tar.gz",
-      "offDeviceEncryptedTransfer": "PENDING",
-      "note": "path/size/SHA in task report + CHANGELOG"
-    }
+  "artifacts": [
+   "docs/audit/BPS_PRIVATE_CANARY_EXECUTION_BUNDLE_2026-07-26.md",
+   "docs/audit/BPS_PRIVATE_CANARY_EXECUTION_BUNDLE_2026-07-26.evidence.json",
+   "packages/contracts/deploy/canary-bundle/unsigned-deployment.json",
+   "packages/contracts/deploy/canary-bundle/unsigned-safe-transactions.json",
+   "packages/contracts/deploy/canary-bundle/verification-manifest.json"
+  ]
+ },
+ "stageAExecution": {
+  "authorization": "founder 'EXECUTE STAGE A' under PCE-1 — deploy+verify ONLY the frozen guard and executor; NO Safe config, unpause, WETH funding, approval, quote, or settlement.",
+  "guard": {
+   "status": "DEPLOYED_AND_VERIFIED",
+   "address": "0x57538680194D9E15Ba78bf243B10B440f663078d",
+   "deployTx": "0xc3095c2ed7d4b8365dde2b6a7d76220a75806c552e4f3e17361fa2aedbb4256f",
+   "deployerNonce": 1,
+   "block": 20167604,
+   "blockTimeUtc": "2026-07-26T20:44:17Z",
+   "gasUsed": 1121401,
+   "liveRuntimeHash": "0xfcb2694b60737532d4d44ede77750068cfb0c0756263c1aaceede57fc74857f4",
+   "verification": "Read-only RPC: receipt status success, from deployer, contractAddress==predicted, nonce 1, value 0, to null. Live runtime keccak == resolved guard hash. Masked byte-compare vs paris template: every difference confined to solc immutable reference ranges. All 14 immutables (each consistent across its reference sites) equal the frozen constructor args + live-read feed/token values. All 14 public immutable getters match. Reconstructed(template+expected immutables)==live runtime exactly."
   },
-  "snapshotPipeline": {
-    "classification": "SNAPSHOT PIPELINE PASS",
-    "date": "2026-07-25",
-    "pinnedBlock": 18791290,
-    "pinnedBlockHash": "0x2d332bb08395b53f571015af9959d1a0e9c68baec300265b08fe77b38ef1516f",
-    "merkleRoot": "0xbf4a88b5ca7b12117c8fb9df350017c6c42ba27dc16d0dfad1499536a529aebb",
-    "canonicalSnapshotDigest": "0x893042b8b6c7ed1466958ce7f38964ffb6826597607431229183dd3ffef4c0c0",
-    "proofBundleDigest": "0xbd8a1a7184b2c519341781fecaae8abd8176df7639decf347aab3d69081d7fa3",
-    "artifacts": "docs/audit/snapshots/robinhood-4663-block18791290/",
-    "chainBoundNow": "snapshot, entitlements, proofs, publication hashes (previously fixture/placeholder-only)",
-    "inf3": "CLOSED for pinned-snapshot generation; persistent-DB indexer remains INF-1",
-    "legalEligibility": "UNRESOLVED — artifacts labeled TECHNICAL CANDIDATE / NOT AUTHORIZED FOR PUBLICATION",
-    "rialtoB3": "UNADDRESSED",
-    "auditB1": "NOT BEGUN",
-    "publication": "NO root published; unsigned payload UNSIGNED_DO_NOT_BROADCAST",
-    "checkpointCommit": "9043476509a9c7f662c5cf580f50e5ae1e0a382d",
-    "finalEvidenceSha256": "aa7aa1f709bc323eaeecf73849bbf53f6df6b3ffcddcbf0c2ea83f71623a98f8",
-    "finalReportSha256": "4b6089c653c0622db979cd328a721926ae3b07817f81a6e90f19db9c9265ba07",
-    "supersededEvidenceSha256": "3935c05a96ffaa46f887699b518a6def3255761a795db9db7123a16164829e22",
-    "supersededReportSha256": "81569855a45e82f3c3e25b387fbc73412897473ba8d5be1e410536a250bb3ef1"
-  },
-  "rialtoBoundary": {
-    "classification": "PARTIAL — RIALTO QUOTE ACCESS REQUIRED",
-    "date": "2026-07-25",
+  "executor": {
+   "status": "NOT_DEPLOYED — expected runtime hash derived offline; awaiting human broadcast via repaired launcher",
+   "predictedAddress": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+   "deploysAtNonce": 2,
+   "expectedResolvedRuntimeHash": "0xf864233b76b77d05fd95250a3641839941fc00fc4aed3ac736458be957273a8d",
+   "immutables": {
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "stockToken": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
     "registry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
-    "resolvedFeature2Router": "0xc94135b63772b91d79d0a2daab2a8801f32359bd",
-    "routerCodeHash": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611",
-    "technicalValidationAsset": "NVDA 0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC — TECHNICAL VENUE VALIDATION ASSET — LEGAL ELIGIBILITY UNVERIFIED — NOT AN APPROVED PRODUCTION BASKET",
-    "quoteAccess": "ABSENT (RIALTO_API_URL/RIALTO_API_KEY unconfigured; presence checked as booleans only)",
-    "selectorValidation": "machinery shipped; approved-selector list EMPTY by default (SELECTOR_POLICY_MISSING fail-closed); selector unpinned pending a real quote",
-    "priceRiskPolicy": "machinery shipped; NO approved feed/staleness/deviation/cap policy exists (decision pack #10/#12) — fails closed",
-    "settlementHardening": "frozen contracts already enforce all section-9 requirements (mapped to named Foundry tests); no contract change made",
-    "mainnetNonMutation": "IDENTICAL before/after; zero acquisitions; nonces 16/16 + 8/8",
-    "remainingB3Blockers": [
-      "authorized Rialto API access",
-      "venue selector pinning from a real quote",
-      "approved price/staleness/deviation/cap policies",
-      "venue replay/nonce semantics"
-    ],
-    "checkpointCommit": "adaddceb09302db78e36fdb294494fe71df0e43b",
-    "finalEvidenceSha256": "979f351d9a88c8f0058628417da46a8809d4a394e4440ec42025f3dd87e8d1b8",
-    "finalReportSha256": "7b0c88c6b11a9bda072241378b5c289f62fbd64d846c43ce4b13a0dae4d75a87",
-    "supersededEvidenceSha256": "e7bc7e6a044296ebeff1249b197416eb99a315e8f776805b7a80f18568bf006e",
-    "supersededReportSha256": "2b87cde1c6f25d2e822dd875403a529d7cd6b84222ee2ae9d301ce1c12e941df",
-    "routerRecheck": "block 19078598: identical router 0xc94135b6…59bd + code hash 0xa7041268…7611",
-    "independentlyRecorded": [
-      "APPROVED PRICE AND RISK POLICY REQUIRED",
-      "VENUE SELECTOR UNVERIFIED",
-      "VENUE REPLAY SEMANTICS UNRESOLVED",
-      "LEGAL ELIGIBILITY UNRESOLVED"
-    ],
-    "oracleSemanticsCorrection": {
-      "date": "2026-07-25",
-      "checkpointCommit": "6cb33745693905f576ec521422c2fca1de3605ac",
-      "criticalFix": "price-guard rewritten: PER_TOKEN_CHAINLINK feeds used directly (multiplier NOT re-applied; prior formula would have double-applied it); RAW_UNDERLYING gated evidence-only; two-feed model; L2 sequencer machinery; 79/79 rialto tests",
-      "evidence": "docs/audit/BPS_RIALTO_ORACLE_SEMANTICS_REVIEW_2026-07-25.{md,evidence.json}",
-      "evidenceSha256": "4295519ce145206b10f32c9f7c6486b654142d6cf6dc21db086f92947a45b0f1",
-      "reportSha256": "1e241a5feb734e7590907c218d72aa91425c3cef2e8d5d28ec8902441cf1c317",
-      "superseded10HHashes": {
-        "evidence": "979f351d9a88c8f0058628417da46a8809d4a394e4440ec42025f3dd87e8d1b8",
-        "report": "7b0c88c6b11a9bda072241378b5c289f62fbd64d846c43ce4b13a0dae4d75a87"
-      },
-      "current10HHashes": {
-        "evidence": "63d94b7a49df6fdf91b2c0a085428eb68ee16b10722d518aa70366b667a99537",
-        "report": "ad298ebf0ed186cca6c331a554251e9de5ce6d0b0b57db604b317085e4c06f56"
-      },
-      "decisionPack": {
-        "path": "docs/decisions/BPS_RIALTO_ACCESS_AND_PRICE_RISK_DECISION_PACK_2026-07-25.md",
-        "sha256": "1c433f0a6e9d28ca8b21607292230f7a880b653ce18f6532f24a47539d35f0af",
-        "decisions": 24,
-        "status": "ALL PROPOSED — NOT APPROVED"
-      }
-    },
-    "oracleDecisionReview": {
-      "date": "2026-07-25",
-      "checkpointCommit": "535e75347c25bb4f253ab7449cd512761f22d74e",
-      "structuralFixes": "policy-pinned inputFeedIdentity/outputFeedIdentity/outputSemantics (no caller relabeling); roundId>0 + updatedAt>0; uint256-domain bounds before exponentiation; rialto 89/89",
-      "wordingFix": "removed NON-BINDING -> 'QUOTE RETRIEVAL ONLY — RETURNS A FIRM EXECUTABLE PAYLOAD; NO SIGNATURE OR BROADCAST OCCURS DURING RETRIEVAL' (dated corrections; superseded hashes preserved)",
-      "ballot": {
-        "path": "docs/decisions/BPS_RIALTO_FOUNDER_APPROVAL_BALLOT_2026-07-25.md",
-        "sha256": "db61b58f6e298c1c73c7cc077d7905429f1a061ff377d5e5eaa94eadd606f0ca",
-        "decisions": 24,
-        "status": "ALL PROPOSED — NOT APPROVED"
-      },
-      "reviewEvidenceSha256": "e145a3c8a719fe8f6ac530fe946a8c5890ab7917c90fde8ce8695a00b529ff01",
-      "reviewReportSha256": "0a3a6fa240f9f4c5cff0757c06db90be09660a313f2b7f318cd4d54ad0e70ff6",
-      "corrected10HHashes": {
-        "boundaryMd": "a38039a3bf94ca22632ec3d9a44d0ef2c0638c9816980ead50b6b0917423245b",
-        "boundaryEvidence": "324bdaf68dae8552d29e84fd099a0360d477cd820555089d77a9ae67a32c266b",
-        "semanticsMd": "88530e01eb7b38c3ea187aa033e8d5654e062d411e65678fdb6d462039caeb79"
-      },
-      "priceGuardTrustModel": "NOT YET APPROVED (ballot D-22: A trusted-server / B on-chain oracle floor / C disabled; conservative = C)"
-    }
+    "note": "controller (Safe 0x62Ae...5E62) is NOT immutable — it is Ownable storage set at construction."
+   },
+   "derivationCrossCheck": "AST-splice offline == read-only eth_call creation-simulation against live mainnet state == 0xf864233b...273a8d (both agree; differs from template 0x16c8af...0908). Simulation also confirms the executor constructor does not revert against live state."
   },
-  "oracleFeedMetadata": {
-    "date": "2026-07-25",
-    "inspectionBlock": 19223939,
-    "inspectionBlockHash": "0xe94b855b7973b78c1fb6611de5f41c421a69bc80f24d6631a89925270bccdb8c",
-    "chainId": 4663,
-    "d9": "OFFICIALLY IDENTIFIED CANDIDATE — NOT APPROVED / NOT CONFIGURED",
-    "d10": "OFFICIALLY IDENTIFIED CANDIDATE — NOT APPROVED / NOT CONFIGURED",
-    "d13": "UNRESOLVED — NO ROBINHOOD CHAIN ADDRESS IN CURRENT OFFICIAL CHAINLINK LIST",
-    "d12": "D-12's strict-freshness approach is founder-directed, but the exact maximum-staleness value remains deferred. The 86400-second catalog heartbeat is evidence for later analysis, not an approved ceiling, production setting or closed-session freshness guarantee.",
-    "candidates": {
-      "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
-      "ethUsdProxy": "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9",
-      "ethUsdAggregator": "0x6091E64eb7138EEF066a80FD3A0d7427B91f2721",
-      "nvdaUsdProxy": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
-      "nvdaUsdAggregator": "0xC9d16E4f2569b9E3ea0468fD85844953713DC2a2",
-      "nvdaToken": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
-      "allLabel": "CANDIDATE — NOT APPROVED / NOT CONFIGURED"
-    },
-    "nvdaTokenProvenance": "OFFICIAL LIVE ROBINHOOD LISTING — REPRODUCIBLY ESTABLISHED (api.robinhood.com/rhj/assets; token uid() == endpoint asset id)",
-    "evidence": [
-      "docs/audit/BPS_RIALTO_FEED_METADATA_2026-07-25.md",
-      "docs/audit/BPS_RIALTO_FEED_METADATA_2026-07-25.evidence.json"
-    ],
-    "decisionRegister": "docs/audit/BPS_FOUNDER_DECISION_REGISTER_2026-07-25.md",
-    "task10J2ProcessDeviation": "seven non-repository response files written by 10J-2 via curl -o (disclosed); 10J-2A/10J-2B made no filesystem change",
-    "d22bBoundary": "founder-selected architectural direction ONLY; implementation NOT authorized",
-    "d23": "COUNSEL-PENDING",
-    "d24": "no acquisition/funding/allowance/quote/simulation/deployment/activation authorized"
+  "preExecutorChainState": {
+   "checkedUtc": "2026-07-27T05:44:12Z",
+   "deployerLatestNonce": 2,
+   "deployerPendingNonce": 2,
+   "guardCodePresent": true,
+   "executorAddressEmpty": true,
+   "deployerBalanceWei": "427902428602000",
+   "gasPriceWei": "48972000",
+   "balanceSufficientForExecutor": true
   },
-  "quoteEvaluation": {
-    "date": "2026-07-25",
-    "decision": "QEX-1 — Isolated Rialto Quote-Evaluation Exception",
-    "qex1Status": "CONSUMED / COMPLETE — exactly one authenticated GET /quote on 2026-07-25; no retry or additional quote authorized",
-    "d2Status": "PRESERVED — founder read-only-key preference; currently unavailable via Rialto dashboard. QEX-1 is a bounded exception, NOT an erasure of D-2",
-    "exceptionVerbatim": "D-2 is superseded by the confirmed venue constraint. A mandatory bundled Rialto key may be used solely in an isolated, non-executing quote-evaluation environment with no signing key, funded wallet, allowance, Permit2 signature or swap-submission route. This exception authorizes GET /quote testing only. It does not authorize acquisition or execution under D-24.",
-    "officialOrigin": "https://rialto-trade-api.rialto.xyz (enforced; BAD_ORIGIN fail-closed on any other protocol/host/credentials/port/path/fragment/query)",
-    "liveCliRetired": "packages/rialto/src/quote-eval-cli.ts now fails with QEX1_CONSUMED before any env read or network call; no env override bypasses it; reviewed quote client not deleted; future live quote requires a separately reviewed source change + new founder authorization",
-    "evidence": [
-      "docs/audit/BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.md",
-      "docs/audit/BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.evidence.json"
-    ],
-    "offlineEvaluator": "packages/rialto/src/registry-structural.ts (pure; no network/env/key); reconciles a quote target against a SEPARATE undated registry observation independently of selector approval; fail-closed on malformed/zero/paused/mismatch/prev-next-only/missing/wrong-chain",
-    "registryObservation": "conversation-supplied, read-only, UNDATED (block/time unavailable): registry 0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E feature 2 (taker-submitted); currentRouter 0xc94135b63772b91d79d0a2daab2a8801f32359bd; previous/next zero; paused false; NOT permanent authority; feature 3 = gasless",
-    "derivedReplay": "SELECTOR_UNAPPROVED — router matched the reported current feature-2 router for that undated snapshot only; selector 0x77963966 evidence-only (not approved/pinned); productionStructuralApproved=false; D-6 OPEN",
-    "originalStructuralResultPreserved": "passed=false, ROUTER_UNRESOLVED, boundary QUOTE_OBSERVED (unchanged in the evidence artifact)",
-    "securityOmissions": "no API key/credential; raw quote_id NOT stored (SHA-256 only); complete calldata NOT stored (selector + byte length only); no PowerShell secret material; NVDA human-decimal not derived (raw buy amounts retained as authoritative)",
-    "verification": "OFFLINE only — @bps/rialto typecheck + build clean, eslint clean, vitest 150/150; zero network requests; NO live GET /quote",
-    "d3": "COUNSEL-PENDING — production possession/use of the broader-scope (swap:create/swap:integrator) key; must stay isolated from any signing key or on-chain allowance",
-    "openDecisions": "D-5, D-6, D-8, D-21, D-22B remain open; D-23 counsel-pending; D-24 stands; QEX-1 closes none of them; ballot D-17 untouched",
-    "d24": "stands — no acquisition/execution authorized"
-  },
-  "guardedSettlement": {
-    "date": "2026-07-25",
-    "task": "TASK 10K-3",
-    "state": "production-shaped but DELIBERATELY DISABLED; offline-only; live trading NOT enabled",
-    "core": "packages/rialto/src/guarded-settlement.ts (pure, deterministic, integer-safe; no env/network/fs/exit; DI for registry/price/replay/clock)",
-    "tests": "packages/rialto/src/guarded-settlement.test.ts (fail-closed matrix, QEX-1 replay non-production, happy path READY_OFFLINE_ONLY, network tripwire)",
-    "doc": "docs/audit/BPS_RIALTO_GUARDED_SETTLEMENT_2026-07-25.md",
-    "candidatePolicy": "chain 4663; feature 2; WETH->NVDA only; no integrator fee; platform fee <=5 bps; slippage 50/100 bps; deviation <=100 bps; lifetime <=300s; selector allow-list EMPTY (0x77963966 evidence-only); taker/caps/ages/price-source UNRESOLVED (fail closed)",
-    "readyStatus": "READY_OFFLINE_ONLY is NEVER execution authorization; production candidate policy is not ready",
-    "solidity": "OPAQUE-CALL MODEL (TASK 10K-5) — packages/contracts/src/GuardedSettlementExecutor.sol (UNDEPLOYED; Ownable2Step Safe controller; executor-as-taker; Pausable start-paused; ReentrancyGuard; registry ownerOf(2) lock; APPROVED runtime code hash + selector via setApprovedRouterCode (NO ABI decode); required price guard; 0.01 WETH cap; exact-allowance + own-balance min-delta + allowance-reset; domain digest + replay; recover own-balance-only). tx.data is passed UNMODIFIED. Removed the per-selector ABI-decoding validator (+ its interface/mock). forge-std v1.9.7 (commit 77041d2ce690e692d6e03cc812b57d1ddaa4d505) in gitignored lib; OZ 5.6.1",
-    "abiBlocker": "REMOVED — the missing human-readable Rialto ABI is no longer a technical blocker (opaque-call envelope)",
-    "onchainEvidence": "block 19674173: router 0xc94135b63772b91d79d0a2daab2a8801f32359bd runtime code hash 0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611 (direct impl, not a proxy); registry ownerOf(2)==router; selector 0x77963966 in dispatcher; router = target + allowance spender; delivers NVDA to the taker. Full cast-run replay unavailable (Arbitrum-Nitro encoding vs foundry 1.7.1); archive STATE reads used. See docs/audit/BPS_RIALTO_ROUTER_OPAQUE_CALL_2026-07-26.*",
-    "selectorProof": "NOT authoritatively proven as a named function; may be APPROVED only when paired with the observed router code hash 0xa7041268...27611 (enforced on-chain). Any rotation/code-hash change halts settlement pending review. FIRST canary gate.",
-    "quoteBoundary": "TS validateOpaqueQuoteForIntent (pure/offline) validates settlement/to/spender/value/selector/tokens/taker/amounts/fee/freshness; never modifies tx.data; returns only the calldata hash",
-    "digestParity": "TS<->Solidity byte-identical for a shared vector (0x99edf1c907908d0d6f278d7e04c0a6624ba35f59ca6b7b74800b220fdd8e8c06); unchanged",
-    "verification": "OFFLINE Foundry build + 55 tests (unit/malicious-router/fuzz/invariant, no fork/RPC), forge fmt clean; @bps/rialto typecheck + build + eslint clean, vitest 219/219; read-only public RPC used for investigation (no API key/signing/broadcast); QEX-1 remains consumed",
-    "decisionStates": "D-5 exact-allowance implemented locally (approval/deployment-pending); D-6 OPEN only for production Safe/taker approval + activation (ABI is NOT the blocker); D-8 0.01/100bps candidate (no production authorization); D-21 replay+allowance implemented/tested (deployment-review pending); D-22B price-guard with mocks (trusted source unresolved, separate); D-3 counsel-pending; D-23 counsel-pending; D-24 stands; D-17 unchanged",
-    "remainingGatesForCanary": [
-      "approve 0x77963966 paired with the observed router code hash 0xa7041268...27611 (D-6)",
-      "trusted production price source + freshness (D-22B)",
-      "production Safe controller/taker + formal activation (D-6)",
-      "per-token sell cap approval (D-8)",
-      "deployment script/procedure + external audit + counsel (D-3/D-23) + new bounded founder authorization (D-24)"
-    ]
+  "launcher": {
+   "location": "OS temp (NOT in repo): %TEMP%/bps-stage-a-launcher/server.mjs",
+   "repairedUtc": "2026-07-27",
+   "sha256": "d2c5d5d3bfd18e5cd9cce160335af82f3ea85d6fac9d1ffa72dc1eb4d5ebe731",
+   "changes": "Now EXECUTOR-ONLY (guard already deployed). Post-deploy runtime validation compares the deployed code hash against the IMMUTABLE-RESOLVED expected hashes (guard 0xfcb2694b..., executor 0xf864233b...), NOT the pre-immutable template hashes (previous defect — would have failed every deploy). Preflight enforces the founder recheck: latest & pending nonce==2, guard present AND its live runtime hash == resolved guard hash, executor empty, balance >= executor gas*price. Binds 127.0.0.1:8799; no key; single eth_sendTransaction; read-only RPC allowlist; server-side viem keccak; startup self-checks (viem, bundle deploy-data, resolved!=template).",
+   "notRunning": "server was smoke-tested read-only then stopped; human restarts it to broadcast the executor",
+   "broadcastPerformed": false
   }
+ },
+ "privateCanaryException": {
+  "id": "PCE-1",
+  "status": "PREPARED_NOT_EXECUTED (bundle ready; not yet consumed)",
+  "authorizedBy": "founder (chat 2026-07-26)",
+  "bounds": "one WETH->NVDA cycle; <= $130 all-inclusive; no public users; no production reuse; mandatory pause + recovery after",
+  "perAcquisitionCapWeth": "0.001",
+  "controllerSafe": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
+  "b1AuditSatisfied": false,
+  "b2CounselSatisfied": false,
+  "d24WeakenedForProduction": false,
+  "executionPerformed": false,
+  "requiresSeparateExecuteGoSignal": true,
+  "artifacts": [
+   "docs/decisions/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.md",
+   "packages/contracts/deploy/PRIVATE_CANARY_DEPLOY_PACKET_2026-07-26.md",
+   "docs/audit/BPS_PRIVATE_CANARY_EXCEPTION_2026-07-26.evidence.json"
+  ]
+ },
+ "executorActivation": {
+  "externalReviewPacketReady": true,
+  "executorDeployed": false,
+  "candidateFrozenCommit": "5181f1b (source SHA-256 recorded in evidence)",
+  "gateStatus": {
+   "B-1_independentAudit": "OPEN — no independent audit; Claude's review is NOT independent",
+   "D-23_counsel": "COUNSEL-PENDING — B-2 unresolved; no counsel opinion in repo",
+   "D-24": "FULLY IN FORCE — not satisfied; requires D-1..D-23 approved + selector pinned + audit B-1 + legal B-2 + fresh independently-reviewed authorization",
+   "ballotReturned": false,
+   "D-3_note": "repo D-3 is a server-env key-scope policy ('never'), NOT the audit gate; the audit gate is B-1"
+  },
+  "status": "EXECUTOR_EXTERNAL_REVIEW_PACKET_READY — activation prohibited",
+  "evidence": "docs/audit/BPS_EXECUTOR_ACTIVATION_READINESS_2026-07-26.*"
+ },
+ "safeController": {
+  "deployed": true,
+  "address": "0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62",
+  "safeVersion": "1.4.1",
+  "type": "SafeL2 2-of-3 multisig",
+  "owners": [
+   "0x7116F2998e625651D310E97919a1c638a7F82ba2",
+   "0x006024ff3b9b707ad0779eD3586546440fAAC49f",
+   "0xd5Bb1534Efc88400f34A832D85D0939c0e2F1759"
+  ],
+  "threshold": 2,
+  "nonce": 0,
+  "deployTx": "0x09a4b2c179da9b1ab2abfc0c2b8067a07fe5850f026d8f8aa89af4d5451ccbb0",
+  "block": 19831992,
+  "role": "verified CANDIDATE contract controller",
+  "activatedAsExecutorController": false,
+  "note": "Safe deployed + verified (29/29 checks). NOT activated — no GuardedSettlementExecutor exists. Owns/controls nothing. Evidence docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.*"
+ },
+ "latestCompletedMilestone": "STAGE A (step 1 of 2) — guard DEPLOYED + independently verified, and executor expected runtime hash derived offline (2026-07-26/27). Guard ChainlinkSettlementPriceGuard live at 0x5753...078d (tx 0xc3095c2e..., nonce 1, block 20167604). CRITICAL CORRECTION: the bundle runtimeBytecodeHash fields (guard 0x4c5859...92e8, executor 0x16c8af...0908) are PRE-IMMUTABLE Foundry templates; the immutable-RESOLVED runtime hashes are guard 0xfcb2694b...857f4 (== live) and executor 0xf864233b...273a8d (derived by two agreeing methods). Live guard proven: masked byte-compare shows every live/template diff confined to solc immutable ranges; all 14 immutables + getters match frozen args + live feed/token reads; reconstruct==live. Ephemeral Rabby launcher repaired to executor-only + immutable-resolved validation. NO Safe config/unpause/fund/approve/quote/settle; executor NOT yet broadcast. Prior: TASK 10K-10 (5f71acc)",
+ "currentTask": "Stage A step 2 pending: executor NOT yet deployed. Repaired launcher (%TEMP%/bps-stage-a-launcher/server.mjs) is ready for the human to broadcast the single executor CREATE at nonce 2; it validates the deployed runtime against the resolved hash 0xf864233b...273a8d. Claude does not broadcast. After broadcast, run read-only Stage-A executor verification + continuity update.",
+ "buildReadiness": "CANARY_BUILD_READY_EXECUTION_LOCKED",
+ "runtimeReadiness": "STAGE_A_GUARD_DEPLOYED_EXECUTOR_PENDING (guard live+verified; executor awaiting human broadcast via repaired launcher; NO Safe/unpause/fund/approve/quote/settle authorized — later PCE-1 stages need a separate go-signal + open NVDA session + fresh live quote)",
+ "nextTask": "(A) Stage A step 2: human broadcasts the executor CREATE (nonce 2) via the repaired launcher; then Claude runs read-only executor verification (receipt/addr/nonce/value; deployed runtime hash == 0xf864233b...273a8d; owner==Safe 0x62Ae...5E62; paused==true; weth/stockToken/registry immutables) and updates continuity. Executor deploys PAUSED/fail-closed. (B) Later PCE-1 stages (Safe config, unpause, WETH fund, approve, quote, settle) each require a separate bounded founder go-signal — NOT authorized now. (C) Production (still fully gated): B-1 audit, D-23/B-2 counsel, returned ballot, a new D-24-replacing authorization.",
+ "chain": {
+  "name": "Robinhood Chain Mainnet",
+  "chainId": 4663,
+  "chainIdHex": "0x1237",
+  "nativeAsset": "ETH",
+  "explorer": "https://robinhoodchain.blockscout.com",
+  "verifiedAtBlock": 18821299,
+  "verifiedUtc": "2026-07-25T07:10:56Z"
+ },
+ "productionStatus": {
+  "deployed": false,
+  "verdict": "NO-GO (TASK 7/9). Canonical BPS production is NOT deployed and requires a fresh, separately authorized deployment.",
+  "bpscIsProduction": false
+ },
+ "canaryStatus": {
+  "kind": "BPSC-TEST canary (NOT canonical BPS production)",
+  "complete": true,
+  "reconciled": true,
+  "plannedTransactions": 19,
+  "completedTransactions": 19,
+  "deployerNonce": {
+   "latest": 16,
+   "pending": 16
+  },
+  "testerNonce": {
+   "latest": 8,
+   "pending": 8
+  },
+  "testerNonce8Executed": false,
+  "testerNonce8Authorized": false,
+  "delayedWithdrawalUnlockUtc": "2026-07-31T23:02:26Z",
+  "lpPositionTokenId": 371728,
+  "pool": "0x4A429194dC4E4A1f3b1cD24bBaf7754f65ABc5EF",
+  "realizedGasAll19Wei": "1881602384200000",
+  "acquisitionBudgetAccruedWei": "31435920663381",
+  "bpscBurnedTotal": "19075555916145897703744",
+  "lifecycleFullyDemonstrated": false,
+  "lifecycleForkRehearsal": {
+   "classification": "REHEARSAL PASS",
+   "date": "2026-07-25",
+   "pinnedForkBlock": 18791290,
+   "pinnedForkBlockHash": "0x2d332bb08395b53f571015af9959d1a0e9c68baec300265b08fe77b38ef1516f",
+   "mockedBoundary": "Rialto feature-2 settlement venue (dev-only MockRialtoRouter via fork-local vm.mockCall of registry.ownerOf(2))",
+   "evidence": [
+    "docs/audit/BPS_DISTRIBUTION_LIFECYCLE_FORK_REHEARSAL_2026-07-25.md",
+    "docs/audit/BPS_DISTRIBUTION_LIFECYCLE_FORK_REHEARSAL_2026-07-25.evidence.json"
+   ],
+   "provesProductionReadiness": false,
+   "realRwaSettlementOccurred": false,
+   "evidenceSha256": "2557a3d782bd38b2c679902578f7bc5519b7b0e5f82f9fdea85e28a77d5cb065",
+   "checkpointCommit": "d699f7aea2d8ec7ebf47de8a9d2789791b8da92f"
+  }
+ },
+ "deployedCanaryContracts": {
+  "note": "Actual on-chain addresses (authoritative). The deploy registry predicted map is offset and its actual map is null (see HANDOVER.md DOC-1).",
+  "canaryToken": "0x2E6C3dC1e04C45d4B9d40BeE392a135beA50A5d7",
+  "lockingVault": "0xeFA9d1C40358E281da21A1BC20a204c849cB8A42",
+  "claimManager": "0x5EcbADf1cF050F1B86D44B979416A8e859Fb2574",
+  "rialtoAdapter": "0xbe2C8c6CB7CeeED24708419F5aaEEF8d949866AE",
+  "coordinator": "0xE3Bd9e1D58d16A31912f804f931Cc6bfcD702205",
+  "stockVault": "0x9a5a55361BcFDD6Ded4A6EAa02D997F1108EdeC6",
+  "uniswapAdapter": "0x5891Dcc2BACD1ADC8b5a9C30B365931290d7E5E1",
+  "tradeRouter": "0x4847b410D1243eD38B481B89B1D1D59a8C8691e6"
+ },
+ "wallets": {
+  "deployer": "0xD9Eec97DEDafe1451b7f201E416A502b93c1e203",
+  "controlledTester": "0x78B256A742fa2c0f84ebdAf570fCDC16Ee206024",
+  "productionOperatorSafe": "UNRESOLVED"
+ },
+ "canonicalArtifacts": {
+  "economicsPolicy": "BPS-ECON-2.0",
+  "acquisitionMandate": "BPS-FRONTIER-10-1.0 (basket PROPOSED, pending approval + registry re-verification)",
+  "restrictedPolicy": "BPS-RESTRICTED-1.0 (draft)",
+  "acceptedExecutionZip": "canary-rabby-recovery-execution-review-v9.zip",
+  "acceptedExecutionZipBytes": 578871,
+  "acceptedExecutionZipSha256": "0c958a58b8684878c4dfce4a15cdba3b2fc0e39680d46902430ab6e78a09b74d",
+  "recoveryAuthorizationDigest": "0xc50d97d780c48308667d17366e383be0b70556e0d0bfbab69225222e228d8314",
+  "evidenceManifestSha256": "d6005083b20e5188ce783cde5b30159b56228398d5bf204746b536e9e36b8ec3",
+  "expiredArtifactsAreEvidenceOnly": true
+ },
+ "deploymentRegistryReferences": [
+  "packages/contracts/deploy/robinhood-mainnet.canary.json",
+  "packages/contracts/deploy/robinhood-mainnet.dryrun.json",
+  "packages/contracts/deploy/manifest.schema.json",
+  "packages/contracts/deploy/RUNBOOK.md",
+  "docs/audit/BPS_CANARY_MAINNET_COMPLETION_2026-07-25.md",
+  "docs/audit/BPS_CANARY_MAINNET_COMPLETION_2026-07-25.evidence.json"
+ ],
+ "testSummary": {
+  "lastFullRunUtc": "2026-07-25",
+  "npmRunCheck": "PASS",
+  "foundry": {
+   "passed": 418,
+   "failed": 0,
+   "suites": 47,
+   "note": "incl. fork lifecycle rehearsal + probe (skip-gated on ROBINHOOD_FORK_RPC)"
+  },
+  "webVitest": {
+   "passed": 177,
+   "files": 25
+  },
+  "sharedVitest": {
+   "passed": 52
+  },
+  "pilotVitest": {
+   "passed": 30
+  },
+  "rialtoVitest": {
+   "passed": 79,
+   "files": 5,
+   "note": "corrected two-feed price guard (20 required cases + sequencer)"
+  },
+  "canaryVerifyAll": "PASS (9 suites)",
+  "playwrightE2E": "PASS (historical ~2026-07-24; single smoke flow; rerun before relying)",
+  "externalSecurityAudit": "NOT_PERFORMED",
+  "indexerVitest": {
+   "passed": 37,
+   "files": 6,
+   "note": "lock-snapshot pipeline suites added in 10G-1"
+  }
+ },
+ "blockers": [
+  {
+   "id": "B-1",
+   "severity": "high",
+   "summary": "No independent smart-contract security audit",
+   "owner": "external auditor"
+  },
+  {
+   "id": "B-2",
+   "severity": "high",
+   "summary": "Legal entity/jurisdiction/eligibility placeholders unresolved",
+   "owner": "founder+counsel"
+  },
+  {
+   "id": "B-3",
+   "severity": "high",
+   "summary": "Rialto boundary PARTIAL: fail-closed machinery shipped (10H-1); remaining: authorized API access, selector pinning, approved price/risk policies, venue replay semantics",
+   "owner": "founder+Rialto/issuer"
+  },
+  {
+   "id": "B-4",
+   "severity": "high",
+   "summary": "Founder authorizations: seed size, valuation/float, Safe m-of-n, real-money go",
+   "owner": "founder"
+  },
+  {
+   "id": "INF-1",
+   "severity": "medium",
+   "summary": "Postgres schema + @bps/db not implemented",
+   "owner": "engineering"
+  },
+  {
+   "id": "INF-2",
+   "severity": "medium",
+   "summary": "Production RPC + monitoring/alerting unresolved",
+   "owner": "founder"
+  },
+  {
+   "id": "INF-3",
+   "severity": "low",
+   "summary": "Indexer enumeration CLOSED for pinned snapshots (10G-1); worker skeleton + persistent-DB indexer remain (see INF-1)",
+   "owner": "engineering"
+  },
+  {
+   "id": "DOC-1",
+   "severity": "medium",
+   "summary": "Deploy registry predicted addresses offset vs actual; actual map null",
+   "owner": "engineering"
+  }
+ ],
+ "requiredEnvVarNames": [
+  "APP_ENV",
+  "PORT",
+  "DATABASE_URL",
+  "DATABASE_MIGRATION_URL",
+  "ROBINHOOD_CHAIN_RPC_URL",
+  "ROBINHOOD_CHAIN_ID",
+  "WALLET_AUTH_SESSION_SECRET",
+  "WALLET_AUTH_DOMAIN",
+  "RIALTO_API_URL",
+  "RIALTO_API_KEY",
+  "PILOT_ALLOWLIST",
+  "PILOT_ACCESS_CODE",
+  "BPS_TOKEN_ADDRESS",
+  "BPS_STAKING_ADDRESS",
+  "TX_MAX_VALUE",
+  "TX_MAX_PER_DAY"
+ ],
+ "secrets": "NONE stored here. All secret VALUES live only in a local .env / encrypted secret store, never in the repo.",
+ "readBeforeActing": [
+  "CLAUDE.md",
+  "HANDOVER.md",
+  "docs/continuity/CURRENT_STATE.json",
+  "docs/continuity/CHANGELOG.md"
+ ],
+ "backup": {
+  "checkpointCommit": "6ace4803b5b637a58c122e2c89d5216a76dfe48d",
+  "localArchive": {
+   "file": "bps-experiment-checkpoint-2026-07-25-6ace4803.tar.gz",
+   "sizeBytes": 149713634,
+   "sha256": "a971760fa0748b6eeebb8f8ee3a196735e4163890fa3d673c8c8ddf8136f374d",
+   "note": "Off-device copy confirmed by the USER on 2026-07-25 (user-verified; not independently inspected by Claude)."
+  },
+  "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25",
+  "rehearsalCheckpointArchive": {
+   "file": "bps-experiment-rehearsal-2026-07-25-d699f7ae.tar.gz",
+   "path": "C:Projects\bps-backups\bps-experiment-rehearsal-2026-07-25-d699f7ae.tar.gz",
+   "sizeBytes": 149833975,
+   "sha256": "6e68525824a3fb18e56604a91ef5c5117b53c12af03d3bc05fc4fa41e0e81039",
+   "checkpointCommit": "d699f7aea2d8ec7ebf47de8a9d2789791b8da92f",
+   "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25",
+   "note": "User-verified confirmation of the off-device copy; not independently inspected by Claude."
+  },
+  "snapshotPipelineArchive": {
+   "file": "bps-experiment-snapshot-pipeline-2026-07-25-9043476.tar.gz",
+   "path": "C:Projects\bps-backups\bps-experiment-snapshot-pipeline-2026-07-25-9043476.tar.gz",
+   "sizeBytes": 149996786,
+   "sha256": "5b45c966d83029ddcfcc44e949dc77ba14575c9e4d5ed92c81b448b894d6e6d0",
+   "checkpointCommit": "9043476509a9c7f662c5cf580f50e5ae1e0a382d",
+   "offDeviceEncryptedTransfer": "COMPLETE — USER VERIFIED 2026-07-25",
+   "note": "User-verified destination-side evidence; not independently inspected by Claude."
+  },
+  "rialtoBoundaryArchive": {
+   "file": "bps-experiment-rialto-boundary-2026-07-25-adaddceb.tar.gz",
+   "offDeviceEncryptedTransfer": "PENDING",
+   "note": "path/size/SHA in task report + CHANGELOG"
+  },
+  "oracleSemanticsArchive": {
+   "file": "bps-experiment-oracle-semantics-2026-07-25-6cb33745.tar.gz",
+   "offDeviceEncryptedTransfer": "PENDING",
+   "note": "path/size/SHA in task report + CHANGELOG"
+  },
+  "oracleDecisionReviewArchive": {
+   "file": "bps-experiment-rialto-decision-review-2026-07-25-535e7534.tar.gz",
+   "offDeviceEncryptedTransfer": "PENDING",
+   "note": "path/size/SHA in task report + CHANGELOG"
+  }
+ },
+ "snapshotPipeline": {
+  "classification": "SNAPSHOT PIPELINE PASS",
+  "date": "2026-07-25",
+  "pinnedBlock": 18791290,
+  "pinnedBlockHash": "0x2d332bb08395b53f571015af9959d1a0e9c68baec300265b08fe77b38ef1516f",
+  "merkleRoot": "0xbf4a88b5ca7b12117c8fb9df350017c6c42ba27dc16d0dfad1499536a529aebb",
+  "canonicalSnapshotDigest": "0x893042b8b6c7ed1466958ce7f38964ffb6826597607431229183dd3ffef4c0c0",
+  "proofBundleDigest": "0xbd8a1a7184b2c519341781fecaae8abd8176df7639decf347aab3d69081d7fa3",
+  "artifacts": "docs/audit/snapshots/robinhood-4663-block18791290/",
+  "chainBoundNow": "snapshot, entitlements, proofs, publication hashes (previously fixture/placeholder-only)",
+  "inf3": "CLOSED for pinned-snapshot generation; persistent-DB indexer remains INF-1",
+  "legalEligibility": "UNRESOLVED — artifacts labeled TECHNICAL CANDIDATE / NOT AUTHORIZED FOR PUBLICATION",
+  "rialtoB3": "UNADDRESSED",
+  "auditB1": "NOT BEGUN",
+  "publication": "NO root published; unsigned payload UNSIGNED_DO_NOT_BROADCAST",
+  "checkpointCommit": "9043476509a9c7f662c5cf580f50e5ae1e0a382d",
+  "finalEvidenceSha256": "aa7aa1f709bc323eaeecf73849bbf53f6df6b3ffcddcbf0c2ea83f71623a98f8",
+  "finalReportSha256": "4b6089c653c0622db979cd328a721926ae3b07817f81a6e90f19db9c9265ba07",
+  "supersededEvidenceSha256": "3935c05a96ffaa46f887699b518a6def3255761a795db9db7123a16164829e22",
+  "supersededReportSha256": "81569855a45e82f3c3e25b387fbc73412897473ba8d5be1e410536a250bb3ef1"
+ },
+ "rialtoBoundary": {
+  "classification": "PARTIAL — RIALTO QUOTE ACCESS REQUIRED",
+  "date": "2026-07-25",
+  "registry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E",
+  "resolvedFeature2Router": "0xc94135b63772b91d79d0a2daab2a8801f32359bd",
+  "routerCodeHash": "0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611",
+  "technicalValidationAsset": "NVDA 0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC — TECHNICAL VENUE VALIDATION ASSET — LEGAL ELIGIBILITY UNVERIFIED — NOT AN APPROVED PRODUCTION BASKET",
+  "quoteAccess": "ABSENT (RIALTO_API_URL/RIALTO_API_KEY unconfigured; presence checked as booleans only)",
+  "selectorValidation": "machinery shipped; approved-selector list EMPTY by default (SELECTOR_POLICY_MISSING fail-closed); selector unpinned pending a real quote",
+  "priceRiskPolicy": "machinery shipped; NO approved feed/staleness/deviation/cap policy exists (decision pack #10/#12) — fails closed",
+  "settlementHardening": "frozen contracts already enforce all section-9 requirements (mapped to named Foundry tests); no contract change made",
+  "mainnetNonMutation": "IDENTICAL before/after; zero acquisitions; nonces 16/16 + 8/8",
+  "remainingB3Blockers": [
+   "authorized Rialto API access",
+   "venue selector pinning from a real quote",
+   "approved price/staleness/deviation/cap policies",
+   "venue replay/nonce semantics"
+  ],
+  "checkpointCommit": "adaddceb09302db78e36fdb294494fe71df0e43b",
+  "finalEvidenceSha256": "979f351d9a88c8f0058628417da46a8809d4a394e4440ec42025f3dd87e8d1b8",
+  "finalReportSha256": "7b0c88c6b11a9bda072241378b5c289f62fbd64d846c43ce4b13a0dae4d75a87",
+  "supersededEvidenceSha256": "e7bc7e6a044296ebeff1249b197416eb99a315e8f776805b7a80f18568bf006e",
+  "supersededReportSha256": "2b87cde1c6f25d2e822dd875403a529d7cd6b84222ee2ae9d301ce1c12e941df",
+  "routerRecheck": "block 19078598: identical router 0xc94135b6…59bd + code hash 0xa7041268…7611",
+  "independentlyRecorded": [
+   "APPROVED PRICE AND RISK POLICY REQUIRED",
+   "VENUE SELECTOR UNVERIFIED",
+   "VENUE REPLAY SEMANTICS UNRESOLVED",
+   "LEGAL ELIGIBILITY UNRESOLVED"
+  ],
+  "oracleSemanticsCorrection": {
+   "date": "2026-07-25",
+   "checkpointCommit": "6cb33745693905f576ec521422c2fca1de3605ac",
+   "criticalFix": "price-guard rewritten: PER_TOKEN_CHAINLINK feeds used directly (multiplier NOT re-applied; prior formula would have double-applied it); RAW_UNDERLYING gated evidence-only; two-feed model; L2 sequencer machinery; 79/79 rialto tests",
+   "evidence": "docs/audit/BPS_RIALTO_ORACLE_SEMANTICS_REVIEW_2026-07-25.{md,evidence.json}",
+   "evidenceSha256": "4295519ce145206b10f32c9f7c6486b654142d6cf6dc21db086f92947a45b0f1",
+   "reportSha256": "1e241a5feb734e7590907c218d72aa91425c3cef2e8d5d28ec8902441cf1c317",
+   "superseded10HHashes": {
+    "evidence": "979f351d9a88c8f0058628417da46a8809d4a394e4440ec42025f3dd87e8d1b8",
+    "report": "7b0c88c6b11a9bda072241378b5c289f62fbd64d846c43ce4b13a0dae4d75a87"
+   },
+   "current10HHashes": {
+    "evidence": "63d94b7a49df6fdf91b2c0a085428eb68ee16b10722d518aa70366b667a99537",
+    "report": "ad298ebf0ed186cca6c331a554251e9de5ce6d0b0b57db604b317085e4c06f56"
+   },
+   "decisionPack": {
+    "path": "docs/decisions/BPS_RIALTO_ACCESS_AND_PRICE_RISK_DECISION_PACK_2026-07-25.md",
+    "sha256": "1c433f0a6e9d28ca8b21607292230f7a880b653ce18f6532f24a47539d35f0af",
+    "decisions": 24,
+    "status": "ALL PROPOSED — NOT APPROVED"
+   }
+  },
+  "oracleDecisionReview": {
+   "date": "2026-07-25",
+   "checkpointCommit": "535e75347c25bb4f253ab7449cd512761f22d74e",
+   "structuralFixes": "policy-pinned inputFeedIdentity/outputFeedIdentity/outputSemantics (no caller relabeling); roundId>0 + updatedAt>0; uint256-domain bounds before exponentiation; rialto 89/89",
+   "wordingFix": "removed NON-BINDING -> 'QUOTE RETRIEVAL ONLY — RETURNS A FIRM EXECUTABLE PAYLOAD; NO SIGNATURE OR BROADCAST OCCURS DURING RETRIEVAL' (dated corrections; superseded hashes preserved)",
+   "ballot": {
+    "path": "docs/decisions/BPS_RIALTO_FOUNDER_APPROVAL_BALLOT_2026-07-25.md",
+    "sha256": "db61b58f6e298c1c73c7cc077d7905429f1a061ff377d5e5eaa94eadd606f0ca",
+    "decisions": 24,
+    "status": "ALL PROPOSED — NOT APPROVED"
+   },
+   "reviewEvidenceSha256": "e145a3c8a719fe8f6ac530fe946a8c5890ab7917c90fde8ce8695a00b529ff01",
+   "reviewReportSha256": "0a3a6fa240f9f4c5cff0757c06db90be09660a313f2b7f318cd4d54ad0e70ff6",
+   "corrected10HHashes": {
+    "boundaryMd": "a38039a3bf94ca22632ec3d9a44d0ef2c0638c9816980ead50b6b0917423245b",
+    "boundaryEvidence": "324bdaf68dae8552d29e84fd099a0360d477cd820555089d77a9ae67a32c266b",
+    "semanticsMd": "88530e01eb7b38c3ea187aa033e8d5654e062d411e65678fdb6d462039caeb79"
+   },
+   "priceGuardTrustModel": "NOT YET APPROVED (ballot D-22: A trusted-server / B on-chain oracle floor / C disabled; conservative = C)"
+  }
+ },
+ "oracleFeedMetadata": {
+  "date": "2026-07-25",
+  "inspectionBlock": 19223939,
+  "inspectionBlockHash": "0xe94b855b7973b78c1fb6611de5f41c421a69bc80f24d6631a89925270bccdb8c",
+  "chainId": 4663,
+  "d9": "OFFICIALLY IDENTIFIED CANDIDATE — NOT APPROVED / NOT CONFIGURED",
+  "d10": "OFFICIALLY IDENTIFIED CANDIDATE — NOT APPROVED / NOT CONFIGURED",
+  "d13": "UNRESOLVED — NO ROBINHOOD CHAIN ADDRESS IN CURRENT OFFICIAL CHAINLINK LIST",
+  "d12": "D-12's strict-freshness approach is founder-directed, but the exact maximum-staleness value remains deferred. The 86400-second catalog heartbeat is evidence for later analysis, not an approved ceiling, production setting or closed-session freshness guarantee.",
+  "candidates": {
+   "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+   "ethUsdProxy": "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9",
+   "ethUsdAggregator": "0x6091E64eb7138EEF066a80FD3A0d7427B91f2721",
+   "nvdaUsdProxy": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
+   "nvdaUsdAggregator": "0xC9d16E4f2569b9E3ea0468fD85844953713DC2a2",
+   "nvdaToken": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+   "allLabel": "CANDIDATE — NOT APPROVED / NOT CONFIGURED"
+  },
+  "nvdaTokenProvenance": "OFFICIAL LIVE ROBINHOOD LISTING — REPRODUCIBLY ESTABLISHED (api.robinhood.com/rhj/assets; token uid() == endpoint asset id)",
+  "evidence": [
+   "docs/audit/BPS_RIALTO_FEED_METADATA_2026-07-25.md",
+   "docs/audit/BPS_RIALTO_FEED_METADATA_2026-07-25.evidence.json"
+  ],
+  "decisionRegister": "docs/audit/BPS_FOUNDER_DECISION_REGISTER_2026-07-25.md",
+  "task10J2ProcessDeviation": "seven non-repository response files written by 10J-2 via curl -o (disclosed); 10J-2A/10J-2B made no filesystem change",
+  "d22bBoundary": "founder-selected architectural direction ONLY; implementation NOT authorized",
+  "d23": "COUNSEL-PENDING",
+  "d24": "no acquisition/funding/allowance/quote/simulation/deployment/activation authorized"
+ },
+ "quoteEvaluation": {
+  "date": "2026-07-25",
+  "decision": "QEX-1 — Isolated Rialto Quote-Evaluation Exception",
+  "qex1Status": "CONSUMED / COMPLETE — exactly one authenticated GET /quote on 2026-07-25; no retry or additional quote authorized",
+  "d2Status": "PRESERVED — founder read-only-key preference; currently unavailable via Rialto dashboard. QEX-1 is a bounded exception, NOT an erasure of D-2",
+  "exceptionVerbatim": "D-2 is superseded by the confirmed venue constraint. A mandatory bundled Rialto key may be used solely in an isolated, non-executing quote-evaluation environment with no signing key, funded wallet, allowance, Permit2 signature or swap-submission route. This exception authorizes GET /quote testing only. It does not authorize acquisition or execution under D-24.",
+  "officialOrigin": "https://rialto-trade-api.rialto.xyz (enforced; BAD_ORIGIN fail-closed on any other protocol/host/credentials/port/path/fragment/query)",
+  "liveCliRetired": "packages/rialto/src/quote-eval-cli.ts now fails with QEX1_CONSUMED before any env read or network call; no env override bypasses it; reviewed quote client not deleted; future live quote requires a separately reviewed source change + new founder authorization",
+  "evidence": [
+   "docs/audit/BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.md",
+   "docs/audit/BPS_RIALTO_QEX1_QUOTE_EVIDENCE_2026-07-25.evidence.json"
+  ],
+  "offlineEvaluator": "packages/rialto/src/registry-structural.ts (pure; no network/env/key); reconciles a quote target against a SEPARATE undated registry observation independently of selector approval; fail-closed on malformed/zero/paused/mismatch/prev-next-only/missing/wrong-chain",
+  "registryObservation": "conversation-supplied, read-only, UNDATED (block/time unavailable): registry 0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E feature 2 (taker-submitted); currentRouter 0xc94135b63772b91d79d0a2daab2a8801f32359bd; previous/next zero; paused false; NOT permanent authority; feature 3 = gasless",
+  "derivedReplay": "SELECTOR_UNAPPROVED — router matched the reported current feature-2 router for that undated snapshot only; selector 0x77963966 evidence-only (not approved/pinned); productionStructuralApproved=false; D-6 OPEN",
+  "originalStructuralResultPreserved": "passed=false, ROUTER_UNRESOLVED, boundary QUOTE_OBSERVED (unchanged in the evidence artifact)",
+  "securityOmissions": "no API key/credential; raw quote_id NOT stored (SHA-256 only); complete calldata NOT stored (selector + byte length only); no PowerShell secret material; NVDA human-decimal not derived (raw buy amounts retained as authoritative)",
+  "verification": "OFFLINE only — @bps/rialto typecheck + build clean, eslint clean, vitest 150/150; zero network requests; NO live GET /quote",
+  "d3": "COUNSEL-PENDING — production possession/use of the broader-scope (swap:create/swap:integrator) key; must stay isolated from any signing key or on-chain allowance",
+  "openDecisions": "D-5, D-6, D-8, D-21, D-22B remain open; D-23 counsel-pending; D-24 stands; QEX-1 closes none of them; ballot D-17 untouched",
+  "d24": "stands — no acquisition/execution authorized"
+ },
+ "guardedSettlement": {
+  "date": "2026-07-25",
+  "task": "TASK 10K-3",
+  "state": "production-shaped but DELIBERATELY DISABLED; offline-only; live trading NOT enabled",
+  "core": "packages/rialto/src/guarded-settlement.ts (pure, deterministic, integer-safe; no env/network/fs/exit; DI for registry/price/replay/clock)",
+  "tests": "packages/rialto/src/guarded-settlement.test.ts (fail-closed matrix, QEX-1 replay non-production, happy path READY_OFFLINE_ONLY, network tripwire)",
+  "doc": "docs/audit/BPS_RIALTO_GUARDED_SETTLEMENT_2026-07-25.md",
+  "candidatePolicy": "chain 4663; feature 2; WETH->NVDA only; no integrator fee; platform fee <=5 bps; slippage 50/100 bps; deviation <=100 bps; lifetime <=300s; selector allow-list EMPTY (0x77963966 evidence-only); taker/caps/ages/price-source UNRESOLVED (fail closed)",
+  "readyStatus": "READY_OFFLINE_ONLY is NEVER execution authorization; production candidate policy is not ready",
+  "solidity": "OPAQUE-CALL MODEL (TASK 10K-5) — packages/contracts/src/GuardedSettlementExecutor.sol (UNDEPLOYED; Ownable2Step Safe controller; executor-as-taker; Pausable start-paused; ReentrancyGuard; registry ownerOf(2) lock; APPROVED runtime code hash + selector via setApprovedRouterCode (NO ABI decode); required price guard; 0.01 WETH cap; exact-allowance + own-balance min-delta + allowance-reset; domain digest + replay; recover own-balance-only). tx.data is passed UNMODIFIED. Removed the per-selector ABI-decoding validator (+ its interface/mock). forge-std v1.9.7 (commit 77041d2ce690e692d6e03cc812b57d1ddaa4d505) in gitignored lib; OZ 5.6.1",
+  "abiBlocker": "REMOVED — the missing human-readable Rialto ABI is no longer a technical blocker (opaque-call envelope)",
+  "onchainEvidence": "block 19674173: router 0xc94135b63772b91d79d0a2daab2a8801f32359bd runtime code hash 0xa7041268d6f20802f420b5c71e84a991dc797f27cb474265598b89e43ef27611 (direct impl, not a proxy); registry ownerOf(2)==router; selector 0x77963966 in dispatcher; router = target + allowance spender; delivers NVDA to the taker. Full cast-run replay unavailable (Arbitrum-Nitro encoding vs foundry 1.7.1); archive STATE reads used. See docs/audit/BPS_RIALTO_ROUTER_OPAQUE_CALL_2026-07-26.*",
+  "selectorProof": "NOT authoritatively proven as a named function; may be APPROVED only when paired with the observed router code hash 0xa7041268...27611 (enforced on-chain). Any rotation/code-hash change halts settlement pending review. FIRST canary gate.",
+  "quoteBoundary": "TS validateOpaqueQuoteForIntent (pure/offline) validates settlement/to/spender/value/selector/tokens/taker/amounts/fee/freshness; never modifies tx.data; returns only the calldata hash",
+  "digestParity": "TS<->Solidity byte-identical for a shared vector (0x99edf1c907908d0d6f278d7e04c0a6624ba35f59ca6b7b74800b220fdd8e8c06); unchanged",
+  "verification": "OFFLINE Foundry build + 55 tests (unit/malicious-router/fuzz/invariant, no fork/RPC), forge fmt clean; @bps/rialto typecheck + build + eslint clean, vitest 219/219; read-only public RPC used for investigation (no API key/signing/broadcast); QEX-1 remains consumed",
+  "decisionStates": "D-5 exact-allowance implemented locally (approval/deployment-pending); D-6 OPEN only for production Safe/taker approval + activation (ABI is NOT the blocker); D-8 0.01/100bps candidate (no production authorization); D-21 replay+allowance implemented/tested (deployment-review pending); D-22B price-guard with mocks (trusted source unresolved, separate); D-3 counsel-pending; D-23 counsel-pending; D-24 stands; D-17 unchanged",
+  "remainingGatesForCanary": [
+   "approve 0x77963966 paired with the observed router code hash 0xa7041268...27611 (D-6)",
+   "trusted production price source + freshness (D-22B)",
+   "production Safe controller/taker + formal activation (D-6)",
+   "per-token sell cap approval (D-8)",
+   "deployment script/procedure + external audit + counsel (D-3/D-23) + new bounded founder authorization (D-24)"
+  ]
+ }
 }
