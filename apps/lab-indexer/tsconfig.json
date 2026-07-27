@@ -6,15 +6,12 @@
     "noEmit": false,
     "sourceMap": true,
     "declaration": false,
-    // Consume @bps/launch-lab (Bundler-style TS source) the same way apps/web
-    // does. Emit preserves the explicit .js specifiers in our own imports, and
-    // Node 24 strips the workspace package's types at runtime.
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    // DOM added only so the shared @bps/launch-lab source (which references
-    // BlobPart/File in its browser-capable metadata module) type-resolves; the
-    // indexer never touches those code paths at runtime.
-    "lib": ["ES2023", "DOM"],
+    // NodeNext: the indexer is a plain-Node ESM service. Its own imports use
+    // explicit .js specifiers and it no longer imports @bps/launch-lab at
+    // runtime, so it emits cleanly resolvable ESM (see anchors.ts).
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["ES2023"],
     "types": ["node"]
   },
   "include": ["src"],

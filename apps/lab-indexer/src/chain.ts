@@ -19,14 +19,14 @@ import {
   getAddresses,
 } from "@whetstone-research/doppler-sdk/evm";
 import { computePoolId, normalizePoolKey } from "@whetstone-research/doppler-sdk/evm";
-import { APPROVED_ANCHORS, getAnchorByAddress } from "@bps/launch-lab";
+// Local, emitted-JS-safe registry — NEVER import @bps/launch-lab at runtime
+// (its TS-source entrypoint breaks plain-Node ESM). See ./anchors.ts.
+import { APPROVED_ANCHOR_ADDRESSES, getAnchorByAddress } from "./anchors.js";
 
 /** Canonical GOOGL — kept for the sync test; discovery now spans all anchors. */
 export const GOOGL_ADDRESS: Address = getAddress("0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3");
 
-/** All approved anchor numeraires the indexer discovers markets for. */
-export const APPROVED_ANCHOR_ADDRESSES: Address[] = APPROVED_ANCHORS.map((a) => a.address);
-export { getAnchorByAddress };
+export { APPROVED_ANCHOR_ADDRESSES, getAnchorByAddress };
 
 export const robinhood = defineChain({
   id: 4663,
