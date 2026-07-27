@@ -32,6 +32,7 @@ export const MIGRATIONS: readonly string[] = [
     numeraire TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`,
+  `ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS consumed_at TIMESTAMPTZ`,
   `CREATE TABLE IF NOT EXISTS lab_used_signatures (
     sig_hash TEXT PRIMARY KEY,
     used_at TIMESTAMPTZ NOT NULL DEFAULT now()

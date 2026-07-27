@@ -64,6 +64,7 @@ async function getPg(): Promise<PgPool | null> {
       numeraire TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
+    await pool.query(`ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS consumed_at TIMESTAMPTZ`);
     await pool.query(`CREATE TABLE IF NOT EXISTS lab_used_signatures (
       sig_hash TEXT PRIMARY KEY,
       used_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -198,7 +199,22 @@ export async function insertVerifiedLaunch(rec: VerifiedLaunchInsert): Promise<b
   }
 }
 
-/** Look up an issued manifest prediction by created token + creator. */
+/** True if a token is already a provenance-verified BPS launch (idempotency). */
+export async function isTokenVerified(tokenAddress: string): Promise<boolean> {
+  const pg = await getPg();
+  if (!pg) return false;
+  try {
+    const res = await pg.query(
+      `SELECT 1 FROM lab_launches WHERE token_address = $1 AND provenance_verified = true`,
+      [tokenAddress.toLowerCase()],
+    );
+    return res.rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Look up an UNCONSUMED issued manifest prediction by created token + creator. */
 export async function matchIssuedManifest(
   tokenAddress: string,
   creator: string,
@@ -208,7 +224,7 @@ export async function matchIssuedManifest(
   try {
     const res = await pg.query(
       `SELECT manifest_hash, anchor_symbol, numeraire FROM lab_prepared
-       WHERE predicted_token = $1 AND creator = $2`,
+       WHERE predicted_token = $1 AND creator = $2 AND consumed_at IS NULL`,
       [tokenAddress.toLowerCase(), creator.toLowerCase()],
     );
     const row = res.rows[0] as
@@ -221,6 +237,20 @@ export async function matchIssuedManifest(
     };
   } catch {
     return null;
+  }
+}
+
+/** Mark an issued manifest single-use once its launch is verified. */
+export async function consumeIssuedManifest(tokenAddress: string): Promise<void> {
+  const pg = await getPg();
+  if (!pg) return;
+  try {
+    await pg.query(
+      `UPDATE lab_prepared SET consumed_at = now() WHERE predicted_token = $1 AND consumed_at IS NULL`,
+      [tokenAddress.toLowerCase()],
+    );
+  } catch {
+    // non-fatal
   }
 }
 

@@ -12,6 +12,8 @@ import {
   getVolumeByToken,
   matchIssuedManifest,
   insertVerifiedLaunch,
+  isTokenVerified,
+  consumeIssuedManifest,
 } from "../../../../lib/lab/store";
 import { clientKey, err, mapError, ok, rateLimited } from "../../../../lib/lab/http";
 
@@ -86,15 +88,24 @@ export async function POST(req: Request): Promise<Response> {
     const asset = getAddress(args.asset);
     const creator = getAddress(receipt.from);
 
-    // BPS PROVENANCE GATE: the created token must match a manifest THIS server
-    // issued to this creator via /api/lab/prepare. An approved anchor + the
-    // generic Doppler initializer is NOT sufficient — external Doppler markets
-    // never went through /api/lab/prepare and are rejected here.
+    // Idempotent: an already-verified token re-registers cleanly.
+    if (await isTokenVerified(asset)) {
+      invalidateLaunchCache();
+      return ok({ registered: true, provenanceVerified: true, tokenAddress: asset });
+    }
+
+    // BPS PROVENANCE GATE: the created token must match an UNCONSUMED manifest
+    // THIS server issued to this creator via /api/lab/prepare. That manifest was
+    // built server-side with the exact creator, anchor, BPS fee recipient,
+    // 85/10/5 shares, rehype initializer, no-op migration/governance and pool
+    // configuration — so a match transitively proves all of those. An approved
+    // anchor + the generic Doppler initializer is NOT sufficient; external
+    // Doppler markets never went through /api/lab/prepare and are rejected here.
     const issued = await matchIssuedManifest(asset, creator);
     if (!issued) {
       return err(
         "UNVERIFIED_PROVENANCE",
-        "This market was not created through the BPS Launch Lab (no matching issued manifest).",
+        "This market was not created through the BPS Launch Lab (no matching unconsumed manifest).",
         409,
       );
     }
@@ -112,6 +123,8 @@ export async function POST(req: Request): Promise<Response> {
       timestamp: Number(block.timestamp),
       manifestHash: issued.manifestHash,
     });
+    // Single-use: the matched manifest cannot verify another market.
+    await consumeIssuedManifest(asset);
     invalidateLaunchCache();
     return ok({ registered: inserted, provenanceVerified: true, tokenAddress: asset });
   } catch (e) {
