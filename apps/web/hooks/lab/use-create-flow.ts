@@ -44,6 +44,11 @@ export interface CreateFlowFormState {
   /** Empty string = default to the connected wallet. */
   creatorFeeAddress: string;
   /**
+   * Chosen approved-anchor symbol (the market's quote asset). Defaults to GOOGL;
+   * sent to the server as `anchorSymbol` in the prepare payload.
+   */
+  anchorSymbol: string;
+  /**
    * Explicit user acknowledgement (experimental, unaffiliated, irreversible).
    * Sent to the server as literal `true` ONLY when the user checked the box —
    * never silently defaulted.
@@ -189,6 +194,7 @@ export function useCreateFlow(): CreateFlow {
     startingFdvUsd: 0,
     feePreset: "BALANCED_1",
     creatorFeeAddress: "",
+    anchorSymbol: "GOOGL",
     termsAccepted: false,
   });
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
@@ -395,6 +401,7 @@ export function useCreateFlow(): CreateFlow {
       feePreset: form.feePreset,
       creatorAddress: address,
       creatorFeeAddress: getAddress(creatorFee) as Address,
+      anchorSymbol: form.anchorSymbol || "GOOGL",
       termsAccepted: true,
     };
   }, [address, metadata, form]);

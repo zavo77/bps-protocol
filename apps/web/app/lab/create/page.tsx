@@ -1,11 +1,16 @@
 "use client";
-// Launch Lab creation flow: Token → Market → Review → Launch, driven entirely by
-// useCreateFlow. Every CreateFlowState enum value is renderable via FLOW_STATE_INFO.
+// Launch Lab creation flow — simplified VISIBLE flow: Token → Pair → Launch,
+// driven entirely by useCreateFlow. Every CreateFlowState enum value is renderable
+// via FLOW_STATE_INFO. All existing validation / metadata upload / simulation /
+// manifest / gating / signing work is preserved; only the step grouping changed:
+// the anchor picker + fee destination live on "Pair", and the old Review + Launch
+// steps are folded into "Launch".
 import { useState } from "react";
 import { useConnect, useSwitchChain } from "wagmi";
 import {
   CHAIN_ID,
   EXPLORER_BASE_URL,
+  SPLIT,
   type CreateFlowState,
   type FeePreset,
   type LaunchManifest,
@@ -27,19 +32,19 @@ const FLOW_STATE_INFO: Record<CreateFlowState, { label: string; detail: string }
   },
   "metadata-confirmed": {
     label: "Metadata confirmed",
-    detail: "The token metadata is pinned on IPFS. Configure the market and prepare the launch.",
+    detail: "The token metadata is pinned on IPFS. Choose the pair and prepare the launch.",
   },
   "anchor-verifying": {
-    label: "Verifying GOOGL anchor",
+    label: "Verifying anchor",
     detail: "Fail-closed verification against the official Stock Token API is in progress.",
   },
   "anchor-verified": {
     label: "Anchor verified",
-    detail: "The canonical GOOGL anchor is verified. Ready to simulate the launch.",
+    detail: "The canonical anchor is verified. Ready to simulate the launch.",
   },
   "anchor-mismatch": {
     label: "Anchor mismatch",
-    detail: "The GOOGL anchor failed verification. Launching is blocked until it verifies.",
+    detail: "The anchor failed verification. Launching is blocked until it verifies.",
   },
   simulating: {
     label: "Simulating",
@@ -121,9 +126,12 @@ export default function LabCreatePage() {
   const flow = useCreateFlow();
   const { connect, connectors, isPending: connecting } = useConnect();
   const { switchChain } = useSwitchChain();
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [feeMode, setFeeMode] = useState<"connected" | "custom">("connected");
 
   const explorer = flow.config?.explorerBaseUrl ?? EXPLORER_BASE_URL;
+  const anchors = flow.config?.anchors ?? [];
+  const selectedAnchor = anchors.find((a) => a.symbol === flow.form.anchorSymbol);
   const info = FLOW_STATE_INFO[flow.flowState];
   const busy =
     flow.flowState === "image-uploading" ||
@@ -140,6 +148,11 @@ export default function LabCreatePage() {
     const fdv = Number(m.startingFdvUsdFixed);
     if (!Number.isFinite(fdv)) return "—";
     return (fdv / 1_000_000_000).toFixed(12).replace(/0+$/, "").replace(/\.$/, "");
+  };
+
+  const selectFeeConnected = () => {
+    setFeeMode("connected");
+    flow.updateForm({ creatorFeeAddress: "" });
   };
 
   return (
@@ -181,10 +194,10 @@ export default function LabCreatePage() {
       </section>
 
       <nav aria-label="Steps" style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
-        {([1, 2, 3, 4] as const).map((n) => {
-          const labels = { 1: "Token", 2: "Market", 3: "Review", 4: "Launch" } as const;
+        {([1, 2, 3] as const).map((n) => {
+          const labels = { 1: "Token", 2: "Pair", 3: "Launch" } as const;
           const enabled =
-            n === 1 || (n === 2 && flow.metadata !== null) || (n >= 3 && flow.bundle !== null);
+            n === 1 || (n === 2 && flow.metadata !== null) || (n === 3 && flow.bundle !== null);
           return (
             <button
               key={n}
@@ -318,94 +331,149 @@ export default function LabCreatePage() {
       ) : null}
 
       {step === 2 ? (
-        <section className="card">
-          <h2>2. Market</h2>
-          <div className="kv">
-            <span className="k">Quote asset (fixed)</span>
-            <span className="v">
-              GOOGL{" "}
-              {flow.anchor?.status === "verified" ? (
-                <span className="badge badge-good">Verified</span>
-              ) : (
-                <span className="badge badge-warn">
-                  {flow.anchorLoading ? "Verifying" : (flow.anchor?.status ?? "unknown")}
-                </span>
-              )}
-            </span>
-          </div>
-          {flow.anchor ? (
-            <>
-              <Row
-                k="Anchor address"
-                v={
-                  <a
-                    href={`${explorer}/address/${flow.anchor.address}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {short(flow.anchor.address)}
-                  </a>
-                }
-              />
-              <Row k="Multiplier" v={flow.anchor.currentMultiplier || "—"} />
-              <Row k="Mid price (USD)" v={flow.anchor.midPriceUsd} />
-            </>
-          ) : null}
-          <br />
-          <label>
-            Starting FDV (USD, integer)
-            <br />
-            <input
-              type="number"
-              min={1_000}
-              max={10_000_000}
-              step={1}
-              value={flow.form.startingFdvUsd || ""}
-              data-testid="fdv-input"
-              onChange={(e) => flow.updateForm({ startingFdvUsd: Number(e.target.value) })}
-            />
-          </label>
-          <h3>Fee preset</h3>
-          <div className="grid">
-            {(flow.config?.feePresets ?? []).map((p: FeePreset) => (
+        <section className="card" data-testid="pair-step">
+          <h2>2. Pair</h2>
+
+          <h3>Quote asset (anchor)</h3>
+          <p className="small muted">
+            Choose the approved Stock Token your market is quoted in. This pairing is fixed
+            permanently at launch.
+          </p>
+          <div className="grid" data-testid="anchor-picker" role="radiogroup" aria-label="Anchor">
+            {anchors.map((a) => (
               <label
-                key={p.id}
+                key={a.symbol}
                 className="card"
-                style={p.enabled ? undefined : { opacity: 0.55 }}
-                data-testid={`preset-choice-${p.id}`}
+                data-testid={`anchor-choice-${a.symbol}`}
+                style={
+                  flow.form.anchorSymbol === a.symbol ? { borderColor: "var(--accent)" } : undefined
+                }
               >
                 <input
                   type="radio"
-                  name="feePreset"
-                  value={p.id}
-                  checked={flow.form.feePreset === p.id}
-                  disabled={!p.enabled}
-                  onChange={() => p.enabled && flow.updateForm({ feePreset: p.id })}
+                  name="anchor"
+                  value={a.symbol}
+                  checked={flow.form.anchorSymbol === a.symbol}
+                  onChange={() => flow.updateForm({ anchorSymbol: a.symbol })}
                 />{" "}
-                {p.label} — {p.displayFee} ({p.mode})
-                {!p.enabled && p.disabledReason ? (
-                  <span className="small muted">
-                    <br />
-                    {p.disabledReason}
-                  </span>
-                ) : null}
+                {a.logo ? (
+                  <img
+                    src={a.logo}
+                    alt=""
+                    width={18}
+                    height={18}
+                    style={{ verticalAlign: "middle", borderRadius: "50%" }}
+                  />
+                ) : null}{" "}
+                <strong>{a.symbol}</strong>
+                <br />
+                <span className="small muted">{a.name}</span>
               </label>
             ))}
+            {anchors.length === 0 ? <p className="small muted">Loading approved anchors…</p> : null}
           </div>
-          <label>
-            Creator fee address (defaults to the connected wallet)
-            <br />
+          {selectedAnchor ? (
+            <Row
+              k="Anchor address"
+              v={
+                <a
+                  href={`${explorer}/address/${selectedAnchor.address}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {short(selectedAnchor.address)}
+                </a>
+              }
+            />
+          ) : null}
+
+          <h3>Fee destination</h3>
+          <p className="small muted">Where your creator share of LP fees is collected.</p>
+          <label style={{ display: "block", margin: "0.35rem 0" }} data-testid="fee-dest-connected">
+            <input
+              type="radio"
+              name="feeDest"
+              checked={feeMode === "connected"}
+              onChange={selectFeeConnected}
+            />{" "}
+            Connected wallet (default)
+          </label>
+          <label style={{ display: "block", margin: "0.35rem 0" }} data-testid="fee-dest-custom">
+            <input
+              type="radio"
+              name="feeDest"
+              checked={feeMode === "custom"}
+              onChange={() => setFeeMode("custom")}
+            />{" "}
+            Custom wallet
+          </label>
+          {feeMode === "custom" ? (
             <input
               type="text"
               value={flow.form.creatorFeeAddress}
-              placeholder="0x… (leave empty to use the connected wallet)"
+              placeholder="0x… fee-collecting address"
               style={{ width: "100%" }}
               data-testid="creator-fee-input"
               onChange={(e) => flow.updateForm({ creatorFeeAddress: e.target.value })}
             />
-          </label>
+          ) : null}
+
+          <h3>Fee split (immutable)</h3>
+          <div data-testid="fee-split-readonly">
+            <Row k="Creator" v={`${SPLIT.creatorFeePct.toString()}%`} />
+            <Row k="BPS" v={`${SPLIT.bpsFeePct.toString()}%`} />
+            <Row k="Doppler" v={`${SPLIT.protocolPct.toString()}%`} />
+          </div>
+
+          <details data-testid="advanced-disclosure" style={{ marginTop: "1rem" }}>
+            <summary>Advanced (defaults are fine for most launches)</summary>
+            <div style={{ marginTop: "0.75rem" }}>
+              <Row k="Total supply" v="1,000,000,000 (fixed)" />
+              <label>
+                Starting FDV (USD, integer)
+                <br />
+                <input
+                  type="number"
+                  min={1_000}
+                  max={10_000_000}
+                  step={1}
+                  value={flow.form.startingFdvUsd || ""}
+                  data-testid="fdv-input"
+                  onChange={(e) => flow.updateForm({ startingFdvUsd: Number(e.target.value) })}
+                />
+              </label>
+              <h4>Fee preset</h4>
+              <div className="grid">
+                {(flow.config?.feePresets ?? []).map((p: FeePreset) => (
+                  <label
+                    key={p.id}
+                    className="card"
+                    style={p.enabled ? undefined : { opacity: 0.55 }}
+                    data-testid={`preset-choice-${p.id}`}
+                  >
+                    <input
+                      type="radio"
+                      name="feePreset"
+                      value={p.id}
+                      checked={flow.form.feePreset === p.id}
+                      disabled={!p.enabled}
+                      onChange={() => p.enabled && flow.updateForm({ feePreset: p.id })}
+                    />{" "}
+                    {p.label} — {p.displayFee} ({p.mode})
+                    {!p.enabled && p.disabledReason ? (
+                      <span className="small muted">
+                        <br />
+                        {p.disabledReason}
+                      </span>
+                    ) : null}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </details>
+
           {flow.formErrors.length > 0 ? (
-            <ul>
+            <ul data-testid="pair-errors">
               {flow.formErrors.map((err) => (
                 <li key={err} className="small" style={{ color: "var(--bad)" }}>
                   {err}
@@ -428,7 +496,7 @@ export default function LabCreatePage() {
 
       {step === 3 && flow.manifest && flow.simulation && flow.prepared ? (
         <section className="card" data-testid="review">
-          <h2>3. Review — every value below is irreversible once launched</h2>
+          <h2>3. Launch — review every value below; it is irreversible once launched</h2>
           <p className="banner">
             <strong>Irreversible configuration.</strong> Token identity, metadata URI, anchor
             pairing, supply, fee preset, and beneficiary splits are fixed permanently at launch.
@@ -533,20 +601,8 @@ export default function LabCreatePage() {
             k="App version / commit"
             v={`${flow.manifest.appVersion} / ${flow.manifest.sourceCommit}`}
           />
-          <button data-testid="review-continue" onClick={() => setStep(4)} disabled={busy}>
-            Continue to launch
-          </button>
-        </section>
-      ) : null}
-      {step === 3 && !flow.manifest ? (
-        <section className="card">
-          <p className="muted">No prepared launch yet — go back and prepare the launch first.</p>
-        </section>
-      ) : null}
 
-      {step === 4 ? (
-        <section className="card">
-          <h2>4. Launch</h2>
+          <h3 style={{ marginTop: "1.25rem" }}>Launch</h3>
           {flow.config && flow.config.publicBeta.launchesToday !== null ? (
             <p className="small muted" data-testid="public-beta-capacity">
               Public beta: {flow.config.publicBeta.launchesToday} of{" "}
@@ -556,7 +612,7 @@ export default function LabCreatePage() {
           <ul style={{ listStyle: "none", paddingLeft: 0 }} data-testid="launch-checklist">
             <Gate ok={flow.gates.walletConnected} label="Wallet connected" />
             <Gate ok={flow.gates.chainOk} label={`On Robinhood Chain (${CHAIN_ID})`} />
-            <Gate ok={flow.gates.anchorVerified} label="GOOGL anchor verified" />
+            <Gate ok={flow.gates.anchorVerified} label="Anchor verified" />
             <Gate ok={flow.gates.metadataConfirmed} label="Metadata confirmed (production IPFS)" />
             <Gate
               ok={flow.gates.simulated && flow.gates.simulationFresh}
@@ -652,6 +708,11 @@ export default function LabCreatePage() {
               </ul>
             </div>
           ) : null}
+        </section>
+      ) : null}
+      {step === 3 && !flow.manifest ? (
+        <section className="card">
+          <p className="muted">No prepared launch yet — go back and prepare the launch first.</p>
         </section>
       ) : null}
     </main>

@@ -3,6 +3,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { LabProviders } from "../../providers/lab-providers";
+import { ConnectedProfileLink } from "./ConnectedProfileLink";
 
 export const metadata: Metadata = {
   title: "BPS Launch Lab",
@@ -22,8 +23,10 @@ export default function LabLayout({ children }: { children: ReactNode }) {
         style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}
       >
         <a href="/lab">Launch Lab</a>
+        <a href="/lab/tokens">Markets</a>
         <a href="/lab/create">Create</a>
         <a href="/lab/proof">Proof</a>
+        <ConnectedProfileLink />
       </nav>
       {children}
       <footer

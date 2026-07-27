@@ -25,3 +25,6 @@ export {
 } from "./use-trade";
 export { useHistory, type SwapRecord, type HistoryState } from "./use-history";
 export { useTokenBalances, type TokenBalance, type TokenBalances } from "./use-token-balances";
+export { useMarkets, type UseMarkets, type MarketsSort, type MarketListItem } from "./use-markets";
+export { useProfile, type CreatorProfile, type ProfileMarket } from "./use-profile";
+export { useFees, type UseFees, type FeesUiState } from "./use-fees";
