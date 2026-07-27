@@ -109,7 +109,9 @@ export interface LabServerFlags {
  * active unless each is explicitly configured otherwise.
  */
 function intEnv(name: string, fallbackValue: number, min: number, max: number): number {
-  const v = Number(process.env[name] ?? "");
+  const raw = process.env[name];
+  if (!raw || raw.trim() === "") return fallbackValue;
+  const v = Number(raw);
   return Number.isInteger(v) && v >= min && v <= max ? v : fallbackValue;
 }
 

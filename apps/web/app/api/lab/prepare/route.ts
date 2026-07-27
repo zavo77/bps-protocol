@@ -61,7 +61,8 @@ export async function POST(req: Request): Promise<Response> {
       return err("METADATA_NOT_BROADCASTABLE", "Token metadata is not a production IPFS upload.");
     }
 
-    const commit = process.env.VERCEL_GIT_COMMIT_SHA ?? "local-dev";
+    const commit =
+      process.env.BPS_SOURCE_COMMIT || process.env.VERCEL_GIT_COMMIT_SHA || "local-dev";
     const bundle = await prepareLaunch(payload, "8h-v1", commit);
     return ok(bundle);
   } catch (e) {

@@ -44,7 +44,8 @@ export async function POST(req: Request): Promise<Response> {
       keccak256(stringToHex(envelope.signature)),
       getFlags().requestTtlSeconds * 1000,
     );
-    const commit = process.env.VERCEL_GIT_COMMIT_SHA ?? "local-dev";
+    const commit =
+      process.env.BPS_SOURCE_COMMIT || process.env.VERCEL_GIT_COMMIT_SHA || "local-dev";
     const bundle = await prepareLaunch(payload, "8h-v1", commit);
     return ok({
       simulation: bundle.simulation,

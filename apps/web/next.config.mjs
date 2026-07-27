@@ -16,6 +16,12 @@ const nextConfig = {
   },
   // @bps/launch-lab ships TypeScript source (no prebuild step); Next compiles it.
   transpilePackages: ["@bps/launch-lab"],
+  // Source-commit provenance for the proof page. CLI deploys don't get
+  // VERCEL_GIT_COMMIT_SHA, so the deploy command passes BPS_SOURCE_COMMIT as a
+  // build-time variable; it is baked in here for runtime reads.
+  env: {
+    BPS_SOURCE_COMMIT: process.env.BPS_SOURCE_COMMIT ?? "",
+  },
 };
 
 export default nextConfig;

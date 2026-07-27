@@ -71,6 +71,16 @@ describe("config", () => {
     expect(flags.bpsFeeAddress).toBeNull();
   });
 
+  it("guardrail knobs fall back to defaults when env is missing or empty", () => {
+    delete process.env.BPS_LAUNCH_LAB_LAUNCH_COOLDOWN_SECONDS;
+    process.env.BPS_LAUNCH_LAB_MAX_LAUNCHES_PER_WALLET = "";
+    const flags = readServerFlags();
+    expect(flags.launchCooldownSeconds).toBe(3600);
+    expect(flags.maxLaunchesPerWallet).toBe(2);
+    process.env.BPS_LAUNCH_LAB_LAUNCH_COOLDOWN_SECONDS = "0";
+    expect(readServerFlags().launchCooldownSeconds).toBe(0);
+  });
+
   it('kill switch deactivates only on explicit "false"', () => {
     process.env.BPS_LAUNCH_LAB_KILL_SWITCH = "off";
     expect(readServerFlags().killSwitchActive).toBe(true);

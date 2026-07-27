@@ -17,7 +17,8 @@ export async function GET(req: Request): Promise<Response> {
     }
     const record: ProofRecord = {
       deploymentUrl: new URL(req.url).host,
-      sourceCommit: process.env.VERCEL_GIT_COMMIT_SHA ?? "local-dev",
+      sourceCommit:
+        process.env.BPS_SOURCE_COMMIT || process.env.VERCEL_GIT_COMMIT_SHA || "local-dev",
       manifest: null,
       manifestHash: GENESIS_MARKET.manifestHash,
       anchor,
