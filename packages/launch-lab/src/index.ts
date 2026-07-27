@@ -2,3 +2,11 @@
 // Modules are exported explicitly as they land; keep this file the single
 // authoritative surface so apps/web imports stay stable for Claude Design.
 export * from './types/index';
+export * from './config/index';
+export * from './anchor/index';
+export * from './doppler/index';
+export * from './manifest/index';
+export * from './metadata/index';
+export * from './receipts/index';
+export * from './validation/index';
+export { GENESIS_MARKET, type GenesisMarketRecord } from './registry/genesis-market';
