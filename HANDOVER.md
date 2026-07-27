@@ -20,8 +20,9 @@
 > primary payment↔Stock-Token venue (priority Rialto → 1inch → 0x; composed Rialto payment↔anchor +
 > BPS Direct anchor↔token; anchor-direct advanced only), frozen primary trade UI, adversarial-review
 > hardening (13 confirmed findings fixed). Preview + Production fail-closed (public / broadcast false /
-> kill true). **Blocker LL-4:** `RIALTO_API_KEY` is local-only — NOT in Vercel — so deployed Rialto
-> routing stays dormant until the founder adds it (server-side, Sensitive) and redeploys.
+> kill true). **LL-4 CLOSED (2026-07-27):** founder added `RIALTO_API_KEY` to Vercel Preview + Production; production
+> Rialto routing LIVE-VERIFIED at commit `48a7c8d` (route-probe: all 8 payment↔anchor pairs fill via
+> Rialto, 5 bps, exact spender, native-ETH pairs simulate; deployed-asset secret scans clean).
 
 ## SNAPSHOT (verified)
 

@@ -130,3 +130,12 @@ Newest entries at the top. No secrets ever recorded here.
 - Gate: 307 web + 53 pkg + 9 indexer tests, lint/typecheck/build clean, client-bundle secret scan clean.
 - Preview + Production deployed fail-closed (public / broadcast false / kill true), health verified at
   commit 01c8cfd. BLOCKER LL-4: RIALTO_API_KEY not in Vercel → deployed Rialto dormant until founder adds it.
+
+## 2026-07-27 — RIALTO_API_KEY activated: production Rialto routing live-verified (e3178a3, 48a7c8d)
+
+- route-probe diagnostic added; all 8 founder pairs fill via Rialto in production (5 bps, exact spender,
+  native ETH approval-free, ETH pairs simulate exact calldata). Trade-card BUY one-steps via Rialto on a
+  live external GOOGL Doppler market; SELL surfaces honest NO_POOL_LIQUIDITY (empty anchor reserves in a
+  fresh pool — market state, root-caused to nested NotEnoughLiquidity under UnexpectedRevertBytes).
+- Deployed-asset secret scans clean. 312+56+9 tests green. LL-4 closed; posture unchanged
+  (public / broadcast false / kill true).

@@ -7,6 +7,36 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-27 — LAUNCH LAB LANE: RIALTO_API_KEY activated in Vercel — production Rialto routing live-verified (commits e3178a3 + 48a7c8d)
+
+- **Type:** Lane source change + Preview/Production redeploys (fail-closed) + live production verification.
+  No mainnet transaction; no launch/trade signature requested; broadcast disabled; kill switch active.
+- **Founder action:** RIALTO_API_KEY added to Vercel Preview + Production (server-side, Sensitive) —
+  closes LL-4. Value never seen, printed, or committed by Claude.
+- **New diagnostic (e3178a3):** GET /api/lab/route-probe — read-only, tightly rate-limited, sanitized
+  (venue, amounts, fee bps, exact returned spender, simulation status; never calldata or key material).
+  Fixed founder matrix through the frozen priority chain on the DEPLOYED runtime; native-ETH pairs
+  simulate the exact returned calldata via a funded public EOA (read-only eth_call) when the
+  beneficiary is unfunded.
+- **Production verification (commit 48a7c8d):** all 8 pairs (ETH→GOOGL, ETH→NVDA, WETH→NVDA,
+  USDG→GOOGL + reverses) fill via **rialto**, chain 4663, fee **5 bps** read from each quote, spender
+  `0xC94135b63772b91D79d0A2DaAb2a8801f32359bD` used exactly, native ETH needs no approval
+  (spender null), ETH→GOOGL and ETH→NVDA **simulate ok**. Trade-card POST /api/lab/quote against the
+  live external GOOGL Doppler market `0x0877…dBA3`: BUY one-steps via Rialto; advanced anchor-direct
+  BUY quotes the live rehype pool (BPS Direct leg proven live).
+- **Bug found & fixed during verification (48a7c8d):** market-token SELL returned INTERNAL 500 — the
+  v4 Quoter wraps pool reverts in UnexpectedRevertBytes(0x6190b2b0); nested selector 0x7a5ed734 =
+  NotEnoughLiquidity(poolId). Root cause is market state, not code: a freshly launched multicurve pool
+  holds only the launched token until first buys seed anchor-side reserves. Added translateQuoterError
+  (cause-chain revert-data walk) → honest 409 NO_POOL_LIQUIDITY / QUOTER_REVERTED in quote +
+  prepare-leg + trade card; mapError now logs INTERNAL errors server-side (first line, URLs redacted).
+- **Secret proof (deployed assets):** 0 hits for key names / venue URLs / Bearer material across
+  production HTML, 6 JS chunks, and API responses.
+- **Preview:** redeployed Ready with the key; external runtime QA still blocked by team deployment
+  protection (LL-3) — identical build verified locally with the same key configured.
+- **Verification:** 312 web + 56 launch-lab + 9 indexer tests; lint/typecheck/build clean.
+- **Blockers:** LL-4 CLOSED. LL-5 (ONEINCH_API_KEY dormant by design) open. LL-3 unchanged.
+
 ## 2026-07-27 — LAUNCH LAB LANE: Rialto primary RWA routing + frozen V1 trade UI (commit 01c8cfd, deployed)
 
 - **Type:** Lane source change + Vercel Preview/Production deployment (fail-closed). No mainnet transaction,
