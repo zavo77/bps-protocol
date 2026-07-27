@@ -3,7 +3,7 @@
 
 import { createPool, runMigrations } from "./db.js";
 import { makeClient } from "./chain.js";
-import { loadKnownPools, startLoop, status } from "./indexer.js";
+import { reloadTrackedMarkets, startLoop, status } from "./indexer.js";
 import { startHealthServer } from "./health.js";
 import { log, logError, readEnv, redact } from "./env.js";
 
@@ -33,10 +33,10 @@ if (env.sentryDsn) {
 const pool = createPool(env.databaseUrl);
 await runMigrations(pool);
 status.dbOk = true;
-await loadKnownPools(pool);
-log(`resume state: knownPools=${status.knownPools}`);
-
 const client = makeClient(env.rpcUrl);
+await reloadTrackedMarkets(client, pool);
+log(`resume state: trackedMarkets=${status.trackedMarkets} knownPools=${status.knownPools}`);
+
 startHealthServer(env.port);
 log(`health server listening on 0.0.0.0:${env.port} (/health)`);
 

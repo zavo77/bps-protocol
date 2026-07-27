@@ -6,7 +6,13 @@ import { parseEventLogs, getAddress, type Address, type Hex } from "viem";
 import { airlockAbi, CHAIN_IDS, getAddresses } from "@whetstone-research/doppler-sdk/evm";
 import { getAnchorByAddress } from "@bps/launch-lab";
 import { getLabClient } from "../../../../lib/lab/server";
-import { invalidateLaunchCache, listLaunches, getVolumeByToken } from "../../../../lib/lab/store";
+import {
+  invalidateLaunchCache,
+  listLaunches,
+  getVolumeByToken,
+  matchIssuedManifest,
+  insertVerifiedLaunch,
+} from "../../../../lib/lab/store";
 import { clientKey, err, mapError, ok, rateLimited } from "../../../../lib/lab/http";
 
 export const dynamic = "force-dynamic";
@@ -77,14 +83,37 @@ export async function POST(req: Request): Promise<Response> {
     if (args.initializer.toLowerCase() !== a.dopplerHookInitializer.toLowerCase()) {
       return err("WRONG_INITIALIZER", "Launch did not use the lab initializer.");
     }
-    // Registration is just cache invalidation: the authoritative list is
-    // re-reconstructed from chain (and mirrored to Postgres when configured).
+    const asset = getAddress(args.asset);
+    const creator = getAddress(receipt.from);
+
+    // BPS PROVENANCE GATE: the created token must match a manifest THIS server
+    // issued to this creator via /api/lab/prepare. An approved anchor + the
+    // generic Doppler initializer is NOT sufficient — external Doppler markets
+    // never went through /api/lab/prepare and are rejected here.
+    const issued = await matchIssuedManifest(asset, creator);
+    if (!issued) {
+      return err(
+        "UNVERIFIED_PROVENANCE",
+        "This market was not created through the BPS Launch Lab (no matching issued manifest).",
+        409,
+      );
+    }
+
+    const block = await client.getBlock({ blockNumber: receipt.blockNumber });
+    const anchor = getAnchorByAddress(args.numeraire);
+    const inserted = await insertVerifiedLaunch({
+      tokenAddress: asset,
+      creator,
+      numeraire: args.numeraire,
+      anchorSymbol: anchor?.symbol ?? issued.anchorSymbol,
+      poolOrHook: args.poolOrHook,
+      launchTx: hash,
+      blockNumber: receipt.blockNumber.toString(),
+      timestamp: Number(block.timestamp),
+      manifestHash: issued.manifestHash,
+    });
     invalidateLaunchCache();
-    const launches = await listLaunches();
-    const found = launches.find(
-      (l) => l.tokenAddress.toLowerCase() === getAddress(args.asset).toLowerCase(),
-    );
-    return ok({ registered: true, indexed: !!found, tokenAddress: getAddress(args.asset) });
+    return ok({ registered: inserted, provenanceVerified: true, tokenAddress: asset });
   } catch (e) {
     return mapError(e);
   }

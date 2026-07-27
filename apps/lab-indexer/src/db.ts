@@ -19,6 +19,19 @@ export const MIGRATIONS: readonly string[] = [
   )`,
   `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS pool_id TEXT`,
   `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS anchor_symbol TEXT`,
+  // Provenance: only BPS-frontend receipt-verified rows are indexed.
+  `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS launch_source TEXT`,
+  `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS provenance_verified BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS provenance_verified_at TIMESTAMPTZ`,
+  `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS manifest_hash TEXT`,
+  `CREATE TABLE IF NOT EXISTS lab_prepared (
+    predicted_token TEXT PRIMARY KEY,
+    creator TEXT NOT NULL,
+    manifest_hash TEXT NOT NULL,
+    anchor_symbol TEXT,
+    numeraire TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
   `CREATE TABLE IF NOT EXISTS lab_used_signatures (
     sig_hash TEXT PRIMARY KEY,
     used_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -58,6 +71,39 @@ export async function getCursor(pool: pg.Pool, stream: string): Promise<bigint |
   ]);
   const row = res.rows[0] as { last_block?: string | number } | undefined;
   return row?.last_block !== undefined ? BigInt(row.last_block) : null;
+}
+
+export interface TrackedMarket {
+  tokenAddress: string;
+  numeraire: string;
+  poolOrHook: string;
+  poolId: string | null;
+}
+
+/** Load provenance-verified BPS markets — the ONLY markets the indexer tracks. */
+export async function loadTrackedMarkets(pool: pg.Pool): Promise<TrackedMarket[]> {
+  const res = await pool.query(
+    `SELECT token_address, numeraire, pool_or_hook, pool_id
+     FROM lab_launches WHERE provenance_verified = true`,
+  );
+  return (res.rows as Record<string, string | null>[]).map((r) => ({
+    tokenAddress: String(r.token_address),
+    numeraire: String(r.numeraire),
+    poolOrHook: String(r.pool_or_hook),
+    poolId: r.pool_id ? String(r.pool_id) : null,
+  }));
+}
+
+/** Enrich a verified market with its resolved poolId (never classifies). */
+export async function setMarketPoolId(
+  pool: pg.Pool,
+  tokenAddress: string,
+  poolId: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE lab_launches SET pool_id = $2 WHERE token_address = $1 AND pool_id IS NULL`,
+    [tokenAddress.toLowerCase(), poolId],
+  );
 }
 
 export async function setCursor(pool: pg.Pool, stream: string, block: bigint): Promise<void> {

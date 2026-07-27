@@ -1,28 +1,27 @@
-// Poll loop: two streams with a shared confirmed-head ceiling and per-stream
-// Postgres cursors, so a restart resumes exactly where it stopped.
-//   launches — Airlock Create logs (numeraire GOOGL + our initializer)
-//   swaps    — PoolManager Swap logs for known lab poolIds
+// Poll loop. The indexer's tracked market set is the AUTHORITATIVE, provenance-
+// verified BPS launches in Postgres (lab_launches WHERE provenance_verified =
+// true) — written only by the BPS frontend after receipt verification. The
+// indexer NEVER classifies a market as BPS from chain events; it only:
+//   1. reloads verified BPS markets from Postgres every poll (no restart needed
+//      to pick up a new launch),
+//   2. resolves + persists each market's poolId (enrichment),
+//   3. indexes PoolManager Swap logs for those known poolIds.
+// knownPools therefore counts verified BPS pools only.
 
 import type pg from "pg";
 import { getContractEvents } from "viem/actions";
 import type { Address, Hex, PublicClient } from "viem";
-import { getCursor, setCursor } from "./db.js";
-import {
-  APPROVED_ANCHOR_ADDRESSES,
-  CREATE_EVENT,
-  SWAP_EVENT,
-  decodeLaunchLog,
-  getAnchorByAddress,
-  labAddresses,
-  resolvePoolId,
-} from "./chain.js";
+import { getCursor, setCursor, loadTrackedMarkets, setMarketPoolId } from "./db.js";
+import { SWAP_EVENT, labAddresses, resolvePoolId } from "./chain.js";
 import { log, logError, type IndexerEnv } from "./env.js";
 
 export interface IndexerStatus {
-  launchesCursor: string | null;
   swapsCursor: string | null;
   headBlock: string | null;
   lagBlocks: string | null;
+  /** Verified BPS markets tracked (rows in lab_launches, provenance_verified). */
+  trackedMarkets: number;
+  /** Verified BPS pools with a resolved poolId (indexable). */
   knownPools: number;
   lastPollOkAt: number | null;
   lastError: string | null;
@@ -30,10 +29,10 @@ export interface IndexerStatus {
 }
 
 export const status: IndexerStatus = {
-  launchesCursor: null,
   swapsCursor: null,
   headBlock: null,
   lagBlocks: null,
+  trackedMarkets: 0,
   knownPools: 0,
   lastPollOkAt: null,
   lastError: null,
@@ -42,57 +41,30 @@ export const status: IndexerStatus = {
 
 const knownPoolIds = new Map<string, Address>(); // poolId -> token address
 
-export async function loadKnownPools(pool: pg.Pool): Promise<void> {
-  const res = await pool.query(
-    "SELECT token_address, pool_id FROM lab_launches WHERE pool_id IS NOT NULL",
-  );
-  for (const row of res.rows as { token_address: string; pool_id: string }[]) {
-    knownPoolIds.set(row.pool_id.toLowerCase(), row.token_address as Address);
-  }
-  status.knownPools = knownPoolIds.size;
-}
-
-async function indexLaunchRange(
-  client: PublicClient,
-  pool: pg.Pool,
-  from: bigint,
-  to: bigint,
-): Promise<void> {
+/**
+ * Reload the verified BPS market set from Postgres, resolving + persisting any
+ * missing poolId. This is the ONLY way a market becomes tracked.
+ */
+export async function reloadTrackedMarkets(client: PublicClient, pool: pg.Pool): Promise<void> {
   const a = labAddresses();
-  // Discover markets for ANY approved anchor (numeraire is the indexed topic).
-  const logs = await getContractEvents(client, {
-    address: a.airlock,
-    abi: [CREATE_EVENT],
-    eventName: "Create",
-    args: { numeraire: APPROVED_ANCHOR_ADDRESSES },
-    fromBlock: from,
-    toBlock: to,
-  });
-  for (const l of logs) {
-    const launch = decodeLaunchLog(l, a.dopplerHookInitializer);
-    if (!launch) continue;
-    const block = await client.getBlock({ blockNumber: launch.blockNumber });
-    const poolId = await resolvePoolId(client, a.dopplerHookInitializer, launch.tokenAddress);
-    const anchorSymbol = getAnchorByAddress(launch.numeraire)?.symbol ?? null;
-    await pool.query(
-      `INSERT INTO lab_launches (token_address, token_name, token_symbol, creator, numeraire, anchor_symbol, pool_or_hook, launch_tx, block_number, launched_at, pool_id)
-       VALUES ($1,'','',NULL,$2,$3,$4,$5,$6,to_timestamp($7),$8)
-       ON CONFLICT (token_address) DO UPDATE SET pool_id = COALESCE(lab_launches.pool_id, EXCLUDED.pool_id), anchor_symbol = COALESCE(lab_launches.anchor_symbol, EXCLUDED.anchor_symbol)`,
-      [
-        launch.tokenAddress.toLowerCase(),
-        launch.numeraire.toLowerCase(),
-        anchorSymbol,
-        launch.poolOrHook.toLowerCase(),
-        launch.txHash,
-        launch.blockNumber.toString(),
-        Number(block.timestamp),
-        poolId,
-      ],
-    );
-    if (poolId) knownPoolIds.set(poolId.toLowerCase(), launch.tokenAddress);
-    log(
-      `launch indexed: ${launch.tokenAddress} block ${launch.blockNumber}${poolId ? ` poolId ${poolId.slice(0, 10)}…` : " (poolId pending)"}`,
-    );
+  const markets = await loadTrackedMarkets(pool);
+  status.trackedMarkets = markets.length;
+  knownPoolIds.clear();
+  for (const m of markets) {
+    let poolId = m.poolId;
+    if (!poolId) {
+      const resolved = await resolvePoolId(
+        client,
+        a.dopplerHookInitializer,
+        m.tokenAddress as Address,
+      );
+      if (resolved) {
+        poolId = resolved;
+        await setMarketPoolId(pool, m.tokenAddress, resolved);
+        log(`resolved poolId for verified market ${m.tokenAddress}: ${resolved.slice(0, 10)}…`);
+      }
+    }
+    if (poolId) knownPoolIds.set(poolId.toLowerCase(), m.tokenAddress as Address);
   }
   status.knownPools = knownPoolIds.size;
 }
@@ -154,29 +126,27 @@ async function indexSwapRange(
   if (logs.length > 0) log(`swaps indexed: ${logs.length} in blocks ${from}-${to}`);
 }
 
-/** One poll iteration: advance both streams toward the confirmed head. */
+/** One poll iteration: reload verified markets, then advance the swap stream. */
 export async function pollOnce(
   client: PublicClient,
   pool: pg.Pool,
   env: IndexerEnv,
 ): Promise<void> {
+  await reloadTrackedMarkets(client, pool);
+
   const head = await client.getBlockNumber();
   const confirmedHead = head - env.confirmations;
   status.headBlock = head.toString();
 
-  for (const stream of ["launches", "swaps"] as const) {
-    const saved = await getCursor(pool, stream);
-    let from = saved !== null ? saved + 1n : env.startBlock;
-    while (from <= confirmedHead) {
-      const to =
-        from + env.chunkBlocks - 1n > confirmedHead ? confirmedHead : from + env.chunkBlocks - 1n;
-      if (stream === "launches") await indexLaunchRange(client, pool, from, to);
-      else await indexSwapRange(client, pool, from, to);
-      await setCursor(pool, stream, to);
-      if (stream === "launches") status.launchesCursor = to.toString();
-      else status.swapsCursor = to.toString();
-      from = to + 1n;
-    }
+  const saved = await getCursor(pool, "swaps");
+  let from = saved !== null ? saved + 1n : env.startBlock;
+  while (from <= confirmedHead) {
+    const to =
+      from + env.chunkBlocks - 1n > confirmedHead ? confirmedHead : from + env.chunkBlocks - 1n;
+    await indexSwapRange(client, pool, from, to);
+    await setCursor(pool, "swaps", to);
+    status.swapsCursor = to.toString();
+    from = to + 1n;
   }
   const swapsCursor = status.swapsCursor ? BigInt(status.swapsCursor) : confirmedHead;
   status.lagBlocks = (head - swapsCursor).toString();

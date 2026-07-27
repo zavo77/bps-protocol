@@ -9,7 +9,11 @@ import {
   prepareLaunch,
   verifySignedRequest,
 } from "../../../../lib/lab/server";
-import { assertSignatureUnused, enforceLaunchGuardrails } from "../../../../lib/lab/store";
+import {
+  assertSignatureUnused,
+  enforceLaunchGuardrails,
+  recordPreparedLaunch,
+} from "../../../../lib/lab/store";
 import {
   assertSameOrigin,
   clientKey,
@@ -64,6 +68,16 @@ export async function POST(req: Request): Promise<Response> {
     const commit =
       process.env.BPS_SOURCE_COMMIT || process.env.VERCEL_GIT_COMMIT_SHA || "local-dev";
     const bundle = await prepareLaunch(payload, "8h-v1", commit);
+    // Record the issued manifest prediction: this is the BPS provenance signal.
+    // At registration, the created token must match a prediction by this creator
+    // — external Doppler markets never went through /api/lab/prepare.
+    await recordPreparedLaunch({
+      predictedToken: bundle.simulation.predictedTokenAddress,
+      creator: wallet,
+      manifestHash: bundle.manifestHash,
+      anchorSymbol: bundle.manifest.anchorSymbol,
+      numeraire: bundle.manifest.anchorAddress,
+    });
     return ok(bundle);
   } catch (e) {
     return mapError(e);

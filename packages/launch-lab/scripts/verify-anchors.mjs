@@ -18,7 +18,12 @@ import {
   getAirlockOwner,
 } from "@whetstone-research/doppler-sdk/evm";
 
-const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "..", "..", "..");
+const REPO_ROOT = path.resolve(
+  path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")),
+  "..",
+  "..",
+  "..",
+);
 const CANDIDATES = ["GOOGL", "NVDA", "AAPL", "TSLA", "SPCX"];
 const CREATOR = getAddress("0x29244A2309B703F82E292A3db7df0e95d0cdca72");
 const CREATOR_FEE = getAddress("0x261Cda9dADdfDC9A0b8de887718af516FA7ee9C2");
@@ -28,7 +33,9 @@ const START_FDV = 20_500;
 const POOL_FEE = 10_000;
 
 const env = {};
-for (const line of readFileSync(path.join(REPO_ROOT, "apps", "web", ".env.local"), "utf8").split(/\r?\n/)) {
+for (const line of readFileSync(path.join(REPO_ROOT, "apps", "web", ".env.local"), "utf8").split(
+  /\r?\n/,
+)) {
   const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
   if (m) env[m[1]] = m[2].trim();
 }
@@ -38,12 +45,19 @@ if (!RPC) {
   process.exit(2);
 }
 const redact = (s) => String(s).split(RPC).join("[RPC]");
-const chain = defineChain({ id: 4663, name: "Robinhood Chain", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } } });
+const chain = defineChain({
+  id: 4663,
+  name: "Robinhood Chain",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } },
+});
 const client = createPublicClient({ chain, transport: http(RPC) });
 
 const assetsRes = await fetch("https://api.robinhood.com/rhj/assets");
 const assetsJson = await assetsRes.json();
-const assetList = Array.isArray(assetsJson) ? assetsJson : (assetsJson.assets ?? assetsJson.results ?? []);
+const assetList = Array.isArray(assetsJson)
+  ? assetsJson
+  : (assetsJson.assets ?? assetsJson.results ?? []);
 const addresses = getAddresses(CHAIN_IDS.ROBINHOOD);
 const airlockOwner = await getAirlockOwner(client);
 const sdk = new DopplerSDK({ publicClient: client, chainId: CHAIN_IDS.ROBINHOOD });
@@ -71,7 +85,8 @@ for (const symbol of CANDIDATES) {
     const priceRes = await fetch(`https://api.robinhood.com/rhj/prices/${symbol}`);
     const priceJson = await priceRes.json();
     const quote = (priceJson.quotes ?? [])[0] ?? priceJson;
-    const mid = ((Number(quote.bid) + Number(quote.ask)) / 2) * Number(asset.currentMultiplier ?? 1);
+    const mid =
+      ((Number(quote.bid) + Number(quote.ask)) / 2) * Number(asset.currentMultiplier ?? 1);
     rec.name = asset.tokenName ?? asset.name ?? name;
     rec.logo = asset.logoUrl ?? asset.iconUrl ?? asset.imageUrl ?? null;
     rec.address = address;
@@ -83,13 +98,26 @@ for (const symbol of CANDIDATES) {
 
     // Exact rehype multicurve simulation with this anchor as numeraire.
     const params = new MulticurveBuilder(CHAIN_IDS.ROBINHOOD)
-      .tokenConfig({ type: "dopplerERC20V1", name: "PROBE", symbol: "PROBE", tokenURI: "ipfs://probe" })
+      .tokenConfig({
+        type: "dopplerERC20V1",
+        name: "PROBE",
+        symbol: "PROBE",
+        tokenURI: "ipfs://probe",
+      })
       .saleConfig({ initialSupply: SUPPLY, numTokensToSell: SUPPLY, numeraire: address })
       .withCurves({
         numerairePrice: rec.midUsd ?? 100,
         curves: [
-          { marketCap: { start: START_FDV, end: 1_000_000 }, numPositions: 11, shares: (WAD * 60n) / 100n },
-          { marketCap: { start: 1_000_000, end: "max" }, numPositions: 10, shares: (WAD * 40n) / 100n },
+          {
+            marketCap: { start: START_FDV, end: 1_000_000 },
+            numPositions: 11,
+            shares: (WAD * 60n) / 100n,
+          },
+          {
+            marketCap: { start: 1_000_000, end: "max" },
+            numPositions: 10,
+            shares: (WAD * 40n) / 100n,
+          },
         ],
         fee: POOL_FEE,
         beneficiaries,
@@ -117,10 +145,16 @@ for (const symbol of CANDIDATES) {
       .withUserAddress(CREATOR)
       .build();
     const sim = await sdk.factory.simulateCreateMulticurve(params);
-    rec.simulation = { status: "ok", predictedToken: sim.tokenAddress, gas: (sim.gasEstimate ?? 0n).toString() };
+    rec.simulation = {
+      status: "ok",
+      predictedToken: sim.tokenAddress,
+      gas: (sim.gasEstimate ?? 0n).toString(),
+    };
     rec.enabled = true;
     rec.verifiedAt = new Date().toISOString();
-    console.log(`OK ${symbol} @ ${address} (${rec.decimals}dp, mid $${rec.midUsd}) — SIM OK gas ${rec.simulation.gas}`);
+    console.log(
+      `OK ${symbol} @ ${address} (${rec.decimals}dp, mid $${rec.midUsd}) — SIM OK gas ${rec.simulation.gas}`,
+    );
   } catch (e) {
     rec.enabled = false;
     rec.reason = redact(e?.shortMessage ?? e?.message ?? String(e)).slice(0, 200);
@@ -130,7 +164,10 @@ for (const symbol of CANDIDATES) {
 }
 
 const out = { generatedAt: new Date().toISOString(), chainId: 4663, anchors: registry };
-writeFileSync(path.join(REPO_ROOT, "docs", "launch-lab", "ANCHOR_VERIFICATION.json"), redact(JSON.stringify(out, null, 2)));
+writeFileSync(
+  path.join(REPO_ROOT, "docs", "launch-lab", "ANCHOR_VERIFICATION.json"),
+  redact(JSON.stringify(out, null, 2)),
+);
 const enabled = registry.filter((r) => r.enabled).map((r) => r.symbol);
 console.log(`ENABLED: ${enabled.join(", ") || "(none)"}`);
 process.exit(enabled.length > 0 ? 0 : 1);

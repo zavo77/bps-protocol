@@ -1,16 +1,15 @@
 // Launch persistence + guardrail accounting.
 //
-// Authority: the chain (listLaunchesOnChain). When DATABASE_URL is configured
-// a Postgres mirror accelerates reads and strengthens replay/duplicate
-// protection across serverless instances; when it is absent everything still
-// works from on-chain reconstruction (per founder rule: Postgres is a mirror,
-// chain reconstruction is the fallback and the authority).
+// AUTHORITATIVE SOURCE = provenance-verified BPS rows in Postgres
+// (lab_launches WHERE provenance_verified = true), written only after the BPS
+// frontend's receipt matches a manifest THIS server issued. The chain is NEVER
+// used to classify a market as BPS (an approved anchor + the generic Doppler
+// initializer is not a BPS fingerprint). When the DB is unavailable there is no
+// authoritative registry, so reads return empty rather than misclassify.
 
 import "server-only";
-import { CHAIN_IDS, getAddresses } from "@whetstone-research/doppler-sdk/evm";
-import { listLaunchesOnChain, type LabServerFlags, type LaunchRecord } from "@bps/launch-lab";
-import type { Address } from "viem";
-import { getLabClient } from "./server";
+import { getAddress, type Address } from "viem";
+import type { LabServerFlags, LaunchRecord } from "@bps/launch-lab";
 
 const CACHE_TTL_MS = 60_000;
 let launchCache: { at: number; records: LaunchRecord[] } | null = null;
@@ -43,6 +42,28 @@ async function getPg(): Promise<PgPool | null> {
       inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
     await pool.query(`ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS anchor_symbol TEXT`);
+    // Provenance: only BPS-frontend receipt-verified rows are authoritative.
+    // Existing (externally-discovered) rows default to provenance_verified=false
+    // and are excluded from every public query.
+    await pool.query(`ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS launch_source TEXT`);
+    await pool.query(
+      `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS provenance_verified BOOLEAN NOT NULL DEFAULT false`,
+    );
+    await pool.query(
+      `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS provenance_verified_at TIMESTAMPTZ`,
+    );
+    await pool.query(`ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS manifest_hash TEXT`);
+    // Issued-manifest ledger: every /api/lab/prepare records its predicted token
+    // + creator. A launch is BPS only if its created token matches an issued
+    // prediction by the same creator — external Doppler markets never do.
+    await pool.query(`CREATE TABLE IF NOT EXISTS lab_prepared (
+      predicted_token TEXT PRIMARY KEY,
+      creator TEXT NOT NULL,
+      manifest_hash TEXT NOT NULL,
+      anchor_symbol TEXT,
+      numeraire TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`);
     await pool.query(`CREATE TABLE IF NOT EXISTS lab_used_signatures (
       sig_hash TEXT PRIMARY KEY,
       used_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -54,50 +75,153 @@ async function getPg(): Promise<PgPool | null> {
   return pgPool;
 }
 
+/**
+ * Authoritative BPS market list = provenance-verified rows only. The chain is
+ * NEVER used to CLASSIFY a market as BPS (an approved anchor + the generic
+ * Doppler initializer is not a BPS fingerprint); it only ever ENRICHES rows the
+ * BPS frontend already verified. When the DB is unavailable there is no
+ * authoritative registry, so we return an empty list rather than misclassify.
+ */
 export async function listLaunches(): Promise<LaunchRecord[]> {
   if (launchCache && Date.now() - launchCache.at < CACHE_TTL_MS) return launchCache.records;
-  const a = getAddresses(CHAIN_IDS.ROBINHOOD) as unknown as {
-    airlock: Address;
-    dopplerHookInitializer: Address;
-  };
+  const pg = await getPg();
+  if (!pg) {
+    launchCache = { at: Date.now(), records: [] };
+    return [];
+  }
   let records: LaunchRecord[] = [];
   try {
-    records = await listLaunchesOnChain(getLabClient(), {
-      airlock: a.airlock,
-      initializer: a.dopplerHookInitializer,
-      maxRecords: 100,
-    });
+    const res = await pg.query(
+      `SELECT token_address, token_name, token_symbol, creator, numeraire, anchor_symbol,
+              pool_or_hook, launch_tx, block_number, EXTRACT(EPOCH FROM launched_at)::bigint AS ts
+       FROM lab_launches
+       WHERE provenance_verified = true
+       ORDER BY launched_at DESC NULLS LAST`,
+    );
+    records = (res.rows as Record<string, unknown>[]).map((r) => ({
+      tokenAddress: getAddress(String(r.token_address)),
+      tokenName: String(r.token_name ?? ""),
+      tokenSymbol: String(r.token_symbol ?? ""),
+      creator: r.creator ? getAddress(String(r.creator)) : null,
+      numeraire: getAddress(String(r.numeraire)),
+      anchorSymbol: r.anchor_symbol ? String(r.anchor_symbol) : null,
+      poolOrHook: getAddress(String(r.pool_or_hook)),
+      launchTransactionHash: String(r.launch_tx) as LaunchRecord["launchTransactionHash"],
+      blockNumber: String(r.block_number),
+      timestamp: r.ts !== null && r.ts !== undefined ? Number(r.ts) : null,
+    }));
   } catch {
     records = launchCache?.records ?? [];
   }
-  const pg = await getPg();
-  if (pg) {
-    try {
-      for (const r of records) {
-        await pg.query(
-          `INSERT INTO lab_launches (token_address, token_name, token_symbol, creator, numeraire, anchor_symbol, pool_or_hook, launch_tx, block_number, launched_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,to_timestamp($10))
-           ON CONFLICT (token_address) DO NOTHING`,
-          [
-            r.tokenAddress.toLowerCase(),
-            r.tokenName,
-            r.tokenSymbol,
-            r.creator?.toLowerCase() ?? null,
-            r.numeraire.toLowerCase(),
-            r.anchorSymbol,
-            r.poolOrHook.toLowerCase(),
-            r.launchTransactionHash,
-            r.blockNumber,
-            r.timestamp,
-          ],
-        );
-      }
-    } catch {
-      // mirror failure is non-fatal
-    }
-  }
   launchCache = { at: Date.now(), records };
   return records;
+}
+
+/** Record an issued BPS manifest prediction (called by /api/lab/prepare). */
+export async function recordPreparedLaunch(args: {
+  predictedToken: string;
+  creator: string;
+  manifestHash: string;
+  anchorSymbol: string;
+  numeraire: string;
+}): Promise<void> {
+  const pg = await getPg();
+  if (!pg) return;
+  try {
+    await pg.query(
+      `INSERT INTO lab_prepared (predicted_token, creator, manifest_hash, anchor_symbol, numeraire)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (predicted_token) DO UPDATE SET creator = EXCLUDED.creator, manifest_hash = EXCLUDED.manifest_hash, created_at = now()`,
+      [
+        args.predictedToken.toLowerCase(),
+        args.creator.toLowerCase(),
+        args.manifestHash,
+        args.anchorSymbol,
+        args.numeraire.toLowerCase(),
+      ],
+    );
+  } catch {
+    // non-fatal: a missing issued row just means the launch can't be verified
+  }
+}
+
+export interface VerifiedLaunchInsert {
+  tokenAddress: string;
+  creator: string;
+  numeraire: string;
+  anchorSymbol: string | null;
+  poolOrHook: string;
+  launchTx: string;
+  blockNumber: string;
+  timestamp: number | null;
+  manifestHash: string;
+  tokenName?: string;
+  tokenSymbol?: string;
+}
+
+/**
+ * Insert a provenance-verified BPS launch (called by /api/lab/launches after
+ * the server matched the created token to an issued manifest). Returns true
+ * if a row was inserted or already present.
+ */
+export async function insertVerifiedLaunch(rec: VerifiedLaunchInsert): Promise<boolean> {
+  const pg = await getPg();
+  if (!pg) return false;
+  try {
+    await pg.query(
+      `INSERT INTO lab_launches
+         (token_address, token_name, token_symbol, creator, numeraire, anchor_symbol, pool_or_hook,
+          launch_tx, block_number, launched_at, launch_source, provenance_verified, provenance_verified_at, manifest_hash)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,to_timestamp($10),'bps-web',true,now(),$11)
+       ON CONFLICT (token_address) DO UPDATE SET
+         provenance_verified = true, launch_source = 'bps-web', provenance_verified_at = now(),
+         manifest_hash = COALESCE(lab_launches.manifest_hash, EXCLUDED.manifest_hash),
+         anchor_symbol = COALESCE(lab_launches.anchor_symbol, EXCLUDED.anchor_symbol)`,
+      [
+        rec.tokenAddress.toLowerCase(),
+        rec.tokenName ?? "",
+        rec.tokenSymbol ?? "",
+        rec.creator.toLowerCase(),
+        rec.numeraire.toLowerCase(),
+        rec.anchorSymbol,
+        rec.poolOrHook.toLowerCase(),
+        rec.launchTx,
+        rec.blockNumber,
+        rec.timestamp,
+        rec.manifestHash,
+      ],
+    );
+    invalidateLaunchCache();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Look up an issued manifest prediction by created token + creator. */
+export async function matchIssuedManifest(
+  tokenAddress: string,
+  creator: string,
+): Promise<{ manifestHash: string; anchorSymbol: string | null; numeraire: string | null } | null> {
+  const pg = await getPg();
+  if (!pg) return null;
+  try {
+    const res = await pg.query(
+      `SELECT manifest_hash, anchor_symbol, numeraire FROM lab_prepared
+       WHERE predicted_token = $1 AND creator = $2`,
+      [tokenAddress.toLowerCase(), creator.toLowerCase()],
+    );
+    const row = res.rows[0] as
+      { manifest_hash?: string; anchor_symbol?: string; numeraire?: string } | undefined;
+    if (!row) return null;
+    return {
+      manifestHash: String(row.manifest_hash),
+      anchorSymbol: row.anchor_symbol ? String(row.anchor_symbol) : null,
+      numeraire: row.numeraire ? String(row.numeraire) : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function invalidateLaunchCache(): void {

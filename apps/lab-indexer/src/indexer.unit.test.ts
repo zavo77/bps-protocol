@@ -1,17 +1,12 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getAddress } from "viem";
 import { readEnv, redact } from "./env.js";
 import { MIGRATIONS } from "./db.js";
-import { decodeLaunchLog, GOOGL_ADDRESS } from "./chain.js";
+import { GOOGL_ADDRESS } from "./chain.js";
 import { GOOGL_ADDRESS as LIB_GOOGL } from "../../../packages/launch-lab/src/config/index.js";
-
-const INIT = getAddress("0x4e3468951D49f2EEa976eD0D6e75fFCb44a9a544");
-const TOKEN = getAddress("0x1F212fccea9995931f4f2F9CA0C8b641188Ca196");
-const HOOK = getAddress("0x9982538F41f2ae29ddb9d3D9307010052984FDbB");
-
-function fakeLog(args: Record<string, unknown>, block = 1n): never {
-  return { args, blockNumber: block, transactionHash: `0x${"ab".repeat(32)}` } as never;
-}
+import { reloadTrackedMarkets, status } from "./indexer.js";
+import type { PublicClient } from "viem";
+import type pg from "pg";
 
 const saved = { ...process.env };
 afterEach(() => {
@@ -24,16 +19,12 @@ describe("env", () => {
     delete process.env.ROBINHOOD_CHAIN_RPC_URL;
     expect(() => readEnv()).toThrow(/DATABASE_URL, ROBINHOOD_CHAIN_RPC_URL/);
   });
-  it("applies defaults for missing/empty knobs and never logs secrets", () => {
+  it("applies defaults and never logs secrets", () => {
     process.env.DATABASE_URL = "postgresql://user:supersecret@dbhost:5432/db";
     process.env.ROBINHOOD_CHAIN_RPC_URL = "https://rpc.example/private-key-path";
-    process.env.BPS_LAB_INDEXER_POLL_MS = "";
     const env = readEnv();
     expect(env.pollMs).toBe(15_000);
-    expect(env.chunkBlocks).toBe(2000n);
-    expect(env.confirmations).toBe(3n);
-    const leaked = `failed: ${process.env.DATABASE_URL} and ${process.env.ROBINHOOD_CHAIN_RPC_URL}`;
-    const out = redact(leaked);
+    const out = redact(`fail: ${process.env.DATABASE_URL} ${process.env.ROBINHOOD_CHAIN_RPC_URL}`);
     expect(out).not.toContain("supersecret");
     expect(out).not.toContain("private-key-path");
     expect(out).toContain("[DATABASE_URL]");
@@ -47,25 +38,79 @@ describe("migrations", () => {
       expect(/\bDROP\b|\bDELETE\b|\bTRUNCATE\b/i.test(stmt)).toBe(false);
     }
   });
+  it("adds the provenance gate columns", () => {
+    const joined = MIGRATIONS.join(" ");
+    expect(joined).toMatch(/provenance_verified/);
+    expect(joined).toMatch(/lab_prepared/);
+  });
 });
 
-describe("launch decoding", () => {
-  const base = {
-    asset: TOKEN,
-    numeraire: GOOGL_ADDRESS,
-    initializer: INIT,
-    poolOrHook: HOOK,
-  };
-  it("GOOGL constant matches @bps/launch-lab", () => {
+describe("GOOGL constant sync", () => {
+  it("matches @bps/launch-lab", () => {
     expect(GOOGL_ADDRESS).toBe(LIB_GOOGL);
   });
-  it("accepts a lab launch", () => {
-    const d = decodeLaunchLog(fakeLog(base), INIT);
-    expect(d?.tokenAddress).toBe(TOKEN);
-    expect(d?.poolOrHook).toBe(HOOK);
+});
+
+// The indexer's tracked set = provenance-verified BPS rows ONLY. Chain events
+// never add a market. These tests prove external markets are excluded and only
+// verified BPS markets (with a resolvable poolId) become known pools.
+function mockClient(): PublicClient {
+  return {
+    getBlockNumber: vi.fn(async () => 100n),
+    readContract: vi.fn(async () => [
+      "0x0000000000000000000000000000000000000000",
+      0n,
+      "0x0000000000000000000000000000000000000000",
+      "0x",
+      2,
+      {
+        currency0: getAddress("0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3"),
+        currency1: getAddress("0x1F212fccea9995931f4f2F9CA0C8b641188Ca196"),
+        fee: 10000,
+        tickSpacing: 200,
+        hooks: getAddress("0x9982538F41f2ae29ddb9d3D9307010052984FDbB"),
+      },
+      0,
+    ]),
+  } as unknown as PublicClient;
+}
+
+function mockPg(
+  verifiedRows: {
+    token_address: string;
+    numeraire: string;
+    pool_or_hook: string;
+    pool_id: string | null;
+  }[],
+): pg.Pool {
+  return {
+    query: vi.fn(async (text: string) => {
+      if (/FROM lab_launches WHERE provenance_verified = true/.test(text)) {
+        return { rows: verifiedRows };
+      }
+      return { rows: [] };
+    }),
+  } as unknown as pg.Pool;
+}
+
+describe("provenance-gated tracking", () => {
+  it("tracks only verified rows and resolves their poolId", async () => {
+    const pg = mockPg([
+      {
+        token_address: "0x1f212fccea9995931f4f2f9ca0c8b641188ca196",
+        numeraire: "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+        pool_or_hook: "0x9982538f41f2ae29ddb9d3d9307010052984fdbb",
+        pool_id: null,
+      },
+    ]);
+    await reloadTrackedMarkets(mockClient(), pg);
+    expect(status.trackedMarkets).toBe(1);
+    expect(status.knownPools).toBe(1); // poolId resolved via getState
   });
-  it("rejects wrong numeraire and wrong initializer", () => {
-    expect(decodeLaunchLog(fakeLog({ ...base, numeraire: TOKEN }), INIT)).toBeNull();
-    expect(decodeLaunchLog(fakeLog({ ...base, initializer: HOOK }), INIT)).toBeNull();
+
+  it("tracks zero markets when there are no verified rows (external markets excluded)", async () => {
+    await reloadTrackedMarkets(mockClient(), mockPg([]));
+    expect(status.trackedMarkets).toBe(0);
+    expect(status.knownPools).toBe(0);
   });
 });

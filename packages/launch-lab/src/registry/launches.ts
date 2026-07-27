@@ -1,8 +1,14 @@
-// Launch registry — direct on-chain reconstruction (always available).
-// Source of truth is the Airlock `Create` event stream filtered to markets
-// created through THIS lab's configuration (numeraire == canonical GOOGL and
-// initializer == DopplerHookInitializer). A Postgres mirror (when configured)
-// only accelerates this; the chain remains the fallback and the authority.
+// DEPRECATED / RECOVERY-DIAGNOSTIC ONLY — NOT an authoritative BPS source.
+//
+// This scans Airlock `Create` events by approved-anchor numeraire + the generic
+// DopplerHookInitializer. That is NOT a BPS provenance fingerprint: any external
+// party can create a Doppler market with the same anchor + initializer. It must
+// NEVER be used to classify a market as BPS or to populate public surfaces.
+//
+// The authoritative BPS market set is the provenance-verified rows in Postgres
+// (lab_launches WHERE provenance_verified = true), written only after the BPS
+// frontend's launch receipt matches a manifest the server itself issued. This
+// function is retained solely for offline diagnostics/recovery investigation.
 
 import {
   encodeEventTopics,

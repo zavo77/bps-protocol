@@ -11,7 +11,9 @@ import process from "node:process";
 import pg from "pg";
 
 const env = {};
-for (const line of readFileSync("C:/Projects/bps-experiment/apps/web/.env.local", "utf8").split(/\r?\n/)) {
+for (const line of readFileSync("C:/Projects/bps-experiment/apps/web/.env.local", "utf8").split(
+  /\r?\n/,
+)) {
   const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
   if (m) env[m[1]] = m[2].trim();
 }
@@ -54,7 +56,11 @@ const poolB = new pg.Pool({ connectionString: DB_URL, max: 1, connectionTimeoutM
 try {
   // 1. Connectivity + idempotent schema (run twice to prove idempotency).
   const meta = await poolA.query("SELECT current_database() AS db, version() AS v");
-  record("connectivity", true, `database "${meta.rows[0].db}", ${String(meta.rows[0].v).split(",")[0]}`);
+  record(
+    "connectivity",
+    true,
+    `database "${meta.rows[0].db}", ${String(meta.rows[0].v).split(",")[0]}`,
+  );
   for (const stmt of SCHEMA) await poolA.query(stmt);
   for (const stmt of SCHEMA) await poolA.query(stmt);
   record("schema setup (2x, additive/idempotent)", true);
@@ -71,9 +77,16 @@ try {
       VALUES ($1,'SELFTEST','SELFTEST',NULL,$1,$1,$2,'0',now()) ON CONFLICT (token_address) DO NOTHING`;
     const first = await client.query(ins, [fake.addr, fake.tx]);
     const second = await client.query(ins, [fake.addr, fake.tx]);
-    const count = await client.query("SELECT count(*) AS c FROM lab_launches WHERE token_address = $1", [fake.addr]);
+    const count = await client.query(
+      "SELECT count(*) AS c FROM lab_launches WHERE token_address = $1",
+      [fake.addr],
+    );
     const okWrite = first.rowCount === 1 && second.rowCount === 0 && count.rows[0].c === "1";
-    record("mirror write + duplicate idempotency (rolled back)", okWrite, `first=${first.rowCount} dup=${second.rowCount} rows=${count.rows[0].c}`);
+    record(
+      "mirror write + duplicate idempotency (rolled back)",
+      okWrite,
+      `first=${first.rowCount} dup=${second.rowCount} rows=${count.rows[0].c}`,
+    );
     await client.query("ROLLBACK");
   } finally {
     client.release();
@@ -92,7 +105,11 @@ try {
     [sentinel],
   );
   const replayOk = insA.rows.length === 1 && insB.rows.length === 0;
-  record("cross-instance replay protection", replayOk, `instanceA=consumed instanceB=${insB.rows.length === 0 ? "rejected (replay)" : "NOT rejected"}`);
+  record(
+    "cross-instance replay protection",
+    replayOk,
+    `instanceA=consumed instanceB=${insB.rows.length === 0 ? "rejected (replay)" : "NOT rejected"}`,
+  );
   await poolA.query("DELETE FROM lab_used_signatures WHERE sig_hash = $1", [sentinel]);
 
   // 4. Failure fallback: a broken DB URL must fail fast and be catchable —
@@ -107,7 +124,11 @@ try {
     await broken.query("SELECT 1");
     record("db-failure fallback semantics", false, "broken URL unexpectedly connected");
   } catch {
-    record("db-failure fallback semantics", true, "broken URL throws; store.ts catches → chain reconstruction serves reads");
+    record(
+      "db-failure fallback semantics",
+      true,
+      "broken URL throws; store.ts catches → chain reconstruction serves reads",
+    );
   } finally {
     await broken.end().catch(() => {});
   }

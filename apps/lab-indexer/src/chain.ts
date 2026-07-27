@@ -1,5 +1,5 @@
-// Chain access: HTTP-only polling (no WebSocket), Doppler addresses, and
-// event decoding for the two indexed streams.
+// Chain access: HTTP-only polling (no WebSocket), Doppler addresses, and the
+// PoolManager Swap event for the swap-indexing stream.
 
 import {
   createPublicClient,
@@ -9,16 +9,15 @@ import {
   parseAbiItem,
   type Address,
   type Hex,
-  type Log,
   type PublicClient,
 } from "viem";
 import {
-  airlockAbi,
   dopplerHookInitializerAbi,
   CHAIN_IDS,
   getAddresses,
+  computePoolId,
+  normalizePoolKey,
 } from "@whetstone-research/doppler-sdk/evm";
-import { computePoolId, normalizePoolKey } from "@whetstone-research/doppler-sdk/evm";
 // Local, emitted-JS-safe registry — NEVER import @bps/launch-lab at runtime
 // (its TS-source entrypoint breaks plain-Node ESM). See ./anchors.ts.
 import { APPROVED_ANCHOR_ADDRESSES, getAnchorByAddress } from "./anchors.js";
@@ -39,11 +38,6 @@ export const robinhood = defineChain({
 export const SWAP_EVENT = parseAbiItem(
   "event Swap(bytes32 indexed id, address indexed sender, int128 amount0, int128 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick, uint24 fee)",
 );
-
-export const CREATE_EVENT = airlockAbi.find(
-  (x): x is Extract<(typeof airlockAbi)[number], { type: "event"; name: "Create" }> =>
-    x.type === "event" && (x as { name?: string }).name === "Create",
-)!;
 
 export interface LabAddresses {
   airlock: Address;
@@ -67,36 +61,9 @@ export function makeClient(rpcUrl: string): PublicClient {
   return createPublicClient({ chain: robinhood, transport: http(rpcUrl, { timeout: 15_000 }) });
 }
 
-export interface DecodedLaunch {
-  tokenAddress: Address;
-  numeraire: Address;
-  initializer: Address;
-  poolOrHook: Address;
-  blockNumber: bigint;
-  txHash: Hex;
-}
-
-/** Type guard + filter: OUR lab's launches (any approved anchor + our initializer). */
-export function decodeLaunchLog(log: Log, expectedInitializer: Address): DecodedLaunch | null {
-  const args = (log as unknown as { args?: Record<string, unknown> }).args;
-  if (!args) return null;
-  const numeraire = args.numeraire as Address | undefined;
-  const initializer = args.initializer as Address | undefined;
-  const asset = args.asset as Address | undefined;
-  const poolOrHook = args.poolOrHook as Address | undefined;
-  if (!numeraire || !initializer || !asset || !poolOrHook) return null;
-  if (!getAnchorByAddress(numeraire)) return null; // must be an approved anchor
-  if (initializer.toLowerCase() !== expectedInitializer.toLowerCase()) return null;
-  if (log.blockNumber === null || !log.transactionHash) return null;
-  return {
-    tokenAddress: getAddress(asset),
-    numeraire: getAddress(numeraire),
-    initializer: getAddress(initializer),
-    poolOrHook: getAddress(poolOrHook),
-    blockNumber: log.blockNumber,
-    txHash: log.transactionHash,
-  };
-}
+// NOTE: the indexer intentionally has NO Airlock-Create classification path.
+// A market becomes tracked ONLY by being a provenance-verified BPS row in
+// Postgres (see indexer.ts reloadTrackedMarkets). Chain events never classify.
 
 /** Resolve the v4 poolId for a launched asset via the initializer's getState. */
 export async function resolvePoolId(
