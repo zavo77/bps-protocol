@@ -39,6 +39,13 @@ Newest entries at the top. No secrets ever recorded here.
 
 ## Log
 
+### 2026-07-27 — core package + API layer complete
+
+- `@bps/launch-lab` modules landed: config (fail-closed flags/env), anchor (GOOGL fail-closed resolver, multiplier-aware), doppler (module+whitelist verification, 85/10/5 beneficiaries, rehype launch builder, exact simulation → unsigned tx), manifest (canonical hash), metadata (Pinata-only broadcastable, strict validation), receipts (decode + hard verify vs manifest), validation (zod), genesis registry. 42 unit tests green; typecheck + eslint + prettier clean.
+- `/api/lab/*` routes: config, anchor/googl, metadata (multipart, EIP-191 envelope), prepare, simulate, token/[address], proof, quote(501 until trading phase). Same-origin + rate limits + allowlist + host/payload-hash binding; `server-only` enforced; `transpilePackages` added preserving the `bps-wagmi-active` alias.
+- Non-secret dev flags committed in `apps/web/.env.development` (broadcast OFF, kill switch ON).
+- In flight (parallel agents): client hooks/providers + functional /lab pages; trading + reserve-read research for the post-launch phase.
+
 ### 2026-07-27 — HARD GATE PASSED (Doppler/GOOGL integration proof)
 
 - `packages/launch-lab` scaffolded; `@whetstone-research/doppler-sdk@1.0.33` pinned (single viem 2.55.8 instance; root `.npmrc` gains `legacy-peer-deps=true` for the SDK's React 18 peer on our React 19 tree).
