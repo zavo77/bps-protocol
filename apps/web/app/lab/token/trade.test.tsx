@@ -4,6 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { NATIVE_ETH, PAYMENT_TOKENS } from "@bps/launch-lab";
+import {
+  loadPendingTrade,
+  savePendingTrade,
+  type PendingComposedTrade,
+} from "../../../hooks/lab/trade-recovery";
 import { TradeCard } from "./[tokenAddress]/TradeCard";
 import { PriceChart } from "./[tokenAddress]/PriceChart";
 
@@ -182,6 +187,7 @@ beforeEach(() => {
   h.state.address = TAKER;
   h.state.isConnected = true;
   h.state.chainId = 4663;
+  if (typeof globalThis.localStorage !== "undefined") globalThis.localStorage.clear();
   for (const fn of Object.values(h.fns)) fn.mockReset();
   h.fns.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
     if (functionName === "decimals") return 18;
@@ -365,6 +371,224 @@ describe("TradeCard — safety gates", () => {
     const switchBtn = screen.getByTestId("switch-chain");
     expect(switchBtn).toHaveTextContent(/Switch to Robinhood Chain/i);
     expect(screen.queryByTestId("trade-button")).not.toBeInTheDocument();
+  });
+});
+
+describe("TradeCard — composed-trade recovery", () => {
+  const FIXTURE_HASH = `0x${"ab".repeat(32)}`;
+
+  function prepLegOk() {
+    return {
+      leg: {
+        kind: "zeroEx",
+        inputToken: NATIVE_ETH,
+        outputToken: NVDA,
+        exactInputAmount: "0",
+        expectedOutputWei: "0",
+        minimumOutputWei: "0",
+      },
+      simulation: "ok",
+      approvals: {
+        erc20ApprovalNeeded: false,
+        erc20ApprovalTarget: null,
+        permit2ApprovalNeeded: false,
+        permit2SpenderTarget: null,
+      },
+      transaction: {
+        chainId: 4663,
+        from: TAKER,
+        to: ROUTER,
+        data: "0x",
+        value: "0",
+        gas: "500000",
+      },
+      staleAfter: Date.now() + 60_000,
+    };
+  }
+
+  function pendingFixture(overrides: Partial<PendingComposedTrade> = {}): PendingComposedTrade {
+    return {
+      v: 1,
+      side: "buy",
+      marketToken: TOKEN,
+      marketSymbol: "PRINT",
+      anchorSymbol: "NVDA",
+      anchorAddress: NVDA,
+      paymentSymbol: "ETH",
+      paymentAddress: NATIVE_ETH,
+      completedLegTxHash: FIXTURE_HASH,
+      actualReceivedAnchorWei: WEI(3),
+      pendingLegNumber: 2,
+      quoteExpiry: Date.now() + 60_000,
+      createdAt: Date.now(),
+      ...overrides,
+    };
+  }
+
+  it("(a) first leg confirms, second leg reverts → pending is persisted and the banner renders", async () => {
+    const user = userEvent.setup();
+    h.fns.signMessageAsync.mockResolvedValue("0xsig");
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"11".repeat(32)}`);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    let balanceOfCall = 0;
+    h.fns.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
+      if (functionName === "decimals") return 18;
+      if (functionName === "balanceOf") {
+        balanceOfCall += 1;
+        return balanceOfCall === 1 ? 0n : 2n * 10n ** 18n; // anchor: before, after leg 1
+      }
+      return 0n;
+    });
+    stubFetch((url, init) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: COMPOSED_BUY });
+      if (url.includes("/api/lab/trade/prepare-leg")) {
+        const body = init?.body ? JSON.parse(init.body as string) : {};
+        const kind = (body?.payload ?? {}).kind;
+        if (kind === "bpsDirect")
+          return jsonResponse(409, { ok: false, error: "sim reverted", code: "SIMULATION_FAILED" });
+        return jsonResponse(200, { ok: true, data: prepLegOk() });
+      }
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" anchorAddress={NVDA} />,
+    );
+
+    await user.type(screen.getByTestId("trade-amount"), "1");
+    await user.click(screen.getByTestId("quote-button"));
+    await waitFor(() => expect(screen.getByTestId("quote-result")).toBeInTheDocument());
+    await user.click(screen.getByTestId("trade-button"));
+
+    await waitFor(() => expect(screen.getByTestId("recovery-banner")).toBeInTheDocument());
+    expect(screen.getByTestId("recovery-heading")).toHaveTextContent("Trade partially completed");
+    // The partial trade is persisted with the ACTUAL received anchor amount.
+    const persisted = loadPendingTrade(TAKER, TOKEN);
+    expect(persisted).not.toBeNull();
+    expect(persisted!.actualReceivedAnchorWei).toBe(WEI(2));
+    expect(persisted!.completedLegTxHash).toBe(`0x${"11".repeat(32)}`);
+  });
+
+  it("(b) a partial trade from a prior session (page refresh) shows the resume banner + action", async () => {
+    savePendingTrade(TAKER, pendingFixture());
+    stubFetch(() => jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" }));
+
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" anchorAddress={NVDA} />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("recovery-banner")).toBeInTheDocument());
+    expect(screen.getByTestId("recovery-resume")).toHaveTextContent(/Continue buying PRINT/i);
+    expect(screen.getByTestId("recovery-leg1-link")).toHaveAttribute(
+      "href",
+      expect.stringContaining(FIXTURE_HASH),
+    );
+    expect(screen.getByTestId("recovery-cancel")).toHaveTextContent(/keep NVDA/i);
+  });
+
+  it("(c) an expired quote between legs still resumes by re-preparing the second leg fresh", async () => {
+    const user = userEvent.setup();
+    h.fns.signMessageAsync.mockResolvedValue("0xsig");
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"22".repeat(32)}`);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    savePendingTrade(TAKER, pendingFixture({ quoteExpiry: Date.now() - 5_000 }));
+    const calls = stubFetch((url) => {
+      if (url.includes("/api/lab/trade/prepare-leg"))
+        return jsonResponse(200, { ok: true, data: prepLegOk() });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" anchorAddress={NVDA} />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("recovery-banner")).toBeInTheDocument());
+    await user.click(screen.getByTestId("recovery-resume"));
+
+    // Resume ALWAYS re-prepares server-side — no reuse of stale calldata.
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.includes("/api/lab/trade/prepare-leg"))).toBe(true),
+    );
+    await waitFor(() => expect(screen.getByTestId("trade-success")).toBeInTheDocument());
+  });
+
+  it("(d) resume prepares the second leg with the persisted ACTUAL amount, not the estimate", async () => {
+    const user = userEvent.setup();
+    h.fns.signMessageAsync.mockResolvedValue("0xsig");
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"33".repeat(32)}`);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    const ACTUAL = WEI(3); // differs from the quote's leg-2 estimate (WEI(2))
+    savePendingTrade(TAKER, pendingFixture({ actualReceivedAnchorWei: ACTUAL }));
+    const calls = stubFetch((url) => {
+      if (url.includes("/api/lab/trade/prepare-leg"))
+        return jsonResponse(200, { ok: true, data: prepLegOk() });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" anchorAddress={NVDA} />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("recovery-banner")).toBeInTheDocument());
+    await user.click(screen.getByTestId("recovery-resume"));
+
+    await waitFor(() => expect(bodyFor(calls, "/api/lab/trade/prepare-leg")).not.toBeNull());
+    const body = bodyFor(calls, "/api/lab/trade/prepare-leg");
+    const payload = body!.payload as Record<string, unknown>;
+    expect(payload.exactInputAmount).toBe(ACTUAL);
+    expect(payload.kind).toBe("bpsDirect");
+    expect(payload.inputToken).toBe(NVDA);
+    expect(payload.outputToken).toBe(TOKEN);
+  });
+
+  it("(e) cancel clears the pending trade, hides the banner, and never touches the second leg", async () => {
+    const user = userEvent.setup();
+    savePendingTrade(TAKER, pendingFixture());
+    const calls = stubFetch(() => jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" }));
+
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" anchorAddress={NVDA} />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("recovery-banner")).toBeInTheDocument());
+    await user.click(screen.getByTestId("recovery-cancel"));
+
+    await waitFor(() => expect(screen.queryByTestId("recovery-banner")).toBeNull());
+    expect(loadPendingTrade(TAKER, TOKEN)).toBeNull();
+    expect(calls.some((c) => c.url.includes("/api/lab/trade/prepare-leg"))).toBe(false);
+  });
+
+  it("(f) a resumed trade completes: success, pending cleared, onTraded fired", async () => {
+    const user = userEvent.setup();
+    h.fns.signMessageAsync.mockResolvedValue("0xsig");
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"44".repeat(32)}`);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    savePendingTrade(TAKER, pendingFixture());
+    const onTraded = vi.fn();
+    stubFetch((url) => {
+      if (url.includes("/api/lab/trade/prepare-leg"))
+        return jsonResponse(200, { ok: true, data: prepLegOk() });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    wrap(
+      <TradeCard
+        address={TOKEN}
+        tokenSymbol="PRINT"
+        anchorSymbol="NVDA"
+        anchorAddress={NVDA}
+        onTraded={onTraded}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("recovery-banner")).toBeInTheDocument());
+    await user.click(screen.getByTestId("recovery-resume"));
+
+    await waitFor(() => expect(screen.getByTestId("trade-success")).toBeInTheDocument());
+    expect(loadPendingTrade(TAKER, TOKEN)).toBeNull();
+    expect(onTraded).toHaveBeenCalled();
+    expect(screen.queryByTestId("recovery-banner")).toBeNull();
   });
 });
 

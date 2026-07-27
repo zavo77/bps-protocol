@@ -49,6 +49,14 @@ import {
   type UserRouteQuote,
 } from "@bps/launch-lab";
 import { LabApiError, errorMessage, labFetch } from "./api";
+import {
+  clearPendingTrade,
+  isQuoteExpired,
+  loadPendingTrade,
+  resumePrompt,
+  savePendingTrade,
+  type PendingComposedTrade,
+} from "./trade-recovery";
 import { useSignedRequest } from "./use-signed-request";
 
 export type TradeSide = "buy" | "sell";
@@ -99,6 +107,8 @@ export interface AnchorInput {
 export interface UseTradeOptions {
   onTraded?: (() => void) | undefined;
   anchor?: AnchorInput | null | undefined;
+  /** Launch-token symbol, persisted with a partial composed trade for resume copy. */
+  marketSymbol?: string | null | undefined;
 }
 
 /** POST /api/lab/trade/prepare-leg request payload (exactly the server schema keys). */
@@ -176,6 +186,16 @@ export interface UseTrade {
   prepareAndTrade: () => Promise<Hex | null>;
   switchToChain: () => Promise<void>;
   reset: () => void;
+  /** A partially-completed composed trade for this market/wallet awaiting its final leg. */
+  pendingRecovery: PendingComposedTrade | null;
+  /** Resume banner copy ({heading, action}) when a pending trade exists, else null. */
+  pendingPrompt: { heading: string; action: string } | null;
+  /** True when the persisted quote window elapsed — resume re-prepares fresh regardless. */
+  pendingExpired: boolean;
+  /** Execute ONLY the outstanding second leg from the ACTUAL persisted anchor amount. */
+  resumePendingTrade: () => Promise<Hex | null>;
+  /** Discard the pending trade; the user keeps the anchor already received. */
+  cancelPendingTrade: () => void;
 }
 
 function parseAmountWei(amount: string, decimals: number): bigint {
@@ -189,7 +209,7 @@ function parseAmountWei(amount: string, decimals: number): bigint {
 }
 
 export function useTrade(marketToken: string, options?: UseTradeOptions): UseTrade {
-  const { onTraded, anchor } = options ?? {};
+  const { onTraded, anchor, marketSymbol } = options ?? {};
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const publicClient = usePublicClient();
@@ -227,8 +247,21 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
   const [txHash, setTxHash] = useState<Hex | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [inputBalanceWei, setInputBalanceWei] = useState<bigint | null>(null);
+  const [pendingRecovery, setPendingRecovery] = useState<PendingComposedTrade | null>(null);
 
   const wrongChain = isConnected && chainId !== CHAIN_ID;
+
+  // Detect a partial composed trade for this wallet/market on mount + when they change.
+  useEffect(() => {
+    if (!address || !isAddress(marketToken)) {
+      setPendingRecovery(null);
+      return;
+    }
+    setPendingRecovery(loadPendingTrade(address, marketToken));
+  }, [address, marketToken]);
+
+  const pendingPrompt = pendingRecovery ? resumePrompt(pendingRecovery) : null;
+  const pendingExpired = pendingRecovery ? isQuoteExpired(pendingRecovery) : false;
 
   // Buy denominates the amount in the pay token; sell denominates it in the market token.
   const inputDecimals = side === "buy" ? payToken.decimals : tokenDecimals;
@@ -438,6 +471,100 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     [signRequest],
   );
 
+  const ensureChain = useCallback(async () => {
+    if (chainId !== CHAIN_ID) {
+      setStatus("wrong-chain");
+      await switchChainAsync({ chainId: CHAIN_ID });
+    }
+  }, [chainId, switchChainAsync]);
+
+  // Execute exactly ONE leg: sign+prepare, run approvals, re-prepare for a clean
+  // simulation, send, and await the receipt. Returns the confirmed hash, or null
+  // after setting a failure status. Throws only on unexpected errors (caught by
+  // the caller). Used by both the full flow and single-leg composed recovery.
+  const executeLeg = useCallback(
+    async (payload: LegPayload, legNo: number, legTotal: number): Promise<Hex | null> => {
+      if (!publicClient) {
+        setStatus("failure");
+        setError("No RPC client available for confirmation.");
+        return null;
+      }
+      setLegCount(legTotal);
+      setLegIndex(legNo);
+
+      // (b)+(c) sign + prepare (server re-quotes; client calldata is never trusted).
+      let prep = await signAndPrepareLeg(payload);
+
+      // (d) approvals in the wallet, then re-prepare for a clean simulation.
+      const nativeLegInput = payload.inputToken.toLowerCase() === NATIVE_ETH.toLowerCase();
+      let approved = false;
+      if (
+        !nativeLegInput &&
+        prep.approvals.erc20ApprovalNeeded &&
+        prep.approvals.erc20ApprovalTarget
+      ) {
+        setStatus("approving");
+        const approveHash = await writeContractAsync({
+          address: payload.inputToken,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [prep.approvals.erc20ApprovalTarget, maxUint256],
+        });
+        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+        approved = true;
+      }
+      if (
+        !nativeLegInput &&
+        prep.approvals.permit2ApprovalNeeded &&
+        prep.approvals.permit2SpenderTarget &&
+        prep.approvals.erc20ApprovalTarget
+      ) {
+        setStatus("approving");
+        // Permit2 expiration is a uint48 → typed as `number` by abitype.
+        const expiration = Math.floor(Date.now() / 1000) + PERMIT2_EXPIRATION_SECONDS;
+        const permitHash = await writeContractAsync({
+          // erc20ApprovalTarget is the Permit2 contract (leg.allowanceTarget).
+          address: prep.approvals.erc20ApprovalTarget,
+          abi: PERMIT2_ABI,
+          functionName: "approve",
+          args: [payload.inputToken, prep.approvals.permit2SpenderTarget, MAX_UINT160, expiration],
+        });
+        await publicClient.waitForTransactionReceipt({ hash: permitHash });
+        approved = true;
+      }
+      if (approved) prep = await signAndPrepareLeg(payload);
+
+      // Stale leg quote → stop; the user re-quotes and reviews fresh numbers.
+      if (Date.now() > prep.staleAfter) {
+        setStatus("failure");
+        setError("Leg quote expired before signing — re-quote and retry.");
+        return null;
+      }
+
+      // (e) send
+      setStatus("awaiting-signature");
+      const hash = await sendTransactionAsync({
+        to: prep.transaction.to,
+        data: prep.transaction.data,
+        value: BigInt(prep.transaction.value),
+        gas: BigInt(prep.transaction.gas),
+        chainId: CHAIN_ID,
+      });
+      setTxHash(hash);
+      setStatus("pending");
+
+      // (f) receipt
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") {
+        setStatus("failure");
+        setError("Leg transaction reverted on-chain.");
+        return null;
+      }
+      return hash;
+    },
+    [publicClient, signAndPrepareLeg, writeContractAsync, sendTransactionAsync],
+  );
+
   const prepareAndTrade = useCallback(async (): Promise<Hex | null> => {
     setError(null);
     setTxHash(null);
@@ -459,22 +586,15 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     }
 
     const legs = quote.legs;
-    setLegCount(legs.length);
+    const composed = quote.walletActionCount === 2;
     const collected: Hex[] = [];
     let overrideInput: bigint | null = null;
-    let onChain = chainId === CHAIN_ID;
 
     try {
+      await ensureChain();
       for (let i = 0; i < legs.length; i++) {
         const leg = legs[i];
         if (!leg) continue;
-
-        // (a) wrong chain → switch to 4663 (once).
-        if (!onChain) {
-          setStatus("wrong-chain");
-          await switchChainAsync({ chainId: CHAIN_ID });
-          onChain = true;
-        }
 
         // Composed leg 2 was an estimate — use the amount actually received.
         const legInputWei = overrideInput ?? BigInt(leg.inputAmountWei);
@@ -494,57 +614,8 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
           taker: address,
         };
 
-        // (b)+(c) sign + prepare
-        let prep = await signAndPrepareLeg(payload);
-
-        // (d) approvals in the wallet, then re-prepare for a clean simulation.
-        const nativeLegInput = leg.inputToken.toLowerCase() === NATIVE_ETH.toLowerCase();
-        let approved = false;
-        if (
-          !nativeLegInput &&
-          prep.approvals.erc20ApprovalNeeded &&
-          prep.approvals.erc20ApprovalTarget
-        ) {
-          setStatus("approving");
-          const approveHash = await writeContractAsync({
-            address: leg.inputToken,
-            abi: erc20Abi,
-            functionName: "approve",
-            args: [prep.approvals.erc20ApprovalTarget, maxUint256],
-          });
-          await publicClient.waitForTransactionReceipt({ hash: approveHash });
-          approved = true;
-        }
-        if (
-          !nativeLegInput &&
-          prep.approvals.permit2ApprovalNeeded &&
-          prep.approvals.permit2SpenderTarget &&
-          prep.approvals.erc20ApprovalTarget
-        ) {
-          setStatus("approving");
-          // Permit2 expiration is a uint48 → typed as `number` by abitype.
-          const expiration = Math.floor(Date.now() / 1000) + PERMIT2_EXPIRATION_SECONDS;
-          const permitHash = await writeContractAsync({
-            // erc20ApprovalTarget is the Permit2 contract (leg.allowanceTarget).
-            address: prep.approvals.erc20ApprovalTarget,
-            abi: PERMIT2_ABI,
-            functionName: "approve",
-            args: [leg.inputToken, prep.approvals.permit2SpenderTarget, MAX_UINT160, expiration],
-          });
-          await publicClient.waitForTransactionReceipt({ hash: permitHash });
-          approved = true;
-        }
-        if (approved) prep = await signAndPrepareLeg(payload);
-
-        // Stale leg quote → stop; the user re-quotes and reviews fresh numbers.
-        if (Date.now() > prep.staleAfter) {
-          setStatus("failure");
-          setError("Leg quote expired before signing — re-quote and retry.");
-          return null;
-        }
-
-        // For a composed route, snapshot the intermediate (anchor) balance so we
-        // can feed leg N+1 the exact amount received from leg N.
+        // For a composed route, snapshot the intermediate (anchor) balance BEFORE
+        // this leg so we can measure exactly how much the next leg must spend.
         const hasNext = i < legs.length - 1;
         let intermediateBefore = 0n;
         if (hasNext) {
@@ -552,28 +623,10 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
             (await readRawBalance({ address: leg.outputToken, native: false })) ?? 0n;
         }
 
-        // (e) send
-        setStatus("awaiting-signature");
-        const hash = await sendTransactionAsync({
-          to: prep.transaction.to,
-          data: prep.transaction.data,
-          value: BigInt(prep.transaction.value),
-          gas: BigInt(prep.transaction.gas),
-          chainId: CHAIN_ID,
-        });
+        const hash = await executeLeg(payload, i + 1, legs.length);
+        if (!hash) return null; // failure status already set
         collected.push(hash);
         setLegHashes([...collected]);
-        setTxHash(hash);
-        setLegIndex(i + 1);
-        setStatus("pending");
-
-        // (f) receipt
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        if (receipt.status !== "success") {
-          setStatus("failure");
-          setError("Leg transaction reverted on-chain.");
-          return null;
-        }
 
         if (hasNext) {
           const after = (await readRawBalance({ address: leg.outputToken, native: false })) ?? 0n;
@@ -584,14 +637,39 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
             return null;
           }
           overrideInput = delta;
+
+          // Persist the ACTUAL received anchor amount so the outstanding final leg
+          // survives a reload/failure. Only non-secret public state — never calldata.
+          if (composed) {
+            const record: PendingComposedTrade = {
+              v: 1,
+              side,
+              marketToken: quote.marketToken,
+              marketSymbol: marketSymbol ?? null,
+              anchorSymbol: quote.anchorSymbol,
+              anchorAddress: quote.anchorAddress,
+              paymentSymbol: payToken.symbol,
+              paymentAddress: payToken.address,
+              completedLegTxHash: hash,
+              actualReceivedAnchorWei: delta.toString(),
+              pendingLegNumber: 2,
+              quoteExpiry: quote.quoteExpiry,
+              createdAt: Date.now(),
+            };
+            savePendingTrade(address, record);
+            setPendingRecovery(record);
+          }
         }
       }
 
       setStatus("success");
+      clearPendingTrade(address, quote.marketToken);
+      setPendingRecovery(null);
       void refreshBalance();
       onTraded?.();
       return collected[collected.length - 1] ?? null;
     } catch (e) {
+      // Leg 2 interrupted → leave the pending record persisted for resume.
       mapTradeError(e);
       return null;
     }
@@ -599,17 +677,94 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     address,
     quote,
     publicClient,
-    chainId,
+    side,
+    marketSymbol,
+    payToken,
     slippageBps,
-    switchChainAsync,
-    signAndPrepareLeg,
-    writeContractAsync,
-    sendTransactionAsync,
+    ensureChain,
+    executeLeg,
     readRawBalance,
     refreshBalance,
     onTraded,
     mapTradeError,
   ]);
+
+  // Resume ONLY the outstanding second leg from the ACTUAL persisted anchor amount.
+  // Never auto-runs — the UI calls this on an explicit user action. prepare-leg
+  // re-quotes server-side, so an expired persisted quote is re-prepared fresh; the
+  // persisted amount is used solely as the input size, never as calldata.
+  const resumePendingTrade = useCallback(async (): Promise<Hex | null> => {
+    setError(null);
+    setTxHash(null);
+    setLegHashes([]);
+    const pending = pendingRecovery;
+    if (!address) {
+      setError("Connect a wallet to resume.");
+      return null;
+    }
+    if (!pending) {
+      setError("No partial trade to resume.");
+      return null;
+    }
+    if (!publicClient) {
+      setStatus("failure");
+      setError("No RPC client available for confirmation.");
+      return null;
+    }
+
+    // Buy: anchor → market token (BPS Direct). Sell: anchor → payment token (0x).
+    const payload: LegPayload =
+      pending.side === "buy"
+        ? {
+            kind: "bpsDirect",
+            marketToken: pending.marketToken,
+            inputToken: pending.anchorAddress as Address,
+            outputToken: pending.marketToken as Address,
+            exactInputAmount: pending.actualReceivedAnchorWei,
+            slippageBps,
+            taker: address,
+          }
+        : {
+            kind: "zeroEx",
+            marketToken: pending.marketToken,
+            inputToken: pending.anchorAddress as Address,
+            outputToken: pending.paymentAddress as Address,
+            exactInputAmount: pending.actualReceivedAnchorWei,
+            slippageBps,
+            taker: address,
+          };
+
+    try {
+      await ensureChain();
+      const hash = await executeLeg(payload, 2, 2);
+      if (!hash) return null; // failure status already set; pending stays persisted
+      setLegHashes([hash]);
+      setStatus("success");
+      clearPendingTrade(address, pending.marketToken);
+      setPendingRecovery(null);
+      void refreshBalance();
+      onTraded?.();
+      return hash;
+    } catch (e) {
+      mapTradeError(e);
+      return null;
+    }
+  }, [
+    pendingRecovery,
+    address,
+    publicClient,
+    slippageBps,
+    ensureChain,
+    executeLeg,
+    refreshBalance,
+    onTraded,
+    mapTradeError,
+  ]);
+
+  const cancelPendingTrade = useCallback(() => {
+    if (address) clearPendingTrade(address, marketToken);
+    setPendingRecovery(null);
+  }, [address, marketToken]);
 
   const reset = useCallback(() => {
     setAmountState("");
@@ -653,5 +808,10 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     prepareAndTrade,
     switchToChain,
     reset,
+    pendingRecovery,
+    pendingPrompt,
+    pendingExpired,
+    resumePendingTrade,
+    cancelPendingTrade,
   };
 }

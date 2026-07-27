@@ -122,7 +122,7 @@ export function TradeCard({
     anchorSymbol && anchorAddress
       ? { symbol: anchorSymbol, address: anchorAddress as `0x${string}`, decimals: anchorDecimals }
       : null;
-  const trade = useTrade(address, { onTraded, anchor });
+  const trade = useTrade(address, { onTraded, anchor, marketSymbol: tokenSymbol });
 
   const {
     side,
@@ -145,6 +145,9 @@ export function TradeCard({
     outputDecimals,
     inputBalanceWei,
     insufficient,
+    pendingRecovery,
+    pendingPrompt,
+    pendingExpired,
   } = trade;
 
   const isBuy = side === "buy";
@@ -167,6 +170,60 @@ export function TradeCard({
 
   return (
     <div data-testid="trade-card">
+      {/* Composed-trade recovery: the first leg confirmed but the second is still
+          outstanding (failed, interrupted, or the page reloaded). Honest and NEVER
+          auto-run — the user explicitly resumes or cancels (keeping the anchor). */}
+      {pendingRecovery && pendingPrompt && !busy && (
+        <div
+          data-testid="recovery-banner"
+          className="lab-card lab-card--nested"
+          style={{
+            marginBottom: 16,
+            background: "var(--warn-bg)",
+            borderColor: "var(--warn-border)",
+          }}
+        >
+          <p className="lab-label" data-testid="recovery-heading" style={{ color: "var(--warn)" }}>
+            {pendingPrompt.heading}
+          </p>
+          <p className="lab-muted" style={{ fontSize: 13, margin: "8px 0", lineHeight: 1.5 }}>
+            Your first step confirmed on-chain. This trade takes a second wallet action to finish —
+            it will not run on its own.{" "}
+            {pendingExpired
+              ? "The earlier quote expired, so the second step is re-priced fresh before you sign."
+              : ""}
+          </p>
+          <p style={{ margin: "0 0 10px" }}>
+            <a
+              href={`${explorer}/tx/${pendingRecovery.completedLegTxHash}`}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="recovery-leg1-link"
+            >
+              First step receipt ↗
+            </a>
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              data-testid="recovery-resume"
+              className="lab-btn lab-btn--primary"
+              onClick={() => void trade.resumePendingTrade()}
+            >
+              {pendingPrompt.action}
+            </button>
+            <button
+              type="button"
+              data-testid="recovery-cancel"
+              className="lab-btn lab-btn--ghost"
+              onClick={() => trade.cancelPendingTrade()}
+            >
+              Cancel and keep {pendingRecovery.anchorSymbol}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Buy / Sell tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }} role="tablist">
         {(["buy", "sell"] as TradeSide[]).map((s) => (
