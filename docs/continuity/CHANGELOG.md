@@ -7,6 +7,21 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-27 — LAUNCH LAB LANE: Genesis card v2 FROZEN (founder corrections; prior hashes invalid)
+
+- Founder corrections applied: (1) market display **PRINT / GOOGL** + hard assertion resolved-anchor ==
+  canonical GOOGL (prior "PRINT / PRINT" confirmed display-only; the simulated numeraire was always
+  canonical GOOGL); (2) FINAL founder-provided description verbatim → metadata re-uploaded
+  (ipfs://QmXLeDV8mfzqaUvL11Ss1wyodTMRHTUgKeuBSzTGvn3DoT; image CID unchanged); (3) launch actor
+  confirmed **mode A — founder wallet** from the standing authorization (mode B would void this card);
+  (4) artwork verified byte-identical (sha256 8e646a45…59fd) to the Claude Design V4 delivery's sole
+  1024×1024 PRINT asset — rendered artwork, not a placeholder.
+- Fresh simulation block 21012000: predicted token `0x8B400Cab3a7F7C912B6Dd3Af9996B16F0847D8C8`,
+  poolId `0x480555529cd58f9aca0c9cad2c56eca9eceee3e2ec8d98010141801ace533396`, gas 3,576,414
+  ≈ 0.0001336 ETH; manifestHash `0x3aff314a…cf84`; calldataHash `0x8d4e20e1…6043`.
+  **All previous predicted addresses and hashes are invalid.**
+- Broadcast remains disabled; kill switch remains active; no signature requested.
+
 ## 2026-07-27 — LAUNCH LAB LANE: route-probe gated + FINAL GENESIS LAUNCH CARD assembled (commit cc3e782)
 
 - **Route-probe cleanup (founder-directed):** GET /api/lab/route-probe now requires server-side

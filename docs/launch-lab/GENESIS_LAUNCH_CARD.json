@@ -1,23 +1,30 @@
 {
   "card": "BPS LAUNCH LAB — GENESIS LAUNCH REVIEW CARD (irreversible action; founder signs in-browser)",
-  "generatedAtUtc": "2026-07-27T20:10:16.111Z",
+  "generatedAtUtc": "2026-07-27T20:18:14.890Z",
   "productionUrl": "https://bps-launch-lab.vercel.app",
-  "sourceCommit": "cc3e782b49f557dd2e020428f1c22b9e2507598c",
+  "sourceCommit": "e05a363335105cae497d630da7abc562b64fe492",
   "appVersion": "0.0.0",
   "token": {
     "name": "PRINT",
-    "symbol": "PRINT",
-    "description": "PRINT is the genesis community market of the BPS RWA Launch Lab, paired with the Alphabet Class A (GOOGL) Robinhood Stock Token on Robinhood Chain.",
-    "descriptionStatus": "PROPOSED — confirm or replace before signing (re-hashes metadata + manifest)",
+    "ticker": "PRINT",
+    "market": "PRINT / GOOGL",
+    "description": "PRINT is the genesis market of BPS Launch Lab, paired with Alphabet Class A • Robinhood Token (GOOGL) on Robinhood Chain. Experimental and unaffiliated.",
+    "descriptionStatus": "FINAL — founder-provided verbatim (2026-07-27)",
     "imageIpfs": "ipfs://QmVnCzLDvRUzLmSg1KdcRTYqFHSJgsgAG8xSm6htZYT6Bc",
-    "metadataUri": "ipfs://QmPMQp1QZsaSkFfTgyEoKGFMNcFX4KFAMDA7BnxZiEJzd8"
+    "imageProvenance": "sha256 8e646a45dddfb77b1fcca5ac8621975e46827151f79575b9d7c965f3e57759fd — byte-identical to the Claude Design V4 delivery's sole PRINT asset (1024×1024 PNG); rendered artwork, not a placeholder",
+    "metadataUri": "ipfs://QmXLeDV8mfzqaUvL11Ss1wyodTMRHTUgKeuBSzTGvn3DoT"
+  },
+  "launchActor": {
+    "mode": "A — founder launch",
+    "creatorWallet": "0x29244A2309B703F82E292A3db7df0e95d0cdca72",
+    "evidence": "Standing founder authorization (2026-07-27): creator/creator-fee wallets fixed; lane checklist reads 'Genesis PRINT launch via public /lab/launch (founder signs)'. If mode B (advisor demo wallet) is now intended instead, this card must NOT be used — the public wizard generates the definitive card after the advisor connects and picks a fee destination."
   },
   "anchor": {
     "name": "Alphabet Class A • Robinhood Token",
     "symbol": "GOOGL",
     "contract": "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3",
     "decimals": 18,
-    "midUsdAtSimulation": "326.425000",
+    "midUsdAtSimulation": "326.750000",
     "currentMultiplier": "1.000000000000000000"
   },
   "wallets": {
@@ -64,34 +71,34 @@
     "tokenStandard": "DopplerERC20V1 (no mint, no tax, no blacklist)"
   },
   "prediction": {
-    "predictedTokenAddress": "0xdfcd034394932C3CEcdC317D7650501189Dd129c",
-    "predictedPoolId": "0xbdee8caad4dc280869b3a4c1c3092d14e48592199d8221579e53ed81e7eb4743",
+    "predictedTokenAddress": "0x8B400Cab3a7F7C912B6Dd3Af9996B16F0847D8C8",
+    "predictedPoolId": "0x480555529cd58f9aca0c9cad2c56eca9eceee3e2ec8d98010141801ace533396",
     "note": "Valid for this exact calldata only; any input change (incl. description) changes both."
   },
   "integrity": {
-    "manifestHash": "0xb54f806372ad650561794e890882db7850a1ceb1603d359cc111e79a0f723f9d",
-    "calldataHash": "0x123e339f6e8c09bde1584fb1777a5f1aea1b9b51bbde5da2d3b4ef8350df0776",
+    "manifestHash": "0x3aff314aec0202c66da1bdcba483864bc25f9e52b58e4f1285699f8c8ce4cf84",
+    "calldataHash": "0x8d4e20e126dfd84af9e8e57280dc0d7799a8efa15d0b9618a03d360f906a6043",
     "transactionTarget": "0xeb7C034704eF8Dcd2D32324c1545f62fB4aD0862",
     "transactionValue": "0"
   },
   "simulation": {
     "status": "ok",
-    "block": "21007227",
-    "timestampUtc": "2026-07-27T20:10:15.558Z",
-    "staleAfterUtc": "2026-07-27T20:13:15.558Z",
+    "block": "21012000",
+    "timestampUtc": "2026-07-27T20:18:14.355Z",
+    "staleAfterUtc": "2026-07-27T20:21:14.355Z",
     "gasEstimate": "3576414",
     "gasLimitBound125pct": "4470517",
-    "gasPriceWei": "37764000",
-    "estimatedCostEth": "0.000135059698296",
-    "estimatedCostEthAtGasLimit": "0.000168824603988"
+    "gasPriceWei": "37346000",
+    "estimatedCostEth": "0.000133564757244",
+    "estimatedCostEthAtGasLimit": "0.000166955927882"
   },
   "paymentRouting": {
     "status": "LIVE-VERIFIED in production (commit 48a7c8d): Rialto primary, all 8 payment↔anchor pairs executable; 1inch dormant (no key); 0x active fallback.",
     "rialtoEthToGooglQuote": {
       "executable": true,
       "pair": "ETH->GOOGL (0.001 ETH)",
-      "buyAmountGoogl": "0.005945884090989145",
-      "minBuyAmountGoogl": "0.005886425250079253",
+      "buyAmountGoogl": "0.005938729864014451",
+      "minBuyAmountGoogl": "0.005879342565374306",
       "platformFeeBps": 5,
       "settlement": "allowance",
       "chainId": 4663

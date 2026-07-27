@@ -147,3 +147,9 @@ Newest entries at the top. No secrets ever recorded here.
   predicted token 0xdfcd0343…129c / poolId 0xbdee8caa…4743, gas 3,576,414 (~0.000135 ETH),
   manifest 0xb54f8063…3f9d, calldata 0x123e339f…0776. Description PROPOSED, awaiting founder text.
 - Broadcast off, kill switch on, no signature requested.
+
+## 2026-07-27 — Genesis card v2 FROZEN (founder corrections)
+
+- PRINT / GOOGL display + numeraire assertion; FINAL description; metadata re-uploaded
+  (QmXLeDV8…3DoT); actor mode A (founder). New prediction: token 0x8B400Cab…D8C8,
+  pool 0x48055552…3396, block 21012000. Prior hashes invalid. Broadcast off, kill on.
