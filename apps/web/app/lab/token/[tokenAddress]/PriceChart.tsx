@@ -4,6 +4,7 @@
 // swap's sqrtPriceX96 — price = (sqrtPriceX96 / 2^96)^2 — falling back to the
 // |amount0/amount1| ratio when the sqrt price is unusable. When there are no
 // swaps (or the indexer view is not ready) it shows "Collecting market data".
+// Restyled to the Claude Design V4 lab palette; logic is unchanged.
 import { useMemo, useState } from "react";
 import { useHistory, type SwapRecord } from "../../../../hooks/lab";
 
@@ -82,7 +83,7 @@ export function PriceChart({ address, tokenSymbol }: { address: string; tokenSym
 
   return (
     <div data-testid="price-chart">
-      <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.6rem", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {(["1H", "6H", "24H", "All"] as Range[]).map((r) => (
           <button
             key={r}
@@ -90,7 +91,17 @@ export function PriceChart({ address, tokenSymbol }: { address: string; tokenSym
             data-testid={`range-${r}`}
             aria-pressed={range === r}
             onClick={() => setRange(r)}
-            style={rangeButtonStyle(range === r)}
+            className="lab-pill"
+            style={{
+              cursor: "pointer",
+              ...(range === r
+                ? {
+                    background: "var(--deep-ink)",
+                    color: "var(--warm-white)",
+                    borderColor: "var(--deep-ink)",
+                  }
+                : {}),
+            }}
           >
             {r}
           </button>
@@ -98,7 +109,7 @@ export function PriceChart({ address, tokenSymbol }: { address: string; tokenSym
       </div>
 
       {empty ? (
-        <p className="small muted" data-testid="price-chart-empty">
+        <p className="lab-muted" data-testid="price-chart-empty" style={{ fontSize: 14 }}>
           {isLoading ? "Loading market data…" : "Collecting market data"}
         </p>
       ) : (
@@ -130,7 +141,7 @@ function Chart({ points, tokenSymbol }: { points: Point[]; tokenSymbol: string |
   const latest = prices[prices.length - 1]!;
 
   return (
-    <div className="scroll-x">
+    <div className="lab-scroll-x">
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
@@ -138,10 +149,15 @@ function Chart({ points, tokenSymbol }: { points: Point[]; tokenSymbol: string |
         aria-label={`Price history for ${tokenSymbol ?? "token"} in GOOGL (derived from ${points.length} swaps)`}
         data-testid="price-chart-svg"
         data-point-count={points.length}
-        style={{ display: "block", background: "var(--panel-2)", borderRadius: "8px" }}
+        style={{
+          display: "block",
+          background: "var(--warm-white)",
+          border: "1px solid var(--peach-grey)",
+          borderRadius: 14,
+        }}
       >
         {points.length > 1 && (
-          <polyline fill="none" stroke="var(--accent)" strokeWidth="2" points={polyline} />
+          <polyline fill="none" stroke="var(--signal-orange)" strokeWidth="2" points={polyline} />
         )}
         {coords.map((c, i) => (
           <circle
@@ -149,29 +165,16 @@ function Chart({ points, tokenSymbol }: { points: Point[]; tokenSymbol: string |
             cx={c.cx}
             cy={c.cy}
             r={points.length > 40 ? 1.5 : 3}
-            fill="var(--accent)"
+            fill="var(--signal-orange)"
             data-testid="price-point"
           />
         ))}
       </svg>
-      <p className="small muted" style={{ marginTop: "0.4rem" }}>
+      <p className="lab-muted" style={{ fontSize: 13, marginTop: 8 }}>
         Latest derived price: {latest.toPrecision(6)} GOOGL / {tokenSymbol ?? "token"} ·{" "}
         {points.length} real swap{points.length === 1 ? "" : "s"}. Derived from on-chain swaps; not
         a price oracle.
       </p>
     </div>
   );
-}
-
-function rangeButtonStyle(active: boolean): React.CSSProperties {
-  return {
-    fontSize: "0.78rem",
-    padding: "0.25rem 0.6rem",
-    borderRadius: "999px",
-    border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-    background: active ? "color-mix(in srgb, var(--accent) 18%, var(--panel))" : "var(--panel-2)",
-    color: active ? "var(--text)" : "var(--muted)",
-    cursor: "pointer",
-    fontWeight: 600,
-  };
 }

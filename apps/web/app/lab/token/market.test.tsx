@@ -4,7 +4,7 @@ import { createConfig, http } from "wagmi";
 import { FEE_PRESETS } from "@bps/launch-lab";
 import { robinhoodChain } from "../../../lib/chain";
 import { Providers } from "../../providers";
-import { TokenMarketView } from "./[address]/TokenMarketView";
+import { TokenMarketView } from "./[tokenAddress]/TokenMarketView";
 
 function makeConfig() {
   return createConfig({
@@ -115,11 +115,14 @@ describe("Launch Lab token market page", () => {
       </Providers>,
     );
 
-    await waitFor(() => expect(screen.getByText("PRINT (PRINT)")).toBeInTheDocument());
+    // Token identity header: name heading + ticker label (design shows them apart).
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("PRINT"),
+    );
 
-    // 13 unavailable datums in the fixture: 12 rows render the exact string in
-    // their value cell + the beneficiaries card renders it once.
-    const awaiting = screen.getAllByText("Awaiting indexed data");
+    // Every unavailable MarketDatum renders EXACTLY the .lab-await treatment
+    // "awaiting indexed data" — never zero, never a fabricated value.
+    const awaiting = screen.getAllByText("awaiting indexed data");
     expect(awaiting.length).toBeGreaterThanOrEqual(12);
 
     // Never rendered as zero.
@@ -136,8 +139,8 @@ describe("Launch Lab token market page", () => {
     // Disconnected wallet: the primary path prompts to connect, never a signature.
     expect(screen.getByTestId("trade-connect")).toBeInTheDocument();
 
-    // Token Blockscout link present.
-    expect(screen.getByRole("link", { name: TOKEN })).toHaveAttribute(
+    // Token Blockscout link present and pointing at the token address.
+    expect(screen.getByTestId("token-blockscout")).toHaveAttribute(
       "href",
       `https://robinhoodchain.blockscout.com/address/${TOKEN}`,
     );

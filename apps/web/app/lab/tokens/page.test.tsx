@@ -114,11 +114,11 @@ describe("Launch Lab markets browser", () => {
     );
 
     await waitFor(() => expect(screen.getByText("Example Token")).toBeInTheDocument());
-    const table = screen.getByTestId("markets-table");
-    expect(table).toHaveTextContent("EXT");
-    expect(table).toHaveTextContent("GOOGL");
-    expect(table).toHaveTextContent("Nvidia Community");
-    expect(table).toHaveTextContent("NVDA");
+    const grid = screen.getByTestId("markets-grid");
+    expect(grid).toHaveTextContent("EXT");
+    expect(grid).toHaveTextContent("GOOGL");
+    expect(grid).toHaveTextContent("Nvidia Community");
+    expect(grid).toHaveTextContent("NVDA");
 
     // Token address links to the internal market page.
     expect(screen.getByRole("link", { name: "0x2222…2222" })).toHaveAttribute(
@@ -131,9 +131,19 @@ describe("Launch Lab markets browser", () => {
       "/lab/profile/0x3333333333333333333333333333333333333333",
     );
 
-    // Indexed activity shown when present; honest "Collecting market data" otherwise.
+    // Indexed activity shown when present; honest "collecting market data" otherwise —
+    // never a fabricated zero.
     expect(screen.getByTestId("market-activity")).toHaveTextContent("12 swaps");
-    expect(screen.getByTestId("market-collecting")).toHaveTextContent("Collecting market data");
+    expect(screen.getByTestId("market-collecting")).toHaveTextContent("collecting market data");
+
+    // The immutable fee split is stated verbatim as read-only economics.
+    const fees = screen.getByTestId("fee-economics");
+    expect(fees).toHaveTextContent("creator beneficiary");
+    expect(fees).toHaveTextContent("BPS Launch Lab");
+    expect(fees).toHaveTextContent("Doppler protocol");
+    expect(fees).toHaveTextContent("85%");
+    expect(fees).toHaveTextContent("10%");
+    expect(fees).toHaveTextContent("5%");
   });
 
   it("filters markets client-side by name, symbol, or anchor", async () => {
@@ -171,7 +181,13 @@ describe("Launch Lab markets browser", () => {
       </Providers>,
     );
     await waitFor(() =>
-      expect(screen.getByTestId("markets-empty")).toHaveTextContent("No markets launched yet."),
+      expect(screen.getByTestId("markets-empty")).toHaveTextContent(
+        "No BPS markets have launched yet.",
+      ),
     );
+    // Honest empty state: no fabricated market cards, activity, or stats are rendered.
+    expect(screen.queryByTestId("markets-grid")).toBeNull();
+    expect(screen.queryAllByTestId(/^market-card-/)).toHaveLength(0);
+    expect(screen.queryByTestId("market-activity")).toBeNull();
   });
 });

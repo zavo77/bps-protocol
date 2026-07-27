@@ -3,8 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { TradeCard } from "./[address]/TradeCard";
-import { PriceChart } from "./[address]/PriceChart";
+import { TradeCard } from "./[tokenAddress]/TradeCard";
+import { PriceChart } from "./[tokenAddress]/PriceChart";
 
 // ---------------------------------------------------------------------------
 // Wagmi hooks are mocked wholesale so the trade card can be exercised in jsdom

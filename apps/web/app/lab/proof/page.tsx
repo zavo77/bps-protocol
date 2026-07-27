@@ -1,212 +1,79 @@
 "use client";
-// Genesis proof page. Pre-launch: a pending checklist (nothing fabricated).
-// Post-launch: every hash with Blockscout links.
-import { EXPLORER_BASE_URL } from "@bps/launch-lab";
-import { useLabConfig, useProof } from "../../../hooks/lab";
+// Proof directory (index). A short "select a market to view its proof" over the
+// real, chain-reconstructed launches from useMarkets. Each verified market links
+// to its per-market evidence trail at /lab/proof/<address>. Honest empty state —
+// nothing is fabricated before a market exists.
+import { useMarkets, type MarketListItem } from "../../../hooks/lab";
 
 function short(v: string): string {
-  return v.length > 14 ? `${v.slice(0, 8)}…${v.slice(-6)}` : v;
+  return `${v.slice(0, 6)}…${v.slice(-4)}`;
 }
 
-function Row({ k, v }: { k: string; v: React.ReactNode }) {
+function ProofCard({ market }: { market: MarketListItem }) {
   return (
-    <div className="kv">
-      <span className="k">{k}</span>
-      <span className="v" style={{ wordBreak: "break-all", textAlign: "right" }}>
-        {v}
-      </span>
-    </div>
+    <a
+      href={`/lab/proof/${market.tokenAddress}`}
+      className="lab-card"
+      data-testid={`proof-market-${market.tokenAddress.toLowerCase()}`}
+      style={{ display: "block", color: "inherit" }}
+    >
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontWeight: 700, fontSize: 20, color: "var(--deep-ink)" }}>
+          {market.tokenName}
+        </span>
+        <span className="lab-label">{market.tokenSymbol}</span>
+      </div>
+      <p className="lab-muted" style={{ fontSize: 14, margin: "8px 0 0" }}>
+        Paired with {market.anchorSymbol ?? "an approved Robinhood Stock Token"}
+      </p>
+      <div className="lab-kv" style={{ marginTop: 14 }}>
+        <span>Token</span>
+        <span className="lab-data">{short(market.tokenAddress)}</span>
+      </div>
+      <div className="lab-kv">
+        <span>Launch tx</span>
+        <span className="lab-data">{short(market.launchTransactionHash)}</span>
+      </div>
+      <p style={{ margin: "14px 0 0", fontWeight: 600, color: "var(--deep-ink)" }}>
+        view proof trail →
+      </p>
+    </a>
   );
 }
 
-function Pending() {
-  return <span className="badge badge-warn">Pending</span>;
-}
-
-export default function LabProofPage() {
-  const proof = useProof();
-  const { data: config } = useLabConfig();
-  const explorer = config?.explorerBaseUrl ?? EXPLORER_BASE_URL;
-
-  if (proof.isPending) {
-    return (
-      <main>
-        <p className="muted">Loading proof record…</p>
-      </main>
-    );
-  }
-  if (proof.isError || !proof.data) {
-    return (
-      <main>
-        <p className="muted">Proof record unavailable: {proof.error?.message ?? "unknown error"}</p>
-      </main>
-    );
-  }
-  const record = proof.data;
-  const launched = record.receipt !== null;
+export default function LabProofIndexPage() {
+  const markets = useMarkets("newest");
 
   return (
     <main>
-      <h1>Genesis proof</h1>
-      <p className="muted">
-        Everything on this page is drawn from the deployment itself, the static registry, and live
-        verification — nothing is fabricated before it exists.
+      <div className="lab-label">evidence</div>
+      <h1 className="lab-h1">
+        the proof <span className="lab-serif">trail</span>
+      </h1>
+      <p className="lab-lead" style={{ marginTop: 14 }}>
+        Written for advisors and skeptics. Select a market to open its evidence trail — every claim
+        links to a primary source: a contract, a transaction, or a pinned document.
       </p>
 
-      <section className="card" data-testid="proof-checklist">
-        <h2>{launched ? "Launch record" : "Pre-launch checklist"}</h2>
-        <Row k="Deployment URL" v={record.deploymentUrl} />
-        <Row k="Source commit" v={record.sourceCommit} />
-        <Row
-          k="Anchor verification (live)"
-          v={
-            record.anchor ? (
-              record.anchor.status === "verified" ? (
-                <span className="badge badge-good">Verified</span>
-              ) : (
-                <span className="badge badge-bad">{record.anchor.status}</span>
-              )
-            ) : (
-              <Pending />
-            )
-          }
-        />
-        <Row k="Launch manifest" v={record.manifestHash ? record.manifestHash : <Pending />} />
-        <Row
-          k="Simulation"
-          v={
-            record.simulation ? (
-              `block ${record.simulation.simulationBlock} · gas ${record.simulation.gasEstimate}`
-            ) : (
-              <Pending />
-            )
-          }
-        />
-        <Row
-          k="Launch receipt"
-          v={
-            record.receipt ? (
-              <a
-                href={`${explorer}/tx/${record.receipt.launchTransactionHash}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {short(record.receipt.launchTransactionHash)}
-              </a>
-            ) : (
-              <Pending />
-            )
-          }
-        />
-        <Row
-          k="Verification buy"
-          v={
-            record.buyTransactionHash ? (
-              <a
-                href={`${explorer}/tx/${record.buyTransactionHash}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {short(record.buyTransactionHash)}
-              </a>
-            ) : (
-              <Pending />
-            )
-          }
-        />
-        <Row
-          k="Verification sell"
-          v={
-            record.sellTransactionHash ? (
-              <a
-                href={`${explorer}/tx/${record.sellTransactionHash}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {short(record.sellTransactionHash)}
-              </a>
-            ) : (
-              <Pending />
-            )
-          }
-        />
-        <Row k="Anchor reserve (wei)" v={record.anchorReserveWei ?? <Pending />} />
-      </section>
-
-      {launched && record.receipt ? (
-        <section className="card" style={{ marginTop: "1rem" }} data-testid="proof-launched">
-          <h2>Receipt facts</h2>
-          <Row
-            k="Token address"
-            v={
-              <a
-                href={`${explorer}/address/${record.receipt.tokenAddress}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {record.receipt.tokenAddress}
-              </a>
-            }
-          />
-          <Row k="Pool id" v={record.receipt.poolId} />
-          <Row k="Confirmation block" v={record.receipt.confirmationBlock} />
-          <Row k="Creator" v={record.receipt.creator} />
-          <Row
-            k="Matches manifest"
-            v={
-              record.receipt.matchesManifest ? (
-                <span className="badge badge-good">Yes</span>
-              ) : (
-                <span className="badge badge-bad">NO — mismatched</span>
-              )
-            }
-          />
-          {record.receipt.mismatches.length > 0 ? (
-            <ul>
-              {record.receipt.mismatches.map((m) => (
-                <li key={m} className="small" style={{ color: "var(--bad)" }}>
-                  {m}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
-      ) : null}
-
-      {record.notes.length > 0 ? (
-        <section className="card" style={{ marginTop: "1rem" }}>
-          <h2>Notes</h2>
-          <ul>
-            {record.notes.map((n) => (
-              <li key={n} className="small muted">
-                {n}
-              </li>
+      <div style={{ marginTop: 28 }}>
+        {markets.isPending ? (
+          <p className="lab-muted">Loading proof directory…</p>
+        ) : markets.isError ? (
+          <p className="lab-muted" data-testid="proof-directory-error">
+            Proof directory temporarily unavailable.
+          </p>
+        ) : markets.markets.length === 0 ? (
+          <p className="lab-muted" data-testid="proof-empty">
+            No BPS markets have launched yet.
+          </p>
+        ) : (
+          <div className="lab-grid" data-testid="proof-directory">
+            {markets.markets.map((m) => (
+              <ProofCard key={m.tokenAddress} market={m} />
             ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {record.anchor ? (
-        <section className="card" style={{ marginTop: "1rem" }} data-testid="proof-anchor">
-          <h2>Live anchor verification</h2>
-          <Row k="Status" v={record.anchor.status} />
-          <Row
-            k="Address"
-            v={
-              <a
-                href={`${explorer}/address/${record.anchor.address}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {record.anchor.address}
-              </a>
-            }
-          />
-          <Row k="Multiplier" v={record.anchor.currentMultiplier || "—"} />
-          <Row k="Mid price (USD)" v={record.anchor.midPriceUsd} />
-          <Row k="Fetched" v={new Date(record.anchor.fetchedAt).toISOString()} />
-        </section>
-      ) : null}
+          </div>
+        )}
+      </div>
     </main>
   );
 }

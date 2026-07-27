@@ -1,20 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import { createConfig, http } from "wagmi";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { FEE_PRESETS } from "@bps/launch-lab";
-import { robinhoodChain } from "../../../lib/chain";
-import { Providers } from "../../providers";
-import LabProofPage from "./page";
+import LabProofIndexPage from "./page";
+import { ProofTrailView } from "./[tokenAddress]/page";
 
-function makeConfig() {
-  return createConfig({
-    chains: [robinhoodChain],
-    connectors: [],
-    transports: { [robinhoodChain.id]: http("http://localhost:0") },
-    multiInjectedProviderDiscovery: false,
-    ssr: false,
-  });
-}
+const TOKEN = "0x1111111111111111111111111111111111111111";
 
 const ANCHOR = {
   status: "verified",
@@ -26,6 +18,32 @@ const ANCHOR = {
   midPriceUsd: "195.12",
   bidUsd: "195.00",
   askUsd: "195.24",
+  fetchedAt: 1_753_600_000_000,
+};
+
+const UNAVAILABLE = { available: false, reason: "awaiting-indexed-data" } as const;
+
+// A market snapshot BEFORE its launch is confirmed/indexed: launch tx, pool,
+// metadata etc. are all unavailable → the proof trail shows the pending state.
+const PENDING_SNAPSHOT = {
+  tokenAddress: TOKEN,
+  tokenName: "PRINT",
+  tokenSymbol: "PRINT",
+  tokenUri: UNAVAILABLE,
+  creator: UNAVAILABLE,
+  totalSupply: UNAVAILABLE,
+  anchor: ANCHOR,
+  poolId: UNAVAILABLE,
+  poolStatus: UNAVAILABLE,
+  anchorReserve: UNAVAILABLE,
+  remainingTokenInventory: UNAVAILABLE,
+  currentPriceUsd: UNAVAILABLE,
+  startingPriceUsd: UNAVAILABLE,
+  currentFdvUsd: UNAVAILABLE,
+  feePreset: UNAVAILABLE,
+  exactPoolFeeUnits: UNAVAILABLE,
+  beneficiaries: UNAVAILABLE,
+  launchTransactionHash: UNAVAILABLE,
   fetchedAt: 1_753_600_000_000,
 };
 
@@ -53,6 +71,7 @@ const LAB_CONFIG = {
   feePresets: [...FEE_PRESETS],
   startingFdvUsd: 20_500,
   anchorSymbol: "GOOGL",
+  anchors: [],
   bpsFeeAddress: null,
   explorerBaseUrl: "https://robinhoodchain.blockscout.com",
   publicBeta: {
@@ -64,59 +83,106 @@ const LAB_CONFIG = {
   genesis: { launched: false, tokenAddress: null },
 };
 
-function stubLabFetch() {
+const MARKET_LIST_ITEM = {
+  tokenAddress: TOKEN,
+  tokenName: "PRINT",
+  tokenSymbol: "PRINT",
+  creator: "0x1000000000000000000000000000000000000001",
+  numeraire: ANCHOR.address,
+  anchorSymbol: "GOOGL",
+  poolOrHook: "0x3333333333333333333333333333333333333333",
+  launchTransactionHash: `0x${"ab".repeat(32)}`,
+  blockNumber: "1234567",
+  timestamp: 1_753_600_000,
+  indexedSwaps: null,
+  grossMovementWei: null,
+};
+
+function jsonResponse(status: number, body: unknown): Response {
+  return { status, json: async () => body } as unknown as Response;
+}
+
+/** Route-aware fetch stub. `launches` controls the directory list contents. */
+function stubFetch(opts: { launches?: unknown[] }) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-      if (url.includes("/api/lab/proof")) {
-        return {
-          status: 200,
-          json: async () => ({ ok: true, data: PENDING_PROOF }),
-        } as unknown as Response;
-      }
-      if (url.includes("/api/lab/config")) {
-        return {
-          status: 200,
-          json: async () => ({ ok: true, data: LAB_CONFIG }),
-        } as unknown as Response;
-      }
-      return {
-        status: 404,
-        json: async () => ({ ok: false, error: "not found", code: "NOT_FOUND" }),
-      } as unknown as Response;
+      if (url.includes("/api/lab/config")) return jsonResponse(200, { ok: true, data: LAB_CONFIG });
+      if (url.includes("/api/lab/launches"))
+        return jsonResponse(200, {
+          ok: true,
+          data: { launches: opts.launches ?? [], indexedDataAvailable: false, sort: "newest" },
+        });
+      if (url.includes("/api/lab/token/"))
+        return jsonResponse(200, { ok: true, data: PENDING_SNAPSHOT });
+      if (url.includes("/api/lab/history/"))
+        return jsonResponse(200, { ok: true, data: { available: false, swaps: [] } });
+      if (url.includes("/api/lab/proof"))
+        return jsonResponse(200, { ok: true, data: PENDING_PROOF });
+      return jsonResponse(404, { ok: false, error: "not found", code: "NOT_FOUND" });
     }),
   );
+}
+
+function wrap(ui: ReactNode) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 }
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("Launch Lab proof page (pre-launch)", () => {
-  it("renders the pending checklist with deployment facts and no fabricated hashes", async () => {
-    stubLabFetch();
-    render(
-      <Providers config={makeConfig()}>
-        <LabProofPage />
-      </Providers>,
+describe("Proof directory (index)", () => {
+  it("shows the honest empty state when no markets have launched", async () => {
+    stubFetch({ launches: [] });
+    wrap(<LabProofIndexPage />);
+
+    await waitFor(() => expect(screen.getByTestId("proof-empty")).toBeInTheDocument());
+    expect(screen.getByTestId("proof-empty")).toHaveTextContent(
+      /No BPS markets have launched yet\./i,
     );
+  });
 
-    await waitFor(() => expect(screen.getByText("Pre-launch checklist")).toBeInTheDocument());
+  it("links each launched market to its per-market proof trail", async () => {
+    stubFetch({ launches: [MARKET_LIST_ITEM] });
+    wrap(<LabProofIndexPage />);
 
-    const checklist = screen.getByTestId("proof-checklist");
-    expect(checklist).toHaveTextContent("lab.example.test");
-    expect(checklist).toHaveTextContent("abc1234def");
-    // Live anchor verification shows verified; everything else is pending.
-    expect(checklist).toHaveTextContent("Verified");
-    // Manifest, simulation, receipt, buy, sell, anchor reserve => 6 pending badges.
-    expect(screen.getAllByText("Pending").length).toBe(6);
-    // No fabricated transaction hashes appear anywhere.
+    await waitFor(() =>
+      expect(screen.getByTestId(`proof-market-${TOKEN.toLowerCase()}`)).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId(`proof-market-${TOKEN.toLowerCase()}`)).toHaveAttribute(
+      "href",
+      `/lab/proof/${TOKEN}`,
+    );
+  });
+});
+
+describe("Per-market proof trail (pending)", () => {
+  it("renders the pending checklist with no fabricated hashes", async () => {
+    stubFetch({});
+    wrap(<ProofTrailView address={TOKEN} />);
+
+    // Progress reflects only the genuinely-verified items (anchor + token address).
+    await waitFor(() =>
+      expect(screen.getByTestId("proof-progress")).toHaveTextContent(/launch in preparation/i),
+    );
+    expect(screen.getByTestId("proof-progress")).toHaveTextContent(/2 of 9 items verified/i);
+
+    // The pending items render pending pills; verified items render verified pills.
+    expect(screen.getAllByTestId("proof-pending-pill").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByTestId("proof-checklist")).toBeInTheDocument();
+
+    // Deployment provenance is real, and no fabricated 64-hex hashes appear.
+    expect(screen.getByTestId("proof-provenance")).toHaveTextContent("abc1234def");
     expect(document.body.textContent).not.toMatch(/0x[0-9a-fA-F]{64}/);
-    // The pending note from the server is rendered.
-    expect(
-      screen.getByText(/Genesis launch pending — checklist state; no launch has occurred yet\./),
-    ).toBeInTheDocument();
+
+    // Market identity + Blockscout link.
+    expect(screen.getByTestId("proof-token-link")).toHaveAttribute(
+      "href",
+      `https://robinhoodchain.blockscout.com/address/${TOKEN}`,
+    );
   });
 });

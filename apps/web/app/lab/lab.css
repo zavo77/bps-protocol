@@ -1,0 +1,302 @@
+/* BPS Launch Lab — design system (ported from Claude Design V4 handoff).
+   Warm editorial peach aesthetic, scoped under .lab-root so it never affects
+   the Capital Engine pages. Fonts are loaded via next/font in layout.tsx and
+   exposed as CSS variables (--font-inter-tight, --font-space-grotesk,
+   --font-instrument-serif, --font-quicksand). */
+
+.lab-root {
+  /* typography variables — web fonts load at runtime with display=swap; these
+     stacks keep every surface legible on system fonts if the CDN is absent */
+  --font-inter-tight: "Inter Tight", ui-sans-serif, system-ui, "Segoe UI", Helvetica, sans-serif;
+  --font-space-grotesk: "Space Grotesk", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-instrument-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-quicksand: "Quicksand", "Trebuchet MS", ui-rounded, system-ui, sans-serif;
+
+  /* palette */
+  --warm-white: #fffdfc;
+  --soft-peach: #ffd8c3;
+  --pastel-orange: #ffb58d;
+  --signal-orange: #ff6a3d; /* ONE primary action per view */
+  --deep-ink: #171311;
+  --peach-grey: #ede5e0;
+  --charcoal: #453c36;
+  --warm-grey: #6b615b;
+  --muted: #a89b93;
+  --peach-field: linear-gradient(150deg, #ffdfc9, #ffd3ba 45%, #ffc5a4);
+  --good: #2e7d4f;
+  --good-bg: #f2faf5;
+  --good-border: #bfe0cc;
+  --bad: #b4451f;
+  --bad-bg: #fdf3ef;
+  --warn: #8a6a12;
+  --warn-bg: #fff8f0;
+  --warn-border: #f0d9a8;
+  --card-shadow: 0 2px 24px rgba(23, 19, 17, 0.08);
+
+  background: var(--warm-white);
+  color: var(--charcoal);
+  font-family: var(--font-inter-tight), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+.lab-root ::selection {
+  background: var(--soft-peach);
+}
+.lab-root :focus-visible {
+  outline: 2px solid var(--signal-orange);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.lab-wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 20px 22px 80px;
+}
+
+/* ---- header / nav ---- */
+.lab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0 22px;
+  flex-wrap: wrap;
+}
+.lab-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-quicksand), sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--deep-ink);
+}
+.lab-brand img {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+.lab-nav {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.lab-nav a {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 8px 12px;
+  border-radius: 99px;
+}
+.lab-nav a:hover {
+  background: var(--peach-grey);
+  color: var(--deep-ink);
+}
+.lab-nav a[aria-current="page"] {
+  background: var(--deep-ink);
+  color: var(--warm-white);
+}
+
+/* ---- typography ---- */
+.lab-h1 {
+  font-family: var(--font-inter-tight), sans-serif;
+  font-weight: 700;
+  font-size: clamp(38px, 6vw, 66px);
+  line-height: 0.94;
+  letter-spacing: -0.05em;
+  text-transform: lowercase;
+  color: var(--deep-ink);
+  margin: 0 0 14px;
+}
+.lab-h2 {
+  font-family: var(--font-inter-tight), sans-serif;
+  font-weight: 600;
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-transform: lowercase;
+  color: var(--deep-ink);
+  margin: 0 0 12px;
+}
+.lab-serif {
+  font-family: var(--font-instrument-serif), serif;
+  font-style: italic;
+  font-weight: 400;
+  text-transform: none;
+  color: var(--signal-orange);
+}
+.lab-label {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--warm-grey);
+}
+.lab-data {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--deep-ink);
+  word-break: break-all;
+}
+.lab-lead {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--warm-grey);
+  max-width: 620px;
+}
+.lab-muted {
+  color: var(--muted);
+}
+
+/* ---- cards ---- */
+.lab-card {
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: var(--card-shadow);
+  padding: 24px;
+}
+.lab-card--nested {
+  border: 1px solid var(--peach-grey);
+  box-shadow: none;
+}
+.lab-card--peach {
+  background: var(--peach-field);
+  box-shadow: none;
+}
+.lab-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.lab-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--peach-grey);
+}
+.lab-kv:last-child {
+  border-bottom: none;
+}
+.lab-kv > span:first-child {
+  color: var(--warm-grey);
+  font-size: 14px;
+}
+.lab-kv > span:last-child {
+  text-align: right;
+}
+
+/* ---- buttons ---- */
+.lab-btn {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 99px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition:
+    transform 0.08s ease-out,
+    background 0.2s ease-out;
+}
+.lab-btn:active {
+  transform: translateY(1px);
+}
+.lab-btn--primary {
+  background: var(--signal-orange);
+  color: #fff;
+}
+.lab-btn--primary:hover {
+  background: #f2551f;
+}
+.lab-btn--ghost {
+  background: #fff;
+  border-color: var(--peach-grey);
+  color: var(--deep-ink);
+}
+.lab-btn--ghost:hover {
+  background: var(--peach-grey);
+}
+.lab-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- pills / status ---- */
+.lab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--peach-grey);
+  background: #fff;
+  color: var(--warm-grey);
+}
+.lab-pill--good {
+  background: var(--good-bg);
+  border-color: var(--good-border);
+  color: var(--good);
+}
+.lab-pill--bad {
+  background: var(--bad-bg);
+  border-color: #e6cbbf;
+  color: var(--bad);
+}
+.lab-pill--warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  color: var(--warn);
+}
+
+/* ---- form fields ---- */
+.lab-field {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--peach-grey);
+  background: #fff;
+  color: var(--deep-ink);
+  font-family: var(--font-inter-tight), sans-serif;
+  font-size: 15px;
+  box-sizing: border-box;
+}
+.lab-field:focus {
+  border-color: var(--pastel-orange);
+}
+
+/* ---- misc ---- */
+.lab-await {
+  font-family: var(--font-instrument-serif), serif;
+  font-style: italic;
+  color: var(--muted);
+}
+.lab-disclosure {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--warm-grey);
+  border-top: 1px solid var(--peach-grey);
+  margin-top: 40px;
+  padding-top: 18px;
+}
+.lab-scroll-x {
+  overflow-x: auto;
+}
