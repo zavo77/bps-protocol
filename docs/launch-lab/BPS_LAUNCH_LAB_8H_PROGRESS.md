@@ -37,6 +37,18 @@ Newest entries at the top. No secrets ever recorded here.
   serves reads. `DATABASE_URL` set in .env.local + Vercel Preview/Production (value never printed).
   Note: the production mirror has nothing to write until the first confirmed launch — engaged but empty.
 
+## Railway indexer (2026-07-27, commit 25ace63)
+
+- New workspace `apps/lab-indexer` (separate from the Capital Engine's `apps/indexer` skeleton):
+  HTTP-polling only (no WSS); streams = Airlock Create (GOOGL + lab initializer; poolId via
+  `DopplerHookInitializer.getState` → `computePoolId`) and PoolManager Swap for known lab poolIds;
+  per-stream Postgres cursors (restart-resume verified live); additive/idempotent migrations
+  (`lab_launches.pool_id` column, `lab_swaps`, `lab_indexer_cursor`); `/health` 200 on `0.0.0.0:$PORT`;
+  optional Sentry (`SENTRY_DSN`) with secret-redacting beforeSend; all logs redacted (verified 0 raw URLs).
+- Local smoke against live chain + Railway Postgres: migrate OK; caught up ~460 blocks; restart resumed
+  from persisted cursor (20686635 → 20686775); health 200 both runs. 6 unit tests; eslint/prettier clean.
+- Deployment handoff values issued to founder (root /, workspace-scoped npm commands, /health path).
+
 ## Milestones
 
 - [x] Consolidated blocker question asked and answered
