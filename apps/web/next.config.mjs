@@ -14,6 +14,8 @@ const nextConfig = {
       "bps-wagmi-active": e2e ? "./app/wagmi-active.e2e.ts" : "./app/wagmi-active.ts",
     },
   },
+  // @bps/launch-lab ships TypeScript source (no prebuild step); Next compiles it.
+  transpilePackages: ["@bps/launch-lab"],
 };
 
 export default nextConfig;

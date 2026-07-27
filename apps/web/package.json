@@ -12,10 +12,12 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@bps/launch-lab": "0.0.0",
     "@tanstack/react-query": "5.101.4",
     "next": "16.2.11",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "server-only": "0.0.1",
     "viem": "2.55.8",
     "wagmi": "3.7.4",
     "zod": "4.4.3"
