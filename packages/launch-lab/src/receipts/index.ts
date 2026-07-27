@@ -47,8 +47,8 @@ export async function decodeAndVerifyReceipt(
     }
   }
 
-  let creator: Address = manifest.creatorAddress;
-  let poolStatus = -1;
+  const creator: Address = manifest.creatorAddress;
+  const poolStatus = -1;
   if (tokenAddress !== '0x0000000000000000000000000000000000000000') {
     try {
       const [name, symbol, supply] = await Promise.all([

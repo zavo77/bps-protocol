@@ -6,6 +6,7 @@
 //
 // Secrets: reads ROBINHOOD_CHAIN_RPC_URL from apps/web/.env.local. The URL is
 // never printed; all error output is passed through redact() first.
+/* global console, fetch, URL */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
