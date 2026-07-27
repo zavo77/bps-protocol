@@ -1,6 +1,6 @@
 {
   "spike": "BPS Launch Lab 8H hard gate — Doppler/GOOGL integration proof",
-  "generatedAtUtc": "2026-07-27T07:13:33.148Z",
+  "generatedAtUtc": "2026-07-27T10:03:13.232Z",
   "sdkVersion": "1.0.0",
   "chainId": 4663,
   "noOpEnabledForChain": true,
@@ -162,9 +162,9 @@
       "status": "ASSET_STATUS_ACTIVE",
       "currentMultiplier": "1.000000000000000000",
       "chain4663Address": "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3",
-      "bid": 323.91,
-      "ask": 323.94,
-      "midUsd": 323.925
+      "bid": 325.35,
+      "ask": 325.49,
+      "midUsd": 325.42
     },
     "match": true
   },
@@ -186,9 +186,9 @@
   "simulation": {
     "rehype": {
       "status": "SIMULATION_OK",
-      "predictedTokenAddress": "0xC3Dab5aF881C69F8CfB0Fa3270b8529fC404817A",
-      "predictedPoolId": "0xef83d635e3b256368dceb8abcfc4e27a68d27928ff529aded68c20354bbe6808",
-      "gasEstimate": "3577075",
+      "predictedTokenAddress": "0x1F212fccea9995931f4f2F9CA0C8b641188Ca196",
+      "predictedPoolId": "0xb5bf8661b14ba491ce6b3cb50701d5def0fb2b1497366a8bc7ac1c0890ba018a",
+      "gasEstimate": "3596358",
       "createParamsKeys": [
         "initialSupply",
         "numTokensToSell",
