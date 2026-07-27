@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0",
+  "lastUpdatedUtc": "",
+  "repoPath": "",
+  "repositoryUrl": "",
+  "branch": "",
+  "headCommit": "",
+  "latestPushedCommit": "",
+  "workingTreeClean": false,
+  "activeMilestone": "",
+  "milestoneStatus": "",
+  "featureFlags": {
+    "launchLabEnabled": null,
+    "broadcastEnabled": null,
+    "killSwitch": null
+  },
+  "deployments": {
+    "vercelProduction": {"url": "", "deploymentId": "", "status": ""},
+    "vercelPreview": {"url": "", "deploymentId": "", "status": ""},
+    "railway": []
+  },
+  "services": {
+    "rpc": {"status": "", "lastValidatedUtc": ""},
+    "database": {"status": "", "lastValidatedUtc": ""},
+    "indexer": {"status": "", "latestBlock": null, "lag": null},
+    "pinata": {"status": ""},
+    "sentry": {"status": ""},
+    "betterStack": {"status": ""},
+    "zeroX": {"status": ""}
+  },
+  "contracts": [],
+  "databaseMigrations": [],
+  "testStatus": [],
+  "blockers": [],
+  "nextActions": []
+}
