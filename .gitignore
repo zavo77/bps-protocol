@@ -56,3 +56,8 @@ Desktop.ini
 # Playwright test artifacts
 apps/web/test-results/
 apps/web/playwright-report/
+
+apps/web/.env.local
+
+# Vercel project metadata (never commit)
+.vercel/
