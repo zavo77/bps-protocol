@@ -109,6 +109,7 @@ describe("validation", () => {
     feePreset: "BALANCED_1",
     creatorAddress: A,
     creatorFeeAddress: B,
+    termsAccepted: true,
   };
 
   it("accepts the Genesis payload", () => {
@@ -122,6 +123,7 @@ describe("validation", () => {
     ["non-ipfs uri", { tokenUri: "https://example.com/x.json" }],
     ["local provider", { metadataProvider: "local-preview" }],
     ["tiny fdv", { startingFdvUsd: 10 }],
+    ["terms not accepted", { termsAccepted: false }],
   ])("rejects %s", (_label, patch) => {
     expect(() => prepareLaunchSchema.parse({ ...payload, ...patch })).toThrow();
   });

@@ -60,12 +60,19 @@ const LAB_CONFIG = {
   enabled: true,
   broadcastEnabled: false,
   killSwitchActive: true,
+  accessMode: "public",
   defaultFeePreset: "BALANCED_1",
   feePresets: [...FEE_PRESETS],
   startingFdvUsd: 20_500,
   anchorSymbol: "GOOGL",
   bpsFeeAddress: null,
   explorerBaseUrl: "https://robinhoodchain.blockscout.com",
+  publicBeta: {
+    maxLaunchesPerWallet: 2,
+    launchCooldownSeconds: 3_600,
+    publicDailyLaunchCap: 25,
+    launchesToday: null,
+  },
   genesis: { launched: false, tokenAddress: null },
 };
 

@@ -58,8 +58,9 @@ const FLOW_STATE_INFO: Record<CreateFlowState, { label: string; detail: string }
     detail: "Server configuration currently disables broadcasting launches.",
   },
   "kill-switch-active": {
-    label: "Kill switch active",
-    detail: "The Launch Lab kill switch is active. All launches are halted.",
+    label: "Creation halted",
+    detail:
+      "Launch creation is switched off by the server (kill switch or disabled access mode). All launches are halted.",
   },
   "ready-to-launch": {
     label: "Ready to launch",
@@ -274,9 +275,31 @@ export default function LabCreatePage() {
               Metadata pinned: {flow.metadata.tokenUri} (provider: {flow.metadata.provider})
             </p>
           ) : null}
+          <label style={{ display: "block", margin: "0.75rem 0" }}>
+            <input
+              type="checkbox"
+              checked={flow.form.termsAccepted}
+              data-testid="terms-checkbox"
+              onChange={(e) => flow.updateForm({ termsAccepted: e.target.checked })}
+            />{" "}
+            {
+              "I acknowledge this is an experimental, unaffiliated market platform and that launch configuration is irreversible."
+            }
+          </label>
+          {!flow.form.termsAccepted ? (
+            <p className="small muted" data-testid="terms-hint">
+              Check the acknowledgement above to continue. Nothing is signed or sent until you do.
+            </p>
+          ) : null}
           <button
             data-testid="upload-continue"
-            disabled={disconnected || busy || !flow.formComplete || flow.formErrors.length > 0}
+            disabled={
+              disconnected ||
+              busy ||
+              !flow.formComplete ||
+              flow.formErrors.length > 0 ||
+              !flow.form.termsAccepted
+            }
             onClick={async () => {
               if (flow.metadata) {
                 setStep(2);
@@ -524,6 +547,12 @@ export default function LabCreatePage() {
       {step === 4 ? (
         <section className="card">
           <h2>4. Launch</h2>
+          {flow.config && flow.config.publicBeta.launchesToday !== null ? (
+            <p className="small muted" data-testid="public-beta-capacity">
+              Public beta: {flow.config.publicBeta.launchesToday} of{" "}
+              {flow.config.publicBeta.publicDailyLaunchCap} launches today
+            </p>
+          ) : null}
           <ul style={{ listStyle: "none", paddingLeft: 0 }} data-testid="launch-checklist">
             <Gate ok={flow.gates.walletConnected} label="Wallet connected" />
             <Gate ok={flow.gates.chainOk} label={`On Robinhood Chain (${CHAIN_ID})`} />
@@ -535,6 +564,8 @@ export default function LabCreatePage() {
             />
             <Gate ok={flow.gates.broadcastEnabled} label="Broadcast enabled (server flag)" />
             <Gate ok={flow.gates.killSwitchInactive} label="Kill switch inactive" />
+            <Gate ok={flow.gates.creationEnabled} label="Creation enabled (access mode)" />
+            <Gate ok={flow.gates.termsAccepted} label="Acknowledgement accepted" />
           </ul>
           <button
             data-testid="launch-button"

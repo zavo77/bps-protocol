@@ -80,20 +80,39 @@ export function requireEnv<const K extends readonly string[]>(names: K): Record<
   return out as Record<K[number], string>;
 }
 
+export type LabAccessMode = "disabled" | "allowlist" | "public";
+
 export interface LabServerFlags {
   enabled: boolean;
   broadcastEnabled: boolean;
   killSwitchActive: boolean;
+  /**
+   * disabled  — no creation for anyone (default when nothing is configured)
+   * allowlist — only BPS_LAUNCH_LAB_CREATOR_ALLOWLIST wallets may create
+   * public    — ANY wallet may create; the allowlist is NOT consulted.
+   */
+  accessMode: LabAccessMode;
   creatorAllowlist: Address[];
   bpsFeeAddress: Address | null;
   startingFdvUsd: number;
   defaultFeePreset: FeePresetId;
+  /** Public-beta guardrails (uniform for every wallet; no exceptions). */
+  maxLaunchesPerWallet: number;
+  launchCooldownSeconds: number;
+  publicDailyLaunchCap: number;
+  metadataMaxBytes: number;
+  requestTtlSeconds: number;
 }
 
 /**
  * Feature flags fail CLOSED: lab disabled, broadcast disabled, kill switch
  * active unless each is explicitly configured otherwise.
  */
+function intEnv(name: string, fallbackValue: number, min: number, max: number): number {
+  const v = Number(process.env[name] ?? "");
+  return Number.isInteger(v) && v >= min && v <= max ? v : fallbackValue;
+}
+
 export function readServerFlags(): LabServerFlags {
   const allow = (process.env.BPS_LAUNCH_LAB_CREATOR_ALLOWLIST ?? "")
     .split(",")
@@ -103,13 +122,33 @@ export function readServerFlags(): LabServerFlags {
   const bps = process.env.BPS_LAUNCH_LAB_BPS_BENEFICIARY;
   const fdv = Number(process.env.BPS_LAUNCH_LAB_START_FDV_USD ?? "20500");
   const preset = (process.env.BPS_LAUNCH_LAB_DEFAULT_FEE_PRESET ?? "BALANCED_1") as FeePresetId;
+  const rawMode = process.env.BPS_LAUNCH_LAB_ACCESS_MODE;
+  // Fail closed: "public" only when explicitly configured; otherwise allowlist
+  // when one exists, else fully disabled.
+  const accessMode: LabAccessMode =
+    rawMode === "public" || rawMode === "allowlist" || rawMode === "disabled"
+      ? rawMode
+      : allow.length > 0
+        ? "allowlist"
+        : "disabled";
   return {
     enabled: process.env.BPS_LAUNCH_LAB_ENABLED === "true",
     broadcastEnabled: process.env.BPS_LAUNCH_LAB_BROADCAST_ENABLED === "true",
     killSwitchActive: process.env.BPS_LAUNCH_LAB_KILL_SWITCH !== "false",
+    accessMode,
     creatorAllowlist: allow,
     bpsFeeAddress: bps ? getAddress(bps) : null,
     startingFdvUsd: Number.isFinite(fdv) && fdv > 0 ? fdv : 20_500,
     defaultFeePreset: FEE_PRESETS.some((p) => p.id === preset && p.enabled) ? preset : "BALANCED_1",
+    maxLaunchesPerWallet: intEnv("BPS_LAUNCH_LAB_MAX_LAUNCHES_PER_WALLET", 2, 1, 100),
+    launchCooldownSeconds: intEnv("BPS_LAUNCH_LAB_LAUNCH_COOLDOWN_SECONDS", 3600, 0, 86_400 * 7),
+    publicDailyLaunchCap: intEnv("BPS_LAUNCH_LAB_PUBLIC_DAILY_LAUNCH_CAP", 25, 1, 10_000),
+    metadataMaxBytes: intEnv(
+      "BPS_LAUNCH_LAB_METADATA_MAX_BYTES",
+      4 * 1024 * 1024,
+      1024,
+      16 * 1024 * 1024,
+    ),
+    requestTtlSeconds: intEnv("BPS_LAUNCH_LAB_REQUEST_TTL_SECONDS", 300, 30, 900),
   };
 }

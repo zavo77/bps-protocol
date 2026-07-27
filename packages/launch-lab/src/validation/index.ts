@@ -36,6 +36,8 @@ export const prepareLaunchSchema = z.object({
   feePreset: feePresetSchema,
   creatorAddress: addressSchema,
   creatorFeeAddress: addressSchema,
+  /** Explicit public terms/disclosure acknowledgement — required for every wallet. */
+  termsAccepted: z.literal(true),
 });
 export type PrepareLaunchPayload = z.infer<typeof prepareLaunchSchema>;
 

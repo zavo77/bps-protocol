@@ -1,11 +1,42 @@
 "use client";
 // Launch Lab landing. Renders ONLY real data (server config + live anchor
-// verification) — no fabricated stats of any kind.
-import { EXPLORER_BASE_URL, SPLIT, type AnchorVerification, type FeePreset } from "@bps/launch-lab";
-import { useAnchor, useLabConfig } from "../../hooks/lab";
+// verification + chain-reconstructed launches) — no fabricated stats of any kind.
+import {
+  EXPLORER_BASE_URL,
+  SPLIT,
+  type AnchorVerification,
+  type FeePreset,
+  type LabPublicConfig,
+  type LaunchRecord,
+} from "@bps/launch-lab";
+import { useAnchor, useLabConfig, useLaunches } from "../../hooks/lab";
 
 function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+const ACCESS_MODE_LINE: Record<LabPublicConfig["accessMode"], string> = {
+  public: "Public beta — any wallet can create a market.",
+  allowlist: "Creation is currently limited.",
+  disabled: "Creation is currently disabled.",
+};
+
+function LiveMarketRow({ launch, explorer }: { launch: LaunchRecord; explorer: string }) {
+  return (
+    <tr data-testid={`launch-row-${launch.tokenAddress.toLowerCase()}`}>
+      <td>{launch.tokenName}</td>
+      <td>{launch.tokenSymbol}</td>
+      <td>
+        <a href={`/lab/token/${launch.tokenAddress}`}>{short(launch.tokenAddress)}</a>
+      </td>
+      <td>{launch.creator ? short(launch.creator) : "—"}</td>
+      <td>
+        <a href={`${explorer}/tx/${launch.launchTransactionHash}`} target="_blank" rel="noreferrer">
+          {short(launch.launchTransactionHash)}
+        </a>
+      </td>
+    </tr>
+  );
 }
 
 function AnchorBadge({ anchor }: { anchor: AnchorVerification | undefined }) {
@@ -48,6 +79,7 @@ function FeePresetCard({ preset }: { preset: FeePreset }) {
 export default function LabLandingPage() {
   const { data: config } = useLabConfig();
   const { data: anchor } = useAnchor();
+  const launchesQuery = useLaunches();
   const explorer = config?.explorerBaseUrl ?? EXPLORER_BASE_URL;
 
   return (
@@ -59,11 +91,48 @@ export default function LabLandingPage() {
           Robinhood Stock Token on Robinhood Chain (4663). Every launch is simulated, manifested,
           and verified against its on-chain receipt.
         </p>
+        {config ? (
+          <p data-testid="access-mode-line">{ACCESS_MODE_LINE[config.accessMode]}</p>
+        ) : null}
         <p>
           <a href="/lab/create">Create a market</a>
           {" · "}
           <a href="/lab/proof">Genesis proof</a>
         </p>
+      </section>
+
+      <section style={{ marginBottom: "1.5rem" }} data-testid="live-markets">
+        <h2>Live markets</h2>
+        {launchesQuery.isPending ? (
+          <p className="muted">Loading launches…</p>
+        ) : launchesQuery.isError ? (
+          <p className="muted" data-testid="live-markets-error">
+            Launches are temporarily unavailable.
+          </p>
+        ) : launchesQuery.data.length === 0 ? (
+          <p className="muted" data-testid="live-markets-empty">
+            No markets launched yet.
+          </p>
+        ) : (
+          <div className="scroll-x">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Token</th>
+                  <th>Symbol</th>
+                  <th>Address</th>
+                  <th>Creator</th>
+                  <th>Launch tx</th>
+                </tr>
+              </thead>
+              <tbody>
+                {launchesQuery.data.map((l) => (
+                  <LiveMarketRow key={l.tokenAddress} launch={l} explorer={explorer} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <div className="grid">

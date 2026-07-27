@@ -43,6 +43,12 @@ export interface CreateFlowFormState {
   feePreset: FeePresetId;
   /** Empty string = default to the connected wallet. */
   creatorFeeAddress: string;
+  /**
+   * Explicit user acknowledgement (experimental, unaffiliated, irreversible).
+   * Sent to the server as literal `true` ONLY when the user checked the box —
+   * never silently defaulted.
+   */
+  termsAccepted: boolean;
 }
 
 export interface PreparedLaunchBundle {
@@ -61,6 +67,10 @@ export interface CreateFlowGates {
   simulationFresh: boolean;
   broadcastEnabled: boolean;
   killSwitchInactive: boolean;
+  /** accessMode !== 'disabled' — public/allowlist creation is switched on. */
+  creationEnabled: boolean;
+  /** The user checked the experimental/irreversible acknowledgement box. */
+  termsAccepted: boolean;
 }
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -179,6 +189,7 @@ export function useCreateFlow(): CreateFlow {
     startingFdvUsd: 0,
     feePreset: "BALANCED_1",
     creatorFeeAddress: "",
+    termsAccepted: false,
   });
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [metadata, setMetadata] = useState<MetadataUploadResult | null>(null);
@@ -233,6 +244,7 @@ export function useCreateFlow(): CreateFlow {
 
   const anchorVerified = anchor?.status === "verified";
   const chainOk = chainId === CHAIN_ID;
+  const creationEnabled = config !== undefined && config.accessMode !== "disabled";
   const gates: CreateFlowGates = {
     walletConnected: walletState !== "disconnected",
     chainOk: walletState !== "disconnected" && chainOk,
@@ -242,10 +254,14 @@ export function useCreateFlow(): CreateFlow {
     simulationFresh,
     broadcastEnabled: config?.broadcastEnabled === true,
     killSwitchInactive: config !== undefined && config.killSwitchActive === false,
+    creationEnabled,
+    termsAccepted: form.termsAccepted,
   };
 
   const flowState: CreateFlowState = useMemo(() => {
     if (phase !== "idle") return phase;
+    // accessMode 'disabled' blocks creation exactly like the kill switch.
+    if (config?.accessMode === "disabled") return "kill-switch-active";
     if (!formComplete) return "form-incomplete";
     if (formErrors.length > 0) return "form-invalid";
     // Form done but metadata not yet confirmed → still an incomplete flow input.
@@ -263,6 +279,7 @@ export function useCreateFlow(): CreateFlow {
       walletState !== "connected" ||
       !simulationFresh ||
       !gates.metadataConfirmed ||
+      !form.termsAccepted ||
       config === undefined
     ) {
       return "simulation-success";
@@ -283,6 +300,7 @@ export function useCreateFlow(): CreateFlow {
     walletState,
     simulationFresh,
     gates.metadataConfirmed,
+    form.termsAccepted,
   ]);
 
   const ensureChain = useCallback(async () => {
@@ -360,6 +378,8 @@ export function useCreateFlow(): CreateFlow {
 
   const buildPayload = useCallback((): PrepareLaunchPayload | null => {
     if (!address || !metadata) return null;
+    // Never silently send termsAccepted: true — only when the user checked it.
+    if (!form.termsAccepted) return null;
     const feeRaw = form.creatorFeeAddress.trim();
     const creatorFee = feeRaw === "" ? address : feeRaw;
     if (!isAddress(creatorFee)) return null;
@@ -375,11 +395,22 @@ export function useCreateFlow(): CreateFlow {
       feePreset: form.feePreset,
       creatorAddress: address,
       creatorFeeAddress: getAddress(creatorFee) as Address,
+      termsAccepted: true,
     };
   }, [address, metadata, form]);
 
   const prepare = useCallback(async (): Promise<boolean> => {
     setError(null);
+    if (!form.termsAccepted) {
+      setError(
+        "Check the acknowledgement box (experimental, unaffiliated, irreversible) before preparing a launch.",
+      );
+      return false;
+    }
+    if (config?.accessMode === "disabled") {
+      setError("Market creation is currently disabled.");
+      return false;
+    }
     setPrepareRequested(true);
     if (metadata && metadata.provider !== "pinata") {
       setError("Token metadata is not a production IPFS upload; broadcast would be refused.");
@@ -415,7 +446,17 @@ export function useCreateFlow(): CreateFlow {
       setPhase("simulation-failure");
       return false;
     }
-  }, [metadata, buildPayload, anchor, anchorQuery, ensureChain, signRequest, failFromError]);
+  }, [
+    form.termsAccepted,
+    config,
+    metadata,
+    buildPayload,
+    anchor,
+    anchorQuery,
+    ensureChain,
+    signRequest,
+    failFromError,
+  ]);
 
   /** Re-simulate via /api/lab/simulate (requires a fresh signature; 180 s rule). */
   const resimulate = useCallback(async (): Promise<PreparedLaunchBundle | null> => {
@@ -453,8 +494,18 @@ export function useCreateFlow(): CreateFlow {
       setError("The kill switch is active; launches are halted.");
       return;
     }
+    if (config.accessMode === "disabled") {
+      setError("Market creation is currently disabled.");
+      return;
+    }
     if (!config.broadcastEnabled) {
       setError("Broadcasting is disabled by server configuration.");
+      return;
+    }
+    if (!form.termsAccepted) {
+      setError(
+        "Check the acknowledgement box (experimental, unaffiliated, irreversible) before launching.",
+      );
       return;
     }
     if (!anchorVerified) {
@@ -498,6 +549,14 @@ export function useCreateFlow(): CreateFlow {
       );
       setReceiptResult(result);
       if (result.matchesManifest) {
+        // Fire-and-forget: register the confirmed launch so the public list
+        // updates promptly. The server verifies everything from chain and the
+        // list is chain-reconstructed regardless, so failures are non-fatal.
+        void labFetch<{ registered: boolean }>("/api/lab/launches", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ transactionHash: hash }),
+        }).catch(() => {});
         setPhase("launch-success");
         router.push(`/lab/token/${result.tokenAddress}`);
       } else {
@@ -517,6 +576,7 @@ export function useCreateFlow(): CreateFlow {
     publicClient,
     anchorVerified,
     metadata,
+    form.termsAccepted,
     ensureChain,
     resimulate,
     sendTransactionAsync,

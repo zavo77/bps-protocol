@@ -1,14 +1,10 @@
 // POST multipart/form-data: envelope (signed request JSON) + image file.
 // Uploads image + metadata JSON to Pinata after signature/allowlist checks.
 
-import { keccak256 } from "viem";
-import {
-  signedRequestSchema,
-  uploadMetadataViaPinata,
-  MAX_BODY_BYTES,
-  type MetadataInput,
-} from "@bps/launch-lab";
-import { verifySignedRequest, payloadHashOf } from "../../../../lib/lab/server";
+import { keccak256, stringToHex } from "viem";
+import { signedRequestSchema, uploadMetadataViaPinata, type MetadataInput } from "@bps/launch-lab";
+import { getFlags, verifySignedRequest, payloadHashOf } from "../../../../lib/lab/server";
+import { assertSignatureUnused } from "../../../../lib/lab/store";
 import {
   assertSameOrigin,
   clientKey,
@@ -30,8 +26,11 @@ export async function POST(req: Request): Promise<Response> {
     if (rateLimited(`meta:${clientKey(req)}`, 6))
       return err("RATE_LIMITED", "Too many requests.", 429);
 
+    const flags = getFlags();
     const len = Number(req.headers.get("content-length") ?? "0");
-    if (!len || len > MAX_BODY_BYTES) return err("BODY_TOO_LARGE", "Payload too large.", 413);
+    if (!len || len > flags.metadataMaxBytes + 64 * 1024) {
+      return err("BODY_TOO_LARGE", "Payload too large.", 413);
+    }
 
     const form = await req.formData();
     const envelopeRaw = form.get("envelope");
@@ -67,6 +66,10 @@ export async function POST(req: Request): Promise<Response> {
       payloadHash: expectedPayloadHash,
       host: requestHost(req),
     });
+    await assertSignatureUnused(
+      keccak256(stringToHex(envelope.signature)),
+      flags.requestTtlSeconds * 1000,
+    );
 
     const input: MetadataInput = {
       tokenName: fields.tokenName,

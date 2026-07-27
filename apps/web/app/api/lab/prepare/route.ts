@@ -1,8 +1,15 @@
 // POST { envelope, payload } — full launch preparation: anchor re-verify,
 // module verification, exact simulation, manifest + unsigned transaction.
 
+import { keccak256, stringToHex } from "viem";
 import { isBroadcastableTokenUri, prepareLaunchSchema, signedRequestSchema } from "@bps/launch-lab";
-import { payloadHashOf, prepareLaunch, verifySignedRequest } from "../../../../lib/lab/server";
+import {
+  getFlags,
+  payloadHashOf,
+  prepareLaunch,
+  verifySignedRequest,
+} from "../../../../lib/lab/server";
+import { assertSignatureUnused, enforceLaunchGuardrails } from "../../../../lib/lab/store";
 import {
   assertSameOrigin,
   clientKey,
@@ -33,6 +40,15 @@ export async function POST(req: Request): Promise<Response> {
     });
     if (wallet.toLowerCase() !== payload.creatorAddress.toLowerCase()) {
       return err("CREATOR_MISMATCH", "Signer must be the creator wallet.", 403);
+    }
+    const flags = getFlags();
+    await assertSignatureUnused(
+      keccak256(stringToHex(envelope.signature)),
+      flags.requestTtlSeconds * 1000,
+    );
+    await enforceLaunchGuardrails(wallet, flags);
+    if (rateLimited(`prepare-wallet:${wallet.toLowerCase()}`, 6)) {
+      return err("RATE_LIMITED", "Too many requests for this wallet.", 429);
     }
     if (
       !isBroadcastableTokenUri({

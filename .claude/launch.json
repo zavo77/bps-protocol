@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lab-prod",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--workspace", "@bps/web", "--", "--port", "3210"],
+      "port": 3210
+    }
+  ]
+}

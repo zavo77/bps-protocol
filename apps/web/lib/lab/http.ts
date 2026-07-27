@@ -53,7 +53,15 @@ export function clientKey(req: Request): string {
 /** Uniform error mapping that never leaks internals or secret values. */
 export function mapError(e: unknown): NextResponse {
   const msg = e instanceof Error ? e.message : String(e);
+  if (msg === "AUTH_CREATION_DISABLED")
+    return err(msg, "Market creation is currently disabled.", 403);
+  if (msg === "AUTH_REPLAY") return err(msg, "This signed request was already used.", 401);
   if (msg.startsWith("AUTH_")) return err(msg, "Request authentication failed.", 401);
+  if (msg === "LIMIT_WALLET_MAX") return err(msg, "This wallet reached its launch limit.", 429);
+  if (msg === "LIMIT_COOLDOWN")
+    return err(msg, "This wallet is in its launch cooldown window.", 429);
+  if (msg === "LIMIT_DAILY_CAP")
+    return err(msg, "The public beta daily launch cap is reached.", 429);
   if (msg === "LAB_DISABLED") return err(msg, "The Launch Lab is not enabled.", 503);
   if (msg.startsWith("Missing required environment"))
     return err("ENV_MISSING", "Server configuration incomplete.", 503);

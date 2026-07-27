@@ -264,15 +264,39 @@ export interface LabPublicConfig {
   enabled: boolean;
   broadcastEnabled: boolean;
   killSwitchActive: boolean;
+  /** disabled | allowlist | public — public consults NO allowlist. */
+  accessMode: "disabled" | "allowlist" | "public";
   defaultFeePreset: FeePresetId;
   feePresets: FeePreset[];
   startingFdvUsd: number;
   anchorSymbol: "GOOGL";
   bpsFeeAddress: Address | null;
   explorerBaseUrl: string;
+  /** Uniform public-beta guardrails, displayed transparently. */
+  publicBeta: {
+    maxLaunchesPerWallet: number;
+    launchCooldownSeconds: number;
+    publicDailyLaunchCap: number;
+    /** Confirmed launches counted today, when cheaply known; else null. */
+    launchesToday: number | null;
+  };
   /** Genesis market facts once launched (from the static registry). */
   genesis: {
     launched: boolean;
     tokenAddress: Address | null;
   };
+}
+
+/** A confirmed launch reconstructed from chain (or mirrored in the DB). */
+export interface LaunchRecord {
+  tokenAddress: Address;
+  tokenName: string;
+  tokenSymbol: string;
+  creator: Address | null;
+  numeraire: Address;
+  poolOrHook: Address;
+  launchTransactionHash: Hex;
+  blockNumber: string;
+  /** unix seconds when known, else null */
+  timestamp: number | null;
 }

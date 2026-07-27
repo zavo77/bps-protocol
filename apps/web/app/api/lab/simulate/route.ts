@@ -1,8 +1,15 @@
 // POST — identical inputs to /prepare; re-runs the exact simulation for
 // freshness checks (180 s rule). Same authentication requirements.
 
+import { keccak256, stringToHex } from "viem";
 import { prepareLaunchSchema, signedRequestSchema } from "@bps/launch-lab";
-import { payloadHashOf, prepareLaunch, verifySignedRequest } from "../../../../lib/lab/server";
+import {
+  getFlags,
+  payloadHashOf,
+  prepareLaunch,
+  verifySignedRequest,
+} from "../../../../lib/lab/server";
+import { assertSignatureUnused } from "../../../../lib/lab/store";
 import {
   assertSameOrigin,
   clientKey,
@@ -33,6 +40,10 @@ export async function POST(req: Request): Promise<Response> {
     if (wallet.toLowerCase() !== payload.creatorAddress.toLowerCase()) {
       return err("CREATOR_MISMATCH", "Signer must be the creator wallet.", 403);
     }
+    await assertSignatureUnused(
+      keccak256(stringToHex(envelope.signature)),
+      getFlags().requestTtlSeconds * 1000,
+    );
     const commit = process.env.VERCEL_GIT_COMMIT_SHA ?? "local-dev";
     const bundle = await prepareLaunch(payload, "8h-v1", commit);
     return ok({

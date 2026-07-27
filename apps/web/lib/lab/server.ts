@@ -32,7 +32,6 @@ import {
   SALE_INVENTORY_WEI,
   SIMULATION_MAX_AGE_MS,
   GENESIS_MARKET,
-  SIGNATURE_MAX_AGE_MS,
   type LabServerFlags,
   type LaunchManifest,
   type LaunchSimulation,
@@ -75,19 +74,26 @@ export function getFlags(): LabServerFlags {
   return readServerFlags();
 }
 
-export function publicConfig(): LabPublicConfig {
+export function publicConfig(launchesToday: number | null = null): LabPublicConfig {
   const flags = getFlags();
   return {
     chainId: CHAIN_ID,
     enabled: flags.enabled,
     broadcastEnabled: flags.broadcastEnabled,
     killSwitchActive: flags.killSwitchActive,
+    accessMode: flags.accessMode,
     defaultFeePreset: flags.defaultFeePreset,
     feePresets: [...FEE_PRESETS],
     startingFdvUsd: flags.startingFdvUsd,
     anchorSymbol: "GOOGL",
     bpsFeeAddress: flags.bpsFeeAddress,
     explorerBaseUrl: EXPLORER_BASE_URL,
+    publicBeta: {
+      maxLaunchesPerWallet: flags.maxLaunchesPerWallet,
+      launchCooldownSeconds: flags.launchCooldownSeconds,
+      publicDailyLaunchCap: flags.publicDailyLaunchCap,
+      launchesToday,
+    },
     genesis: { launched: GENESIS_MARKET.launched, tokenAddress: GENESIS_MARKET.tokenAddress },
   };
 }
@@ -111,11 +117,12 @@ export async function verifySignedRequest(
   if (message.payloadHash !== expected.payloadHash) throw new Error("AUTH_PAYLOAD_MISMATCH");
   const hostOk = message.host === expected.host;
   if (!hostOk) throw new Error("AUTH_HOST_MISMATCH");
+  const flags = getFlags();
+  const ttlMs = flags.requestTtlSeconds * 1000;
   const now = Date.now();
   if (message.issuedAt > now + 60_000) throw new Error("AUTH_ISSUED_IN_FUTURE");
   if (message.expiresAt < now) throw new Error("AUTH_EXPIRED");
-  if (message.expiresAt - message.issuedAt > SIGNATURE_MAX_AGE_MS)
-    throw new Error("AUTH_WINDOW_TOO_LONG");
+  if (message.expiresAt - message.issuedAt > ttlMs) throw new Error("AUTH_WINDOW_TOO_LONG");
   const text = canonicalize(message);
   const ok = await verifyMessage({
     address: message.wallet,
@@ -123,8 +130,13 @@ export async function verifySignedRequest(
     signature: signature as `0x${string}`,
   });
   if (!ok) throw new Error("AUTH_BAD_SIGNATURE");
-  const flags = getFlags();
-  if (!flags.creatorAllowlist.some((a) => a.toLowerCase() === message.wallet.toLowerCase())) {
+  // Access modes: public consults NO allowlist and requires no known wallet;
+  // allowlist restricts to the configured set; disabled rejects everyone.
+  if (flags.accessMode === "disabled") throw new Error("AUTH_CREATION_DISABLED");
+  if (
+    flags.accessMode === "allowlist" &&
+    !flags.creatorAllowlist.some((a) => a.toLowerCase() === message.wallet.toLowerCase())
+  ) {
     throw new Error("AUTH_NOT_ALLOWLISTED");
   }
   return message.wallet;

@@ -35,8 +35,27 @@ export function isNotAllowlisted(e: unknown): boolean {
   return e instanceof LabApiError && e.code === "AUTH_NOT_ALLOWLISTED";
 }
 
+/** Server said creation is switched off (access mode 'disabled'). */
+export function isCreationDisabled(e: unknown): boolean {
+  return e instanceof LabApiError && e.code === "AUTH_CREATION_DISABLED";
+}
+
+/**
+ * User-facing messages for the public-beta access/limit error codes. Codes not
+ * listed here fall back to the server-provided error message.
+ */
+const FRIENDLY_CODE_MESSAGES: Record<string, string> = {
+  AUTH_CREATION_DISABLED: "Market creation is currently disabled.",
+  AUTH_REPLAY: "That signed request was already used. Sign a fresh request and try again.",
+  LIMIT_WALLET_MAX: "This wallet has reached its public-beta launch limit.",
+  LIMIT_COOLDOWN: "This wallet is in its launch cooldown window. Please wait and try again.",
+  LIMIT_DAILY_CAP: "Today's public-beta launch cap has been reached. Try again tomorrow.",
+};
+
 export function errorMessage(e: unknown): string {
-  if (e instanceof LabApiError) return `${e.message} (${e.code})`;
+  if (e instanceof LabApiError) {
+    return `${FRIENDLY_CODE_MESSAGES[e.code] ?? e.message} (${e.code})`;
+  }
   if (e instanceof Error) return e.message;
   return String(e);
 }
