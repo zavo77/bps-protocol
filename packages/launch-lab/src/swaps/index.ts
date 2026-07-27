@@ -48,8 +48,16 @@ export interface SwapQuote {
 /** Resolve and validate the pool for a lab token; fail closed on non-GOOGL pools. */
 export async function getLabPoolContext(client: PublicClient, tokenAddress: Address): Promise<LabPoolContext> {
   const sdk = new DopplerSDK({ publicClient: client, chainId: CHAIN_IDS.ROBINHOOD });
-  const pool = await sdk.getMulticurvePool(tokenAddress);
-  const state = await pool.getState();
+  // Any failure to resolve a multicurve pool for this token means it is not a
+  // lab market — fail closed with a clean, non-leaking error rather than
+  // surfacing the SDK's internal revert.
+  let state: Awaited<ReturnType<Awaited<ReturnType<typeof sdk.getMulticurvePool>>["getState"]>>;
+  try {
+    const pool = await sdk.getMulticurvePool(tokenAddress);
+    state = await pool.getState();
+  } catch {
+    throw new Error("NOT_A_GOOGL_MARKET");
+  }
   const poolKey = state.poolKey as unknown as V4PoolKeyStruct;
   const c0 = getAddress(poolKey.currency0);
   const c1 = getAddress(poolKey.currency1);
