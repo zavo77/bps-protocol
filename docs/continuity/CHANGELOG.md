@@ -7,6 +7,47 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-27 — LAUNCH LAB LANE: 8H Vercel-first build (founder-authorized new product lane)
+
+- **Type:** New separate product lane (BPS RWA Launch Lab) implemented on branch
+  `feature/bps-launch-lab-8h-vercel` per the founder's 8H authorization (chat 2026-07-27) and
+  `docs/launch-lab/BPS_LAUNCH_LAB_8H_VERCEL_MASTER_PROMPT.md`. **Capital Engine untouched** (no
+  frozen-contract/app/page.tsx/canary/rialto changes). Stage-A canary lane state unchanged and preserved
+  in a dedicated checkpoint commit `06ff34b` on master before branching.
+- **Authoritative lane log:** `docs/launch-lab/BPS_LAUNCH_LAB_8H_PROGRESS.md` (running milestones).
+- **Hard gate PASSED:** exact PRINT/GOOGL Doppler **rehype multicurve** creation simulated against live
+  4663 via pinned `@whetstone-research/doppler-sdk@1.0.33` (standard/scheduled/decay multicurve
+  initializers are NOT deployed on 4663 — recorded; rehype path proven; artifact
+  `docs/launch-lab/SPIKE_LAUNCH_PROOF.json`).
+- **Implemented:** `packages/launch-lab` (anchor fail-closed GOOGL resolver, module+whitelist
+  verification, 85/10/5 WAD beneficiaries, launch builder, exact simulation → unsigned tx, canonical
+  manifest hashing, Pinata-only metadata, receipt decode + hard manifest verification, on-chain launch
+  registry) + `/api/lab/*` routes (EIP-191 envelopes, origin/host/payload-hash binding, rate limits,
+  replay protection) + functional `/lab` routes (create flow with kill-switch/broadcast gates and honest
+  "Awaiting indexed data" states). PUBLIC access-mode retrofit in progress:
+  `BPS_LAUNCH_LAB_ACCESS_MODE=disabled|allowlist|public` (fail-closed default), per-wallet/day guardrail
+  env knobs, terms acknowledgement, chain-reconstructed launch listing with optional Postgres mirror
+  (`DATABASE_URL` — NOT yet provisioned).
+- **Deployments (fail-closed):** Vercel project `bps-launch-lab` (team zavo1, root `apps/web`, Node
+  24.x). Preview + Production deployed with `BPS_LAUNCH_LAB_BROADCAST_ENABLED=false` and
+  `BPS_LAUNCH_LAB_KILL_SWITCH=true` (founder-configured env). **No mainnet transaction performed; no
+  broadcast enabled; Genesis PRINT launch NOT executed** — it requires the founder-approved launch gate
+  and founder wallet signatures only.
+- **New env names (values never committed):** BPS_LAUNCH_LAB_{ENABLED,BROADCAST_ENABLED,KILL_SWITCH,
+  ACCESS_MODE,CREATOR_ALLOWLIST,BPS_BENEFICIARY,START_FDV_USD,DEFAULT_FEE_PRESET,SESSION_SECRET,
+  MAX_LAUNCHES_PER_WALLET,LAUNCH_COOLDOWN_SECONDS,PUBLIC_DAILY_LAUNCH_CAP,METADATA_MAX_BYTES,
+  REQUEST_TTL_SECONDS}, PINATA_JWT, PINATA_GATEWAY, DATABASE_URL (pending).
+- **Blockers recorded:** LL-1 private RPC quota exhausted ("Monthly capacity limit exceeded") —
+  mitigated by viem fallback(private→public) for reads; founder must upgrade/replace the endpoint.
+  LL-2 `DATABASE_URL` not provisioned — persistence runs on chain-reconstruction fallback (authority)
+  until provided. LL-3 Vercel preview URLs sit behind team Deployment Protection — preview QA done
+  against a local production server of the identical build; production URL is public.
+- **Toolchain:** root `.npmrc` gains `legacy-peer-deps=true` (SDK React-18 peer vs repo React 19);
+  `transpilePackages` added to next.config.mjs preserving the `bps-wagmi-active` alias byte-for-byte;
+  apps/web gains pg/server-only/typescript/@types/node/vitest/@testing-library-dom declarations.
+- **Verification:** 42 package unit tests + 182+ web vitest green; lint/typecheck/format clean; local
+  prod build + secret-bundle scan clean (no secret names/values in client chunks).
+
 ## 2026-07-27 — STAGE A (step 1): guard deployment verified + executor runtime hash derived + launcher repaired
 
 - **Type:** Read-only on-chain verification + offline bytecode analysis + repair of the ephemeral (out-of-repo)

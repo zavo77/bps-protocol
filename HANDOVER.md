@@ -7,6 +7,15 @@
 >
 > **HANDOVER.md IS NOT A BACKUP OF THE REPOSITORY OR SECRETS.** See section Q (Disaster recovery).
 
+## ACTIVE PARALLEL LANE — BPS RWA LAUNCH LAB (2026-07-27)
+
+> A founder-authorized, SEPARATE product lane is being built on branch
+> `feature/bps-launch-lab-8h-vercel` (spec: `docs/launch-lab/BPS_LAUNCH_LAB_8H_VERCEL_MASTER_PROMPT.md`;
+> running log: `docs/launch-lab/BPS_LAUNCH_LAB_8H_PROGRESS.md`; continuity entry: top of
+> `docs/continuity/CHANGELOG.md`; machine state: `launchLab` key in `docs/continuity/CURRENT_STATE.json`).
+> It does NOT modify the Capital Engine, frozen contracts, canary artifacts, or the Stage-A lane below.
+> Everything in the SNAPSHOT below continues to describe the Capital Engine lane on `master`.
+
 ## SNAPSHOT (verified)
 
 | Field                       | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |

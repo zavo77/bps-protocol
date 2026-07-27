@@ -1,5 +1,25 @@
 {
   "schemaVersion": "1.0.0",
+  "launchLab": {
+    "lane": "BPS RWA Launch Lab (separate product lane; Capital Engine untouched)",
+    "authorization": "founder 8H authorization (chat 2026-07-27); spec docs/launch-lab/BPS_LAUNCH_LAB_8H_VERCEL_MASTER_PROMPT.md",
+    "branch": "feature/bps-launch-lab-8h-vercel (master checkpoints 06ff34b Stage-A continuity, dec2794 planning docs)",
+    "laneLog": "docs/launch-lab/BPS_LAUNCH_LAB_8H_PROGRESS.md",
+    "hardGate": "PASSED — rehype multicurve PRINT/GOOGL creation simulated on live 4663 (docs/launch-lab/SPIKE_LAUNCH_PROOF.json); standard/scheduled/decay multicurve initializers absent on 4663",
+    "sdk": "@whetstone-research/doppler-sdk@1.0.33 (pinned)",
+    "vercel": {
+      "project": "bps-launch-lab (team zavo1, root apps/web, Node 24.x)",
+      "state": "Preview + Production deployed FAIL-CLOSED (broadcast disabled, kill switch active)",
+      "previewProtection": "team-auth wall on preview URLs; QA performed on local prod server of identical build"
+    },
+    "genesisLaunch": "NOT executed; requires founder launch-gate approval + founder wallet signatures",
+    "blockers": {
+      "LL-1": "private RPC monthly quota exhausted — viem fallback(private→public) mitigates reads; founder to upgrade endpoint",
+      "LL-2": "DATABASE_URL not provisioned — persistence uses chain reconstruction (authority) until provided",
+      "LL-3": "Vercel preview deployment protection blocks external preview QA"
+    },
+    "publicAccessRetrofit": "in progress: ACCESS_MODE disabled|allowlist|public (fail-closed), guardrail env knobs, terms acknowledgement, chain-reconstructed launch registry + optional Postgres mirror"
+  },
   "updatedUtc": "2026-07-27T05:44:12Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
