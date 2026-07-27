@@ -18,7 +18,11 @@
       "LL-2": "CLOSED 2026-07-27 — Railway bps-production/bps-postgres (PostgreSQL 18.4); connectivity, idempotent schema, mirror idempotency, cross-instance replay, and failure fallback all verified (scripts/verify-db.mjs)",
       "LL-3": "Vercel preview deployment protection blocks external preview QA (production URL is public; low priority)"
     },
-    "publicAccessRetrofit": "in progress: ACCESS_MODE disabled|allowlist|public (fail-closed), guardrail env knobs, terms acknowledgement, chain-reconstructed launch registry + optional Postgres mirror"
+    "publicAccessRetrofit": "COMPLETE: ACCESS_MODE disabled|allowlist|public (fail-closed), guardrail env knobs, terms acknowledgement, chain-reconstructed launch registry + Postgres mirror (LL-2 verified)",
+    "webHealth": "GET /api/lab/health live 200 (sanitized; Better Stack incident resolved)",
+    "indexer": "apps/lab-indexer deployed on Railway bps-production; /health 200, restart-resume verified; GET /api/lab/history/[address] live",
+    "embeddedTrading": "P0 COMPLETE (code): bpsDirectV4 (mandatory, Universal Router V4_SWAP, hook-aware V4 Quoter, token-order-resolved, Permit2 approvals) + zeroEx (optional, server-only key, Settler-approval rejected). POST /api/lab/quote (no longer 501) + POST /api/lab/trade/prepare (signed envelope, balance/allowance/simulation, no server signer). Trade card + real-swap chart on the token page; Matcha secondary. 208 web + 54 package tests green. LIVE PROOF of buy/sell/indexed-swaps/chart DEFERRED to the launch sequence — requires an on-chain lab market, which only the Genesis launch creates. Broadcast still disabled, kill switch active.",
+    "tradingAcceptanceGate": "The first real market IS the trading acceptance test: at the founder launch gate, enable broadcast → founder signs Genesis launch → embedded buy + partial sell on the token page (<=$50/trade, <=$250 total) → verify indexer records both swaps + chart populates. Only then is the bidirectional gate passed."
   },
   "updatedUtc": "2026-07-27T05:44:12Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",

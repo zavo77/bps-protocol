@@ -50,6 +50,29 @@ Newest entries at the top. No secrets ever recorded here.
 - Deployment handoff values issued to founder (root /, workspace-scoped npm commands, /health path).
 - **RAILWAY HEALTH GATE PASSED (2026-07-27, founder-verified):** production /health 200 (db ok, lag==confirmations==3, knownPools 0 pre-launch). **Production restart-resume VERIFIED**: redeploy via CLI; new instance (uptime 3s) continued cursors 20717152→20717549 from Postgres, no reset to start block. Indexed-history endpoint /api/lab/history/[address] live on production ({available:true, swaps:[], source: lab-indexer}); creation path has zero dependency on the indexer service.
 
+## Embedded bidirectional trading — P0 (2026-07-27, commit a92b2b2)
+
+- **bpsDirectV4 (mandatory):** `packages/launch-lab/src/swaps` — pool context via SDK
+  `getMulticurvePool.getState` (token-order-resolved from the live PoolKey, GOOGL-market fail-closed →
+  clean 404 NOT_A_LAB_MARKET), hook-aware V4 Quoter exact-input quotes both directions, Universal Router
+  `execute` V4_SWAP (SWAP_EXACT_IN_SINGLE + SETTLE_ALL + TAKE_ALL) calldata, Permit2 approval targets,
+  price-impact estimate, common RouteQuote shape.
+- **zeroEx (optional best-route):** `apps/web/lib/lab/zeroex.ts` — 0x v2 allowance-holder, server-only key,
+  allowance spender taken from the response, **Settler-approval rejected**; no 0x route ≠ market failure.
+- **APIs:** `POST /api/lab/quote` (both routes + selected by better output; **no longer 501** — verified
+  live 404 fail-closed on a non-lab token) and `POST /api/lab/trade/prepare` (signed envelope, server-side
+  quote refresh, balance/allowance checks, exact-calldata simulation vs taker, unsigned tx out; no server
+  signer). Origin/host/payload-hash/TTL/replay/rate-limit/secret-redaction all applied.
+- **UI:** trade card on `/lab/token/[address]` (Buy/Sell, balance, Max + 25/50/75, expected/min output,
+  price-impact warning, slippage presets, route label+switch, Permit2/ERC20 approvals, all wallet/chain/
+  error states, Blockscout receipt); real-swap **PriceChart** from `/api/lab/history` (sqrtPriceX96 →
+  price-in-GOOGL, 1H/6H/24H/All, honest "Collecting market data"); Matcha demoted to secondary.
+- **Verify:** 208 web + 54 package tests green; lint/typecheck/prod build clean; client-bundle scan finds
+  no secret values or names (incl. ZEROX_API_KEY, server-only). Production redeployed (broadcast OFF).
+- **LIVE bidirectional proof (gate items 2–11) DEFERRED to the launch sequence** — a BPS market must
+  exist on-chain to quote/buy/sell/index, and only the Genesis launch creates one. The first real market
+  is the trading acceptance test, executed at the founder launch gate (broadcast enabled only then).
+
 ## Milestones
 
 - [x] Consolidated blocker question asked and answered
