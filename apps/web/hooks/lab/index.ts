@@ -15,3 +15,13 @@ export {
   type CreateFlowGates,
   type PreparedLaunchBundle,
 } from "./use-create-flow";
+export {
+  useTrade,
+  TRADE_DECIMALS,
+  PRICE_IMPACT_WARN_BPS,
+  type TradeSide,
+  type TradeStatus,
+  type UseTrade,
+} from "./use-trade";
+export { useHistory, type SwapRecord, type HistoryState } from "./use-history";
+export { useTokenBalances, type TokenBalance, type TokenBalances } from "./use-token-balances";

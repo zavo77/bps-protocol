@@ -1,9 +1,13 @@
 "use client";
 // Market page body. Every MarketDatum with available:false renders EXACTLY
 // "Awaiting indexed data" — never zero, never a fabricated value.
+import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { EXPLORER_BASE_URL, type MarketDatum } from "@bps/launch-lab";
 import { useLabConfig, useMarket } from "../../../../hooks/lab";
+import { TradeCard } from "./TradeCard";
+import { PriceChart } from "./PriceChart";
 
 export const AWAITING = "Awaiting indexed data";
 
@@ -30,8 +34,16 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 export function TokenMarketView({ address }: { address: string }) {
   const { data: config } = useLabConfig();
   const market = useMarket(address);
+  const queryClient = useQueryClient();
   const explorer = config?.explorerBaseUrl ?? EXPLORER_BASE_URL;
   const snap = market.data;
+
+  // After a confirmed trade, refresh market, balances, and swap history.
+  const handleTraded = useCallback(() => {
+    void market.refetch();
+    void queryClient.invalidateQueries({ queryKey: ["lab", "balances"] });
+    void queryClient.invalidateQueries({ queryKey: ["lab", "history"] });
+  }, [market, queryClient]);
 
   if (market.isPending) {
     return (
@@ -163,24 +175,30 @@ export function TokenMarketView({ address }: { address: string }) {
         </section>
       </div>
 
+      <section className="card" style={{ marginTop: "1rem" }} data-testid="price-chart-section">
+        <h2>Price history</h2>
+        <PriceChart address={snap.tokenAddress} tokenSymbol={snap.tokenSymbol} />
+      </section>
+
       <section className="card" style={{ marginTop: "1rem" }} data-testid="trade-section">
         <h2>Trade</h2>
-        <p className="small muted">
-          Integrated quoting is not available yet (the quote API responds QUOTE_NOT_YET_AVAILABLE).
-          No prices are fabricated here.
-        </p>
-        <p>
+        <TradeCard
+          address={snap.tokenAddress}
+          tokenSymbol={snap.tokenSymbol}
+          explorer={explorer}
+          onTraded={handleTraded}
+        />
+        <p className="small muted" style={{ marginTop: "0.9rem" }}>
           <a
             href="https://matcha.xyz"
             target="_blank"
             rel="noreferrer"
+            className="small muted"
             data-testid="trade-external"
           >
-            Trade on an external aggregator (matcha.xyz)
+            Advanced: trade on Matcha ↗
           </a>{" "}
-          <span className="small muted">
-            — opens an external site not operated by BPS; verify the token address yourself.
-          </span>
+          — external aggregator not operated by BPS; verify the token address yourself.
         </p>
       </section>
 

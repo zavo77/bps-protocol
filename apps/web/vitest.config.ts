@@ -11,6 +11,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "bps-wagmi-active": fileURLToPath(new URL("./app/wagmi-active.ts", import.meta.url)),
+      // `server-only` throws when imported outside a server component; in tests
+      // (node env) neutralize it so server-lib logic can be unit-tested. The
+      // real guard still protects the production build.
+      "server-only": fileURLToPath(new URL("./lib/testing/server-only-stub.ts", import.meta.url)),
     },
   },
   test: {

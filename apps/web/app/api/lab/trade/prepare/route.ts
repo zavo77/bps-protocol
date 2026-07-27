@@ -4,7 +4,15 @@
 // the taker, and returns the unsigned wallet transaction. The browser wallet
 // signs; there is no server-side signer.
 
-import { erc20Abi, getAddress, isAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
+import {
+  erc20Abi,
+  getAddress,
+  isAddress,
+  keccak256,
+  stringToHex,
+  type Address,
+  type Hex,
+} from "viem";
 import { z } from "zod";
 import {
   PERMIT2_ABI,
@@ -12,10 +20,23 @@ import {
   signedRequestSchema,
   type RouteQuote,
 } from "@bps/launch-lab";
-import { getFlags, getLabClient, payloadHashOf, verifySignedRequest } from "../../../../../lib/lab/server";
+import {
+  getFlags,
+  getLabClient,
+  payloadHashOf,
+  verifySignedRequest,
+} from "../../../../../lib/lab/server";
 import { assertSignatureUnused } from "../../../../../lib/lab/store";
 import { quoteZeroExRoute } from "../../../../../lib/lab/zeroex";
-import { assertSameOrigin, clientKey, err, mapError, ok, rateLimited, requestHost } from "../../../../../lib/lab/http";
+import {
+  assertSameOrigin,
+  clientKey,
+  err,
+  mapError,
+  ok,
+  rateLimited,
+  requestHost,
+} from "../../../../../lib/lab/http";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +53,8 @@ export async function POST(req: Request): Promise<Response> {
   try {
     const originProblem = assertSameOrigin(req);
     if (originProblem) return err("BAD_ORIGIN", originProblem, 403);
-    if (rateLimited(`trade:${clientKey(req)}`, 12)) return err("RATE_LIMITED", "Too many requests.", 429);
+    if (rateLimited(`trade:${clientKey(req)}`, 12))
+      return err("RATE_LIMITED", "Too many requests.", 429);
 
     const body = (await req.json()) as { envelope?: unknown; payload?: unknown };
     const envelope = signedRequestSchema.parse(body.envelope);
@@ -46,7 +68,10 @@ export async function POST(req: Request): Promise<Response> {
       return err("TAKER_MISMATCH", "Signer must be the taker wallet.", 403);
     }
     const flags = getFlags();
-    await assertSignatureUnused(keccak256(stringToHex(envelope.signature)), flags.requestTtlSeconds * 1000);
+    await assertSignatureUnused(
+      keccak256(stringToHex(envelope.signature)),
+      flags.requestTtlSeconds * 1000,
+    );
 
     const client = getLabClient();
     const token = getAddress(payload.tokenAddress);
@@ -59,14 +84,26 @@ export async function POST(req: Request): Promise<Response> {
     let route: RouteQuote;
     let permit2: Address | null = null;
     if (payload.routeId === "bpsDirectV4") {
-      const { quote, ctx } = await quoteDirectRoute(client, token, payload.side, amountIn, payload.slippageBps);
+      const { quote, ctx } = await quoteDirectRoute(
+        client,
+        token,
+        payload.side,
+        amountIn,
+        payload.slippageBps,
+      );
       route = quote;
       permit2 = ctx.permit2;
     } else {
       const { GOOGL_ADDRESS } = await import("@bps/launch-lab");
       const sellToken = payload.side === "buy" ? GOOGL_ADDRESS : token;
       const buyToken = payload.side === "buy" ? token : GOOGL_ADDRESS;
-      const z = await quoteZeroExRoute({ sellToken, buyToken, sellAmountWei: amountIn, taker, slippageBps: payload.slippageBps });
+      const z = await quoteZeroExRoute({
+        sellToken,
+        buyToken,
+        sellAmountWei: amountIn,
+        taker,
+        slippageBps: payload.slippageBps,
+      });
       if (!z) return err("ROUTE_UNAVAILABLE", "0x has no executable route; use BPS Direct.", 409);
       route = z;
     }
@@ -81,11 +118,12 @@ export async function POST(req: Request): Promise<Response> {
       functionName: "balanceOf",
       args: [taker],
     })) as bigint;
-    if (balance < amountIn) return err("INSUFFICIENT_BALANCE", "Wallet balance is below the trade amount.", 409);
+    if (balance < amountIn)
+      return err("INSUFFICIENT_BALANCE", "Wallet balance is below the trade amount.", 409);
 
     // Allowance requirements (reported; approvals happen in the wallet).
     let approvalNeeded = false;
-    let approvalTarget: Address | null = route.allowanceTarget;
+    const approvalTarget: Address | null = route.allowanceTarget;
     let permit2ApprovalNeeded = false;
     if (route.routeId === "bpsDirectV4" && permit2) {
       const erc20Allowance = (await client.readContract({
@@ -129,7 +167,11 @@ export async function POST(req: Request): Promise<Response> {
         simulation = "reverted";
       }
       if (simulation === "reverted") {
-        return err("SIMULATION_FAILED", "The exact trade transaction reverts; not returning it for signature.", 409);
+        return err(
+          "SIMULATION_FAILED",
+          "The exact trade transaction reverts; not returning it for signature.",
+          409,
+        );
       }
     }
 

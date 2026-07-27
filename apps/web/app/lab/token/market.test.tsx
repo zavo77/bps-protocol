@@ -126,11 +126,15 @@ describe("Launch Lab token market page", () => {
     const core = screen.getByTestId("market-core");
     expect(core).not.toHaveTextContent(/\b0(\.0+)?\b/);
 
-    // External trading fallback — clearly labeled, no fake quote widget.
+    // The embedded trade card is the primary control; the Matcha link is demoted
+    // to a clearly secondary "Advanced" link (an <a>, not the primary trade button).
     const external = screen.getByTestId("trade-external");
     expect(external).toHaveAttribute("href", "https://matcha.xyz");
-    expect(screen.getByTestId("trade-section")).toHaveTextContent(/external site/i);
-    expect(screen.getByTestId("trade-section")).toHaveTextContent(/QUOTE_NOT_YET_AVAILABLE/);
+    expect(external.tagName).toBe("A");
+    expect(external).toHaveTextContent(/Advanced/i);
+    expect(screen.getByTestId("trade-card")).toBeInTheDocument();
+    // Disconnected wallet: the primary path prompts to connect, never a signature.
+    expect(screen.getByTestId("trade-connect")).toBeInTheDocument();
 
     // Token Blockscout link present.
     expect(screen.getByRole("link", { name: TOKEN })).toHaveAttribute(
