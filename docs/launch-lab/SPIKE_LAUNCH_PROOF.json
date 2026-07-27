@@ -1,0 +1,216 @@
+{
+  "spike": "BPS Launch Lab 8H hard gate — Doppler/GOOGL integration proof",
+  "generatedAtUtc": "2026-07-27T07:13:33.148Z",
+  "sdkVersion": "1.0.0",
+  "chainId": 4663,
+  "noOpEnabledForChain": true,
+  "modules": {
+    "airlock": {
+      "address": "0xeb7C034704eF8Dcd2D32324c1545f62fB4aD0862",
+      "code": "present (5695 bytes)"
+    },
+    "tokenFactory": {
+      "address": "0x0000000000000000000000000000000000000000",
+      "code": "ZERO_ADDRESS"
+    },
+    "dopplerERC20V1Factory": {
+      "address": "0x1B37D3a72082029c44B35B604Ea473617580b69a",
+      "code": "present (1912 bytes)"
+    },
+    "dopplerERC20V1Implementation": {
+      "address": "0x3Be8B97Fd0e713B5aBE0649Fa830223B6B4BC599",
+      "code": "present (13927 bytes)"
+    },
+    "doppler404Factory": {
+      "address": "0x37A9Fa204a4d3A429FDED7e3469ab076C854Bc9d",
+      "code": "present (15565 bytes)"
+    },
+    "v3Initializer": {
+      "address": "0x0000000000000000000000000000000000000000",
+      "code": "ZERO_ADDRESS"
+    },
+    "v3Quoter": {
+      "address": "0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7",
+      "code": "present (8273 bytes)"
+    },
+    "lockableV3Initializer": {
+      "address": "0xde8886A0019Ea060B8378Ee37b8A23b8117F29A3",
+      "code": "present (11681 bytes)"
+    },
+    "v4Initializer": {
+      "address": "0x6cce158B6D1747617fc218592B4D60B239B957ea",
+      "code": "present (2685 bytes)"
+    },
+    "dopplerHookInitializer": {
+      "address": "0x4e3468951D49f2EEa976eD0D6e75fFCb44a9a544",
+      "code": "present (25533 bytes)"
+    },
+    "rehypeDopplerHookInitializer": {
+      "address": "0x9982538F41f2ae29ddb9d3D9307010052984FDbB",
+      "code": "present (17609 bytes)"
+    },
+    "rehypeDopplerHook": {
+      "address": "0x9982538F41f2ae29ddb9d3D9307010052984FDbB",
+      "code": "present (17609 bytes)"
+    },
+    "dopplerLens": {
+      "address": "0xf4c22465532f64777FfcD7770831AEca38F35c04",
+      "code": "present (5835 bytes)"
+    },
+    "dopplerDeployer": {
+      "address": "0x4389AD34938B14F25cff7ED983c53f5a42A2573f",
+      "code": "present (24063 bytes)"
+    },
+    "poolManager": {
+      "address": "0x8366a39cc670b4001a1121b8f6a443a643e40951",
+      "code": "present (24009 bytes)"
+    },
+    "v2Migrator": {
+      "address": "0x0000000000000000000000000000000000000000",
+      "code": "ZERO_ADDRESS"
+    },
+    "v2MigratorSplit": {
+      "address": "0xB05046cEa797c993FB5b583098B1c4682e9Da333",
+      "code": "present (4631 bytes)"
+    },
+    "v4Migrator": {
+      "address": "0x0000000000000000000000000000000000000000",
+      "code": "ZERO_ADDRESS"
+    },
+    "dopplerHookMigrator": {
+      "address": "0x7BF319d8e969f7596B1Bc171Da9ce322f67Ae0c4",
+      "code": "present (16297 bytes)"
+    },
+    "rehypeDopplerHookMigrator": {
+      "address": "0x975f9d1939cf6e4A3c9D99f9d41e6411CF4dA23b",
+      "code": "present (14206 bytes)"
+    },
+    "noOpMigrator": {
+      "address": "0xba2F330EDb16cD8056f5988d8CE19BbC63475A0e",
+      "code": "present (524 bytes)"
+    },
+    "governanceFactory": {
+      "address": "0xDeb0447DAE3EB177c4dbA8bBCCCa25c8F273B7ef",
+      "code": "present (19111 bytes)"
+    },
+    "noOpGovernanceFactory": {
+      "address": "0x85f37f74Ef2478A770318bc810177a9835911aD7",
+      "code": "present (180 bytes)"
+    },
+    "launchpadGovernanceFactory": {
+      "address": "0xdb036746D65DD52126b1915f1AdF555e6C5237Cf",
+      "code": "present (171 bytes)"
+    },
+    "streamableFeesLocker": {
+      "address": "0x0000000000000000000000000000000000000000",
+      "code": "ZERO_ADDRESS"
+    },
+    "streamableFeesLockerV2": {
+      "address": "0x7B6147AC3F615bdb764e7EbD5f517dac1AD163B8",
+      "code": "present (9335 bytes)"
+    },
+    "topUpDistributor": {
+      "address": "0x46adee7595d48b1Ec53090e9bc78e1E69Fa0eF06",
+      "code": "present (1450 bytes)"
+    },
+    "universalRouter": {
+      "address": "0x8876789976decbfcbbbe364623c63652db8c0904",
+      "code": "present (24546 bytes)"
+    },
+    "permit2": {
+      "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "code": "present (9152 bytes)"
+    },
+    "bundler": {
+      "address": "0xEdE0B5fae363232c396724Fa962250Fa197cc5a1",
+      "code": "present (4520 bytes)"
+    },
+    "weth": {
+      "address": "0x0bd7d308f8e1639fab988df18a8011f41eacad73",
+      "code": "present (2202 bytes)"
+    },
+    "uniswapV2Factory": {
+      "address": "0x8bceaa40b9acdfaedf85adf4ff01f5ad6517937f",
+      "code": "present (13859 bytes)"
+    },
+    "uniswapV3Factory": {
+      "address": "0x1f7d7550b1b028f7571e69a784071f0205fd2efa",
+      "code": "present (24535 bytes)"
+    },
+    "uniswapV4Quoter": {
+      "address": "0x8dc178efb8111bb0973dd9d722ebeff267c98f94",
+      "code": "present (6118 bytes)"
+    }
+  },
+  "moduleWhitelist": {
+    "dopplerHookInitializer": 3,
+    "rehypeDopplerHookInitializer": 0,
+    "noOpMigrator": 4,
+    "noOpGovernanceFactory": 2,
+    "dopplerERC20V1Factory": 1
+  },
+  "airlockOwner": "0x21E2ce70511e4FE542a97708e89520471DAa7A66",
+  "googl": {
+    "address": "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3",
+    "onchain": {
+      "name": "Alphabet Class A • Robinhood Token",
+      "symbol": "GOOGL",
+      "decimals": 18
+    },
+    "api": {
+      "name": "Alphabet Class A • Robinhood Token",
+      "status": "ASSET_STATUS_ACTIVE",
+      "currentMultiplier": "1.000000000000000000",
+      "chain4663Address": "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3",
+      "bid": 323.91,
+      "ask": 323.94,
+      "midUsd": 323.925
+    },
+    "match": true
+  },
+  "beneficiaries": [
+    {
+      "beneficiary": "0x21E2ce70511e4FE542a97708e89520471DAa7A66",
+      "sharesWad": "50000000000000000"
+    },
+    {
+      "beneficiary": "0xF7F2d76F6364c72ea860512d78ae07e54bBbF8A5",
+      "sharesWad": "100000000000000000"
+    },
+    {
+      "beneficiary": "0x261Cda9dADdfDC9A0b8de887718af516FA7ee9C2",
+      "sharesWad": "850000000000000000"
+    }
+  ],
+  "launchTemplate": {},
+  "simulation": {
+    "rehype": {
+      "status": "SIMULATION_OK",
+      "predictedTokenAddress": "0xC3Dab5aF881C69F8CfB0Fa3270b8529fC404817A",
+      "predictedPoolId": "0xef83d635e3b256368dceb8abcfc4e27a68d27928ff529aded68c20354bbe6808",
+      "gasEstimate": "3577075",
+      "createParamsKeys": [
+        "initialSupply",
+        "numTokensToSell",
+        "numeraire",
+        "tokenFactory",
+        "tokenFactoryData",
+        "governanceFactory",
+        "governanceFactoryData",
+        "poolInitializer",
+        "poolInitializerData",
+        "liquidityMigrator",
+        "liquidityMigratorData",
+        "integrator",
+        "salt"
+      ],
+      "calldataHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+    },
+    "standard": {
+      "status": "FAILED",
+      "error": "Multicurve initializer address not configured on this chain. Override via builder or update chain config."
+    }
+  },
+  "verdict": "HARD_GATE_PASSED",
+  "failures": []
+}

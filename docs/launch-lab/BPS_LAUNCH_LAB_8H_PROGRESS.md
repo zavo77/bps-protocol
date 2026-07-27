@@ -23,7 +23,7 @@ Newest entries at the top. No secrets ever recorded here.
 - [x] Stage-A continuity checkpoint commit on master (`06ff34b`)
 - [x] Launch Lab planning docs checkpoint commit on master
 - [x] Feature branch `feature/bps-launch-lab-8h-vercel`
-- [ ] Hard gate: Doppler/GOOGL integration proof (build + exact simulation)
+- [x] Hard gate: Doppler/GOOGL integration proof — **PASSED** (rehype multicurve; live-mainnet simulation OK; see `SPIKE_LAUNCH_PROOF.json`)
 - [ ] Interface scaffold (stable TS contracts) committed
 - [ ] Design worktree + brief + prompt ready
 - [ ] packages/launch-lab core (anchor/config/doppler/fees/manifest/metadata/pricing/receipts/registry/simulation/swaps/types/validation)
@@ -38,6 +38,15 @@ Newest entries at the top. No secrets ever recorded here.
 - [ ] /lab/proof complete; genesis registry updated; final redeploy
 
 ## Log
+
+### 2026-07-27 — HARD GATE PASSED (Doppler/GOOGL integration proof)
+
+- `packages/launch-lab` scaffolded; `@whetstone-research/doppler-sdk@1.0.33` pinned (single viem 2.55.8 instance; root `.npmrc` gains `legacy-peer-deps=true` for the SDK's React 18 peer on our React 19 tree).
+- Spike `packages/launch-lab/scripts/spike-launch-proof.mjs` (read-only; RPC redacted) PASSED against live 4663:
+  chainId OK; modules airlock/dopplerHookInitializer/rehypeDopplerHookInitializer/noOpMigrator/noOpGovernanceFactory/dopplerERC20V1Factory all have bytecode; Airlock owner `0x21E2ce70511e4FE542a97708e89520471DAa7A66`; whitelist states 3/4/2/1 as expected (rehype hook is whitelisted inside DopplerHookInitializer, not Airlock — state 0 there is correct); GOOGL re-verified (API+on-chain, mid ≈$323.9, multiplier 1.0); 85/10/5 beneficiaries sum==WAD.
+- **Exact simulation OK (rehype multicurve, noOp governance + noOp migration, DopplerERC20V1 token, fee 10000 = 1%, FDV $20,500, two curves 60/40 to 'max')**: predicted token `0xC3Dab5aF881C69F8CfB0Fa3270b8529fC404817A` (placeholder tokenURI — final address will differ), poolId `0xef83d635e3b256368dceb8abcfc4e27a68d27928ff529aded68c20354bbe6808`, gasEstimate 3,577,075.
+- `standard` multicurve mode fails on 4663 with "Multicurve initializer address not configured" — recorded as the documented reason the rehype path is used.
+- Artifact: `docs/launch-lab/SPIKE_LAUNCH_PROOF.json` (redacted).
 
 ### 2026-07-27 — build start
 

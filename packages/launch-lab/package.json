@@ -1,0 +1,20 @@
+{
+  "name": "@bps/launch-lab",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "BPS Launch Lab domain package: Doppler launch construction, anchor verification, manifests, simulation, receipts (server-side; no secrets stored)",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@whetstone-research/doppler-sdk": "1.0.33",
+    "viem": "2.55.8",
+    "zod": "4.4.3"
+  }
+}
