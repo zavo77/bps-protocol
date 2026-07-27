@@ -200,6 +200,62 @@ export async function getLaunchRecord(token: string): Promise<LaunchRecord | nul
   return records.find((r) => r.tokenAddress.toLowerCase() === token.toLowerCase()) ?? null;
 }
 
+/** Markets created by a wallet (creator == launch tx sender). */
+export async function getCreatorMarkets(wallet: string): Promise<LaunchRecord[]> {
+  const records = await listLaunches();
+  return records.filter((r) => r.creator?.toLowerCase() === wallet.toLowerCase());
+}
+
+/**
+ * Swap counts + gross movement per token from indexed swaps (for the list view).
+ * Per-market anchor-denominated volume uses getAnchorVolume with the resolved
+ * PoolKey ordering. Returns null when the DB view is unavailable.
+ */
+export async function getVolumeByToken(
+  tokens: string[],
+): Promise<Map<string, { swaps: number; gross: bigint }> | null> {
+  const pg = await getPg();
+  if (!pg) return null;
+  if (tokens.length === 0) return new Map();
+  try {
+    const lowered = tokens.map((t) => t.toLowerCase());
+    const res = await pg.query(
+      `SELECT token_address, COUNT(*) AS n, COALESCE(SUM(abs(amount0) + abs(amount1)),0) AS gross
+       FROM lab_swaps WHERE token_address = ANY($1) GROUP BY token_address`,
+      [lowered],
+    );
+    const map = new Map<string, { swaps: number; gross: bigint }>();
+    for (const row of res.rows as { token_address: string; n: string; gross: string }[]) {
+      map.set(row.token_address.toLowerCase(), {
+        swaps: Number(row.n),
+        gross: BigInt(row.gross ?? "0"),
+      });
+    }
+    return map;
+  } catch {
+    return null;
+  }
+}
+
+/** Anchor-denominated volume for one token (sum of |anchor-side amount|). */
+export async function getAnchorVolume(
+  token: string,
+  anchorIsCurrency0: boolean,
+): Promise<string | null> {
+  const pg = await getPg();
+  if (!pg) return null;
+  try {
+    const col = anchorIsCurrency0 ? "amount0" : "amount1";
+    const res = await pg.query(
+      `SELECT COALESCE(SUM(abs(${col})),0) AS vol FROM lab_swaps WHERE token_address = $1`,
+      [token.toLowerCase()],
+    );
+    return String((res.rows[0] as { vol?: string })?.vol ?? "0");
+  } catch {
+    return null;
+  }
+}
+
 /** Health probe: SELECT 1. Throws (sanitized upstream) on any failure. */
 export async function pingDatabase(): Promise<void> {
   const pg = await getPg();

@@ -6,14 +6,38 @@ import { parseEventLogs, getAddress, type Address, type Hex } from "viem";
 import { airlockAbi, CHAIN_IDS, getAddresses } from "@whetstone-research/doppler-sdk/evm";
 import { getAnchorByAddress } from "@bps/launch-lab";
 import { getLabClient } from "../../../../lib/lab/server";
-import { invalidateLaunchCache, listLaunches } from "../../../../lib/lab/store";
+import { invalidateLaunchCache, listLaunches, getVolumeByToken } from "../../../../lib/lab/store";
 import { clientKey, err, mapError, ok, rateLimited } from "../../../../lib/lab/http";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
+/**
+ * List markets for /lab/tokens. Enriched with indexed swap activity and the
+ * resolved anchor; supports sort=newest|volume (default newest). Search/filter
+ * by symbol/name/anchor is applied client-side over this real data.
+ */
+export async function GET(req: Request): Promise<Response> {
   try {
-    return ok({ launches: await listLaunches() });
+    const launches = await listLaunches();
+    const volume = await getVolumeByToken(launches.map((l) => l.tokenAddress));
+    const enriched = launches.map((l) => {
+      const anchor = getAnchorByAddress(l.numeraire);
+      const v = volume?.get(l.tokenAddress.toLowerCase());
+      return {
+        ...l,
+        anchorSymbol: anchor?.symbol ?? l.anchorSymbol,
+        indexedSwaps: v ? v.swaps : null,
+        grossMovementWei: v ? v.gross.toString() : null,
+      };
+    });
+    const sort = new URL(req.url).searchParams.get("sort") ?? "newest";
+    enriched.sort((a, b) => {
+      if (sort === "volume") {
+        return BigInt(b.grossMovementWei ?? "0") > BigInt(a.grossMovementWei ?? "0") ? 1 : -1;
+      }
+      return Number(b.timestamp ?? 0) - Number(a.timestamp ?? 0);
+    });
+    return ok({ launches: enriched, indexedDataAvailable: volume !== null, sort });
   } catch (e) {
     return mapError(e);
   }
