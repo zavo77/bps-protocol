@@ -14,9 +14,9 @@
     },
     "genesisLaunch": "NOT executed; requires founder launch-gate approval + founder wallet signatures",
     "blockers": {
-      "LL-1": "private RPC monthly quota exhausted — viem fallback(private→public) mitigates reads; founder to upgrade endpoint",
-      "LL-2": "DATABASE_URL not provisioned — persistence uses chain reconstruction (authority) until provided",
-      "LL-3": "Vercel preview deployment protection blocks external preview QA"
+      "LL-1": "CLOSED 2026-07-27 — healthy RPC configured (local + Vercel); hard-gate re-run green; public-RPC fallback retained",
+      "LL-2": "CLOSED 2026-07-27 — Railway bps-production/bps-postgres (PostgreSQL 18.4); connectivity, idempotent schema, mirror idempotency, cross-instance replay, and failure fallback all verified (scripts/verify-db.mjs)",
+      "LL-3": "Vercel preview deployment protection blocks external preview QA (production URL is public; low priority)"
     },
     "publicAccessRetrofit": "in progress: ACCESS_MODE disabled|allowlist|public (fail-closed), guardrail env knobs, terms acknowledgement, chain-reconstructed launch registry + optional Postgres mirror"
   },

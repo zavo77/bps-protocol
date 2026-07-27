@@ -25,8 +25,17 @@ Newest entries at the top. No secrets ever recorded here.
 - Public access retrofit COMPLETE: ACCESS_MODE modes, terms acknowledgement (required, in signed
   payload), replay protection, per-wallet/IP limits, chain-reconstructed launch registry +
   `/api/lab/launches` + Postgres mirror awaiting `DATABASE_URL`. 44 package + 189 web tests green.
-- Open founder inputs: RPC endpoint upgrade (LL-1 quota), `DATABASE_URL` (LL-2), Claude Design session
-  (styling + print-token.png), wallet funding, then the launch-gate approval.
+- Open founder inputs: Claude Design session (styling + print-token.png), wallet funding, then the
+  launch-gate approval.
+- **LL-1 CLOSED (2026-07-27):** healthy RPC configured locally + Vercel Preview/Production; full hard-gate
+  re-run green (modules/whitelists, GOOGL verified mid ≈$325.4, PRINT rehype simulation OK gas 3,596,358;
+  refreshed `SPIKE_LAUNCH_PROOF.json`). Public-RPC fallback retained as resilience.
+- **LL-2 CLOSED (2026-07-27):** Railway `bps-production`/`bps-postgres` (PostgreSQL 18.4). Verified via
+  `packages/launch-lab/scripts/verify-db.mjs`: connectivity OK; additive/idempotent schema (2× run);
+  mirror write + duplicate idempotency (ON CONFLICT no-op, transaction rolled back); cross-instance
+  replay protection (second connection rejected); broken-URL failure caught → chain reconstruction
+  serves reads. `DATABASE_URL` set in .env.local + Vercel Preview/Production (value never printed).
+  Note: the production mirror has nothing to write until the first confirmed launch — engaged but empty.
 
 ## Milestones
 
