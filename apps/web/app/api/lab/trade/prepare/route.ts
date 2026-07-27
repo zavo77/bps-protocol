@@ -94,9 +94,11 @@ export async function POST(req: Request): Promise<Response> {
       route = quote;
       permit2 = ctx.permit2;
     } else {
-      const { GOOGL_ADDRESS } = await import("@bps/launch-lab");
-      const sellToken = payload.side === "buy" ? GOOGL_ADDRESS : token;
-      const buyToken = payload.side === "buy" ? token : GOOGL_ADDRESS;
+      // Resolve the market's ACTUAL anchor for the 0x pair (fail closed).
+      const { getLabPoolContext } = await import("@bps/launch-lab");
+      const ctx = await getLabPoolContext(client, token);
+      const sellToken = payload.side === "buy" ? ctx.anchorAddress : token;
+      const buyToken = payload.side === "buy" ? token : ctx.anchorAddress;
       const z = await quoteZeroExRoute({
         sellToken,
         buyToken,

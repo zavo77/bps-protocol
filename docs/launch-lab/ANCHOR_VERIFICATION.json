@@ -1,0 +1,101 @@
+{
+  "generatedAt": "2026-07-27T12:56:57.100Z",
+  "chainId": 4663,
+  "anchors": [
+    {
+      "symbol": "GOOGL",
+      "enabled": true,
+      "reason": "",
+      "name": "Alphabet Class A • Robinhood Token",
+      "logo": "https://cdn.robinhood.com/ncw_assets/logos/0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3.png",
+      "address": "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3",
+      "decimals": 18,
+      "currentMultiplier": "1.000000000000000000",
+      "status": "ASSET_STATUS_ACTIVE",
+      "chainId": 4663,
+      "midUsd": 324.905,
+      "simulation": {
+        "status": "ok",
+        "predictedToken": "0xD098b99495c8344c806CF8B872bEabf3eda03Ea0",
+        "gas": "3530554"
+      },
+      "verifiedAt": "2026-07-27T12:56:56.000Z"
+    },
+    {
+      "symbol": "NVDA",
+      "enabled": true,
+      "reason": "",
+      "name": "NVIDIA • Robinhood Token",
+      "logo": "https://cdn.robinhood.com/ncw_assets/logos/0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec.png",
+      "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "decimals": 18,
+      "currentMultiplier": "1.000000000000000000",
+      "status": "ASSET_STATUS_ACTIVE",
+      "chainId": 4663,
+      "midUsd": 208.33,
+      "simulation": {
+        "status": "ok",
+        "predictedToken": "0xA6Cf22808A8f0913B4F73F6e9d36bd6f7a92783C",
+        "gas": "3550333"
+      },
+      "verifiedAt": "2026-07-27T12:56:56.288Z"
+    },
+    {
+      "symbol": "AAPL",
+      "enabled": true,
+      "reason": "",
+      "name": "Apple • Robinhood Token",
+      "logo": "https://cdn.robinhood.com/ncw_assets/logos/0xaf3d76f1834a1d425780943c99ea8a608f8a93f9.png",
+      "address": "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9",
+      "decimals": 18,
+      "currentMultiplier": "1.000000000000000000",
+      "status": "ASSET_STATUS_ACTIVE",
+      "chainId": 4663,
+      "midUsd": 333.98,
+      "simulation": {
+        "status": "ok",
+        "predictedToken": "0xc554eDD06F2B5089aCf9A5C70406870374DF8af7",
+        "gas": "3528935"
+      },
+      "verifiedAt": "2026-07-27T12:56:56.595Z"
+    },
+    {
+      "symbol": "TSLA",
+      "enabled": true,
+      "reason": "",
+      "name": "Tesla • Robinhood Token",
+      "logo": "https://cdn.robinhood.com/ncw_assets/logos/0x322f0929c4625ed5bad873c95208d54e1c003b2d.png",
+      "address": "0x322F0929c4625eD5bAd873c95208D54E1c003b2d",
+      "decimals": 18,
+      "currentMultiplier": "1.000000000000000000",
+      "status": "ASSET_STATUS_ACTIVE",
+      "chainId": 4663,
+      "midUsd": 316.595,
+      "simulation": {
+        "status": "ok",
+        "predictedToken": "0xCC0DEfA16951Fd0D717fbD76C47cB04e96898118",
+        "gas": "3530205"
+      },
+      "verifiedAt": "2026-07-27T12:56:56.843Z"
+    },
+    {
+      "symbol": "SPCX",
+      "enabled": true,
+      "reason": "",
+      "name": "Space Exploration Technologies Corp. Class A Common Stock • Robinhood Token",
+      "logo": "https://cdn.robinhood.com/ncw_assets/logos/0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea.png",
+      "address": "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa",
+      "decimals": 18,
+      "currentMultiplier": "1.000000000000000000",
+      "status": "ASSET_STATUS_ACTIVE",
+      "chainId": 4663,
+      "midUsd": 113.145,
+      "simulation": {
+        "status": "ok",
+        "predictedToken": "0xfdF5462AaA9C6A80Fbd2271d2F76d51b3518B71F",
+        "gas": "3530749"
+      },
+      "verifiedAt": "2026-07-27T12:56:57.100Z"
+    }
+  ]
+}

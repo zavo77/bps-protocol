@@ -42,6 +42,7 @@ async function getPg(): Promise<PgPool | null> {
       launched_at TIMESTAMPTZ,
       inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
+    await pool.query(`ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS anchor_symbol TEXT`);
     await pool.query(`CREATE TABLE IF NOT EXISTS lab_used_signatures (
       sig_hash TEXT PRIMARY KEY,
       used_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -74,8 +75,8 @@ export async function listLaunches(): Promise<LaunchRecord[]> {
     try {
       for (const r of records) {
         await pg.query(
-          `INSERT INTO lab_launches (token_address, token_name, token_symbol, creator, numeraire, pool_or_hook, launch_tx, block_number, launched_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,to_timestamp($9))
+          `INSERT INTO lab_launches (token_address, token_name, token_symbol, creator, numeraire, anchor_symbol, pool_or_hook, launch_tx, block_number, launched_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,to_timestamp($10))
            ON CONFLICT (token_address) DO NOTHING`,
           [
             r.tokenAddress.toLowerCase(),
@@ -83,6 +84,7 @@ export async function listLaunches(): Promise<LaunchRecord[]> {
             r.tokenSymbol,
             r.creator?.toLowerCase() ?? null,
             r.numeraire.toLowerCase(),
+            r.anchorSymbol,
             r.poolOrHook.toLowerCase(),
             r.launchTransactionHash,
             r.blockNumber,
@@ -190,6 +192,12 @@ export async function getRecentSwaps(token: string, limit = 200): Promise<Indexe
   } catch {
     return null;
   }
+}
+
+/** Single launch record by token address (chain-reconstructed list). */
+export async function getLaunchRecord(token: string): Promise<LaunchRecord | null> {
+  const records = await listLaunches();
+  return records.find((r) => r.tokenAddress.toLowerCase() === token.toLowerCase()) ?? null;
 }
 
 /** Health probe: SELECT 1. Throws (sanitized upstream) on any failure. */

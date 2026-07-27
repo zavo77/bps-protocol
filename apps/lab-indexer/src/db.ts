@@ -18,6 +18,7 @@ export const MIGRATIONS: readonly string[] = [
     inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`,
   `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS pool_id TEXT`,
+  `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS anchor_symbol TEXT`,
   `CREATE TABLE IF NOT EXISTS lab_used_signatures (
     sig_hash TEXT PRIMARY KEY,
     used_at TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -4,7 +4,7 @@
 
 import { parseEventLogs, getAddress, type Address, type Hex } from "viem";
 import { airlockAbi, CHAIN_IDS, getAddresses } from "@whetstone-research/doppler-sdk/evm";
-import { GOOGL_ADDRESS } from "@bps/launch-lab";
+import { getAnchorByAddress } from "@bps/launch-lab";
 import { getLabClient } from "../../../../lib/lab/server";
 import { invalidateLaunchCache, listLaunches } from "../../../../lib/lab/store";
 import { clientKey, err, mapError, ok, rateLimited } from "../../../../lib/lab/http";
@@ -47,8 +47,8 @@ export async function POST(req: Request): Promise<Response> {
       initializer: Address;
       poolOrHook: Address;
     };
-    if (args.numeraire.toLowerCase() !== GOOGL_ADDRESS.toLowerCase()) {
-      return err("WRONG_NUMERAIRE", "Launch is not GOOGL-anchored.");
+    if (!getAnchorByAddress(args.numeraire)) {
+      return err("WRONG_NUMERAIRE", "Launch is not paired with an approved Stock Token.");
     }
     if (args.initializer.toLowerCase() !== a.dopplerHookInitializer.toLowerCase()) {
       return err("WRONG_INITIALIZER", "Launch did not use the lab initializer.");

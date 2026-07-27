@@ -40,7 +40,7 @@ export type AnchorVerificationStatus = "unverified" | "verifying" | "verified" |
 
 export interface AnchorVerification {
   status: AnchorVerificationStatus;
-  symbol: "GOOGL";
+  symbol: string;
   /** Checksummed canonical address, fail-closed against the official API. */
   address: Address;
   name: string;
@@ -102,7 +102,7 @@ export interface LaunchManifest {
   tokenDescriptionHash: Hex;
   tokenImageCid: string;
   tokenUri: string;
-  anchorSymbol: "GOOGL";
+  anchorSymbol: string;
   anchorAddress: Address;
   anchorDecimals: number;
   anchorMultiplier: string;
@@ -269,7 +269,16 @@ export interface LabPublicConfig {
   defaultFeePreset: FeePresetId;
   feePresets: FeePreset[];
   startingFdvUsd: number;
-  anchorSymbol: "GOOGL";
+  /** Default anchor symbol (back-compat); prefer `anchors` for the full set. */
+  anchorSymbol: string;
+  /** Approved Stock Token anchors a market may be paired with. */
+  anchors: {
+    symbol: string;
+    name: string;
+    logo: string | null;
+    address: Address;
+    decimals: number;
+  }[];
   bpsFeeAddress: Address | null;
   explorerBaseUrl: string;
   /** Uniform public-beta guardrails, displayed transparently. */
@@ -294,6 +303,8 @@ export interface LaunchRecord {
   tokenSymbol: string;
   creator: Address | null;
   numeraire: Address;
+  /** Approved-anchor symbol for this market's numeraire, when recognized. */
+  anchorSymbol: string | null;
   poolOrHook: Address;
   launchTransactionHash: Hex;
   blockNumber: string;

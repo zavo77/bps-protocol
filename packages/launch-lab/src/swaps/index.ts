@@ -14,8 +14,13 @@ import {
   type Hex,
   type PublicClient,
 } from "viem";
-import { CHAIN_IDS, DopplerSDK, computePoolId, getAddresses } from "@whetstone-research/doppler-sdk/evm";
-import { GOOGL_ADDRESS } from "../config/index";
+import {
+  CHAIN_IDS,
+  DopplerSDK,
+  computePoolId,
+  getAddresses,
+} from "@whetstone-research/doppler-sdk/evm";
+import { getAnchorByAddress } from "../anchors/registry";
 
 export interface V4PoolKeyStruct {
   currency0: Address;
@@ -30,7 +35,11 @@ export interface LabPoolContext {
   poolId: Hex;
   /** LockablePoolStatus numeric (2 = Locked). */
   status: number;
-  googlIsCurrency0: boolean;
+  /** Resolved anchor (numeraire) for this market. */
+  anchorSymbol: string;
+  anchorAddress: Address;
+  /** True when the anchor is currency0 in the PoolKey. */
+  anchorIsCurrency0: boolean;
   universalRouter: Address;
   permit2: Address;
 }
@@ -46,7 +55,10 @@ export interface SwapQuote {
 }
 
 /** Resolve and validate the pool for a lab token; fail closed on non-GOOGL pools. */
-export async function getLabPoolContext(client: PublicClient, tokenAddress: Address): Promise<LabPoolContext> {
+export async function getLabPoolContext(
+  client: PublicClient,
+  tokenAddress: Address,
+): Promise<LabPoolContext> {
   const sdk = new DopplerSDK({ publicClient: client, chainId: CHAIN_IDS.ROBINHOOD });
   // Any failure to resolve a multicurve pool for this token means it is not a
   // lab market — fail closed with a clean, non-leaking error rather than
@@ -61,28 +73,44 @@ export async function getLabPoolContext(client: PublicClient, tokenAddress: Addr
   const poolKey = state.poolKey as unknown as V4PoolKeyStruct;
   const c0 = getAddress(poolKey.currency0);
   const c1 = getAddress(poolKey.currency1);
-  const googlIsCurrency0 = c0.toLowerCase() === GOOGL_ADDRESS.toLowerCase();
-  const googlIsCurrency1 = c1.toLowerCase() === GOOGL_ADDRESS.toLowerCase();
-  if (!googlIsCurrency0 && !googlIsCurrency1) {
-    throw new Error("NOT_A_GOOGL_MARKET");
-  }
+  // The numeraire must be an APPROVED anchor (any of the enabled Stock Tokens).
+  const anchor0 = getAnchorByAddress(c0);
+  const anchor1 = getAnchorByAddress(c1);
+  const anchor = anchor0 ?? anchor1;
+  if (!anchor) throw new Error("NOT_A_GOOGL_MARKET"); // preserved code: "not an approved-anchor market"
+  const anchorIsCurrency0 = anchor0 !== null;
   const tokenInPool =
-    c0.toLowerCase() === tokenAddress.toLowerCase() || c1.toLowerCase() === tokenAddress.toLowerCase();
+    c0.toLowerCase() === tokenAddress.toLowerCase() ||
+    c1.toLowerCase() === tokenAddress.toLowerCase();
   if (!tokenInPool) throw new Error("TOKEN_NOT_IN_POOL");
-  const a = getAddresses(CHAIN_IDS.ROBINHOOD) as unknown as { universalRouter: Address; permit2: Address };
+  const a = getAddresses(CHAIN_IDS.ROBINHOOD) as unknown as {
+    universalRouter: Address;
+    permit2: Address;
+  };
   return {
-    poolKey: { currency0: c0, currency1: c1, fee: poolKey.fee, tickSpacing: poolKey.tickSpacing, hooks: getAddress(poolKey.hooks) },
+    poolKey: {
+      currency0: c0,
+      currency1: c1,
+      fee: poolKey.fee,
+      tickSpacing: poolKey.tickSpacing,
+      hooks: getAddress(poolKey.hooks),
+    },
     poolId: computePoolId(state.poolKey),
     status: Number(state.status),
-    googlIsCurrency0,
+    anchorSymbol: anchor.symbol,
+    anchorAddress: anchor.address,
+    anchorIsCurrency0,
     universalRouter: a.universalRouter,
     permit2: a.permit2,
   };
 }
 
-/** buy = GOOGL -> token; sell = token -> GOOGL. */
-export function directionToZeroForOne(direction: "buy" | "sell", googlIsCurrency0: boolean): boolean {
-  return direction === "buy" ? googlIsCurrency0 : !googlIsCurrency0;
+/** buy = anchor -> token; sell = token -> anchor. */
+export function directionToZeroForOne(
+  direction: "buy" | "sell",
+  anchorIsCurrency0: boolean,
+): boolean {
+  return direction === "buy" ? anchorIsCurrency0 : !anchorIsCurrency0;
 }
 
 /** Exact-input quote through the V4 Quoter (hook-aware). */
@@ -94,7 +122,7 @@ export async function quoteLabSwap(
 ): Promise<SwapQuote> {
   if (amountInWei <= 0n) throw new Error("AMOUNT_REQUIRED");
   const sdk = new DopplerSDK({ publicClient: client, chainId: CHAIN_IDS.ROBINHOOD });
-  const zeroForOne = directionToZeroForOne(direction, ctx.googlIsCurrency0);
+  const zeroForOne = directionToZeroForOne(direction, ctx.anchorIsCurrency0);
   const res = await sdk.quoter.quoteExactInputV4({
     poolKey: ctx.poolKey,
     zeroForOne,
@@ -332,10 +360,17 @@ export async function quoteDirectRoute(
   const ctx = await getLabPoolContext(client, tokenAddress);
   const q = await quoteLabSwap(client, ctx, direction, amountInWei);
   const tx = buildSwapTransaction({ ctx, quote: q, slippageBps });
-  const impact = await computePriceImpactBps(client, ctx, direction, amountInWei, BigInt(q.amountOutWei));
+  const impact = await computePriceImpactBps(
+    client,
+    ctx,
+    direction,
+    amountInWei,
+    BigInt(q.amountOutWei),
+  );
   const block = await client.getBlockNumber();
   const warnings: string[] = [];
-  if (impact !== null && impact >= PRICE_IMPACT_WARN_BPS) warnings.push(`High price impact: ${(impact / 100).toFixed(2)}%`);
+  if (impact !== null && impact >= PRICE_IMPACT_WARN_BPS)
+    warnings.push(`High price impact: ${(impact / 100).toFixed(2)}%`);
   if (ctx.status !== 2) warnings.push(`Pool status ${ctx.status} (expected Locked=2).`);
   return {
     ctx,

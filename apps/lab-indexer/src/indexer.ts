@@ -8,10 +8,11 @@ import { getContractEvents } from "viem/actions";
 import type { Address, Hex, PublicClient } from "viem";
 import { getCursor, setCursor } from "./db.js";
 import {
+  APPROVED_ANCHOR_ADDRESSES,
   CREATE_EVENT,
-  GOOGL_ADDRESS,
   SWAP_EVENT,
   decodeLaunchLog,
+  getAnchorByAddress,
   labAddresses,
   resolvePoolId,
 } from "./chain.js";
@@ -58,11 +59,12 @@ async function indexLaunchRange(
   to: bigint,
 ): Promise<void> {
   const a = labAddresses();
+  // Discover markets for ANY approved anchor (numeraire is the indexed topic).
   const logs = await getContractEvents(client, {
     address: a.airlock,
     abi: [CREATE_EVENT],
     eventName: "Create",
-    args: { numeraire: GOOGL_ADDRESS },
+    args: { numeraire: APPROVED_ANCHOR_ADDRESSES },
     fromBlock: from,
     toBlock: to,
   });
@@ -71,13 +73,15 @@ async function indexLaunchRange(
     if (!launch) continue;
     const block = await client.getBlock({ blockNumber: launch.blockNumber });
     const poolId = await resolvePoolId(client, a.dopplerHookInitializer, launch.tokenAddress);
+    const anchorSymbol = getAnchorByAddress(launch.numeraire)?.symbol ?? null;
     await pool.query(
-      `INSERT INTO lab_launches (token_address, token_name, token_symbol, creator, numeraire, pool_or_hook, launch_tx, block_number, launched_at, pool_id)
-       VALUES ($1,'','',NULL,$2,$3,$4,$5,to_timestamp($6),$7)
-       ON CONFLICT (token_address) DO UPDATE SET pool_id = COALESCE(lab_launches.pool_id, EXCLUDED.pool_id)`,
+      `INSERT INTO lab_launches (token_address, token_name, token_symbol, creator, numeraire, anchor_symbol, pool_or_hook, launch_tx, block_number, launched_at, pool_id)
+       VALUES ($1,'','',NULL,$2,$3,$4,$5,$6,to_timestamp($7),$8)
+       ON CONFLICT (token_address) DO UPDATE SET pool_id = COALESCE(lab_launches.pool_id, EXCLUDED.pool_id), anchor_symbol = COALESCE(lab_launches.anchor_symbol, EXCLUDED.anchor_symbol)`,
       [
         launch.tokenAddress.toLowerCase(),
         launch.numeraire.toLowerCase(),
+        anchorSymbol,
         launch.poolOrHook.toLowerCase(),
         launch.txHash,
         launch.blockNumber.toString(),

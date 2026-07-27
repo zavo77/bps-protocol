@@ -20,7 +20,13 @@ function stub(body: unknown, ok = true) {
   );
 }
 
-const base = { sellToken: GOOGL, buyToken: TOKEN, sellAmountWei: 10n ** 18n, taker: TOKEN, slippageBps: 100 };
+const base = {
+  sellToken: GOOGL,
+  buyToken: TOKEN,
+  sellAmountWei: 10n ** 18n,
+  taker: TOKEN,
+  slippageBps: 100,
+};
 
 describe("quoteZeroExRoute", () => {
   it("returns null when ZEROX_API_KEY is unset (no route is not a failure)", async () => {

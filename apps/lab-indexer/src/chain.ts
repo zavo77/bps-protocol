@@ -19,9 +19,14 @@ import {
   getAddresses,
 } from "@whetstone-research/doppler-sdk/evm";
 import { computePoolId, normalizePoolKey } from "@whetstone-research/doppler-sdk/evm";
+import { APPROVED_ANCHORS, getAnchorByAddress } from "@bps/launch-lab";
 
-/** Canonical GOOGL — must match packages/launch-lab/src/config (kept in sync by test). */
+/** Canonical GOOGL — kept for the sync test; discovery now spans all anchors. */
 export const GOOGL_ADDRESS: Address = getAddress("0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3");
+
+/** All approved anchor numeraires the indexer discovers markets for. */
+export const APPROVED_ANCHOR_ADDRESSES: Address[] = APPROVED_ANCHORS.map((a) => a.address);
+export { getAnchorByAddress };
 
 export const robinhood = defineChain({
   id: 4663,
@@ -71,7 +76,7 @@ export interface DecodedLaunch {
   txHash: Hex;
 }
 
-/** Type guard + filter: only OUR lab's launches (GOOGL + DopplerHookInitializer). */
+/** Type guard + filter: OUR lab's launches (any approved anchor + our initializer). */
 export function decodeLaunchLog(log: Log, expectedInitializer: Address): DecodedLaunch | null {
   const args = (log as unknown as { args?: Record<string, unknown> }).args;
   if (!args) return null;
@@ -80,7 +85,7 @@ export function decodeLaunchLog(log: Log, expectedInitializer: Address): Decoded
   const asset = args.asset as Address | undefined;
   const poolOrHook = args.poolOrHook as Address | undefined;
   if (!numeraire || !initializer || !asset || !poolOrHook) return null;
-  if (numeraire.toLowerCase() !== GOOGL_ADDRESS.toLowerCase()) return null;
+  if (!getAnchorByAddress(numeraire)) return null; // must be an approved anchor
   if (initializer.toLowerCase() !== expectedInitializer.toLowerCase()) return null;
   if (log.blockNumber === null || !log.transactionHash) return null;
   return {

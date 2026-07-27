@@ -19,7 +19,17 @@ const of = <T>(value: T): MarketDatum<T> => ({ available: true, value });
 export async function readMarketSnapshot(tokenAddressRaw: string): Promise<MarketSnapshot> {
   const tokenAddress = getAddress(tokenAddressRaw);
   const client = getLabClient();
-  const anchor = await resolveAnchor(client);
+  // Resolve THIS market's actual anchor from its pool; fall back to the default
+  // anchor verification if the pool can't be resolved (e.g. not yet indexed).
+  let anchorSymbol: string | undefined;
+  try {
+    const { getLabPoolContext } = await import("@bps/launch-lab");
+    const ctx = await getLabPoolContext(client, tokenAddress);
+    anchorSymbol = ctx.anchorSymbol;
+  } catch {
+    anchorSymbol = undefined;
+  }
+  const anchor = await resolveAnchor(client, anchorSymbol ? { symbol: anchorSymbol } : undefined);
 
   let name = "";
   let symbol = "";

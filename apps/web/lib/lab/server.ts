@@ -32,6 +32,9 @@ import {
   SALE_INVENTORY_WEI,
   SIMULATION_MAX_AGE_MS,
   GENESIS_MARKET,
+  APPROVED_ANCHORS,
+  DEFAULT_ANCHOR_SYMBOL,
+  isApprovedAnchorSymbol,
   type LabServerFlags,
   type LaunchManifest,
   type LaunchSimulation,
@@ -85,7 +88,14 @@ export function publicConfig(launchesToday: number | null = null): LabPublicConf
     defaultFeePreset: flags.defaultFeePreset,
     feePresets: [...FEE_PRESETS],
     startingFdvUsd: flags.startingFdvUsd,
-    anchorSymbol: "GOOGL",
+    anchorSymbol: DEFAULT_ANCHOR_SYMBOL,
+    anchors: APPROVED_ANCHORS.map((a) => ({
+      symbol: a.symbol,
+      name: a.name,
+      logo: a.logo,
+      address: a.address,
+      decimals: a.decimals,
+    })),
     bpsFeeAddress: flags.bpsFeeAddress,
     explorerBaseUrl: EXPLORER_BASE_URL,
     publicBeta: {
@@ -170,7 +180,9 @@ export async function prepareLaunch(
   if (!preset.enabled) throw new Error("FEE_PRESET_DISABLED");
 
   const client = getLabClient();
-  const anchor = await resolveAnchor(client, { bypassCache: true });
+  const anchorSymbol = payload.anchorSymbol ?? DEFAULT_ANCHOR_SYMBOL;
+  if (!isApprovedAnchorSymbol(anchorSymbol)) throw new Error("UNAPPROVED_ANCHOR");
+  const anchor = await resolveAnchor(client, { bypassCache: true, symbol: anchorSymbol });
   if (anchor.status !== "verified") throw new Error(`ANCHOR_MISMATCH: ${anchor.mismatchReason}`);
 
   const modules = await resolveAndVerifyModules(client);
@@ -208,7 +220,7 @@ export async function prepareLaunch(
     tokenDescriptionHash: hashDescription(payload.tokenDescription),
     tokenImageCid: payload.imageCid,
     tokenUri: payload.tokenUri,
-    anchorSymbol: "GOOGL",
+    anchorSymbol,
     anchorAddress: anchor.address,
     anchorDecimals: anchor.decimals,
     anchorMultiplier: anchor.currentMultiplier,

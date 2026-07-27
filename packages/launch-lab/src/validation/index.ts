@@ -36,6 +36,11 @@ export const prepareLaunchSchema = z.object({
   feePreset: feePresetSchema,
   creatorAddress: addressSchema,
   creatorFeeAddress: addressSchema,
+  /** Approved anchor symbol; defaults to GOOGL when omitted (back-compat). */
+  anchorSymbol: z
+    .string()
+    .regex(/^[A-Z0-9]{1,12}$/)
+    .optional(),
   /** Explicit public terms/disclosure acknowledgement — required for every wallet. */
   termsAccepted: z.literal(true),
 });

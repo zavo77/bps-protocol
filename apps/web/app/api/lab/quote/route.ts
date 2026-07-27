@@ -5,10 +5,17 @@
 
 import { getAddress, isAddress } from "viem";
 import { z } from "zod";
-import { quoteDirectRoute, GOOGL_ADDRESS, type RouteQuote } from "@bps/launch-lab";
+import { quoteDirectRoute, type RouteQuote } from "@bps/launch-lab";
 import { getLabClient } from "../../../../lib/lab/server";
 import { quoteZeroExRoute } from "../../../../lib/lab/zeroex";
-import { assertSameOrigin, clientKey, err, mapError, ok, rateLimited } from "../../../../lib/lab/http";
+import {
+  assertSameOrigin,
+  clientKey,
+  err,
+  mapError,
+  ok,
+  rateLimited,
+} from "../../../../lib/lab/http";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +31,8 @@ export async function POST(req: Request): Promise<Response> {
   try {
     const originProblem = assertSameOrigin(req);
     if (originProblem) return err("BAD_ORIGIN", originProblem, 403);
-    if (rateLimited(`quote:${clientKey(req)}`, 30)) return err("RATE_LIMITED", "Too many requests.", 429);
+    if (rateLimited(`quote:${clientKey(req)}`, 30))
+      return err("RATE_LIMITED", "Too many requests.", 429);
 
     const input = quoteInputSchema.parse(await req.json());
     const amountIn = BigInt(input.amountInWei);
@@ -33,12 +41,18 @@ export async function POST(req: Request): Promise<Response> {
     const taker = getAddress(input.taker);
     const client = getLabClient();
 
-    // Mandatory direct route (fails closed on non-lab/non-GOOGL pools).
-    const { quote: direct } = await quoteDirectRoute(client, token, input.side, amountIn, input.slippageBps);
+    // Mandatory direct route (fails closed on non-lab/non-anchor pools).
+    const { quote: direct, ctx } = await quoteDirectRoute(
+      client,
+      token,
+      input.side,
+      amountIn,
+      input.slippageBps,
+    );
 
-    // Optional 0x route; its absence is never a market failure.
-    const sellToken = input.side === "buy" ? GOOGL_ADDRESS : token;
-    const buyToken = input.side === "buy" ? token : GOOGL_ADDRESS;
+    // Optional 0x route on the market's ACTUAL anchor; absence is never failure.
+    const sellToken = input.side === "buy" ? ctx.anchorAddress : token;
+    const buyToken = input.side === "buy" ? token : ctx.anchorAddress;
     const zeroEx = await quoteZeroExRoute({
       sellToken,
       buyToken,
@@ -49,15 +63,26 @@ export async function POST(req: Request): Promise<Response> {
 
     const routes: RouteQuote[] = zeroEx ? [direct, zeroEx] : [direct];
     const selected =
-      zeroEx && BigInt(zeroEx.buyAmount) > BigInt(direct.buyAmount) ? zeroEx.routeId : direct.routeId;
+      zeroEx && BigInt(zeroEx.buyAmount) > BigInt(direct.buyAmount)
+        ? zeroEx.routeId
+        : direct.routeId;
 
-    return ok({ routes, selected, side: input.side, tokenAddress: token, taker });
+    return ok({
+      routes,
+      selected,
+      side: input.side,
+      tokenAddress: token,
+      taker,
+      anchorSymbol: ctx.anchorSymbol,
+      anchorAddress: ctx.anchorAddress,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
     if (msg === "NOT_A_GOOGL_MARKET" || msg === "TOKEN_NOT_IN_POOL") {
       return err("NOT_A_LAB_MARKET", "That token is not a Launch Lab GOOGL market.", 404);
     }
-    if (msg === "AMOUNT_REQUIRED" || msg === "INVALID_SLIPPAGE") return err(msg, "Invalid quote input.");
+    if (msg === "AMOUNT_REQUIRED" || msg === "INVALID_SLIPPAGE")
+      return err(msg, "Invalid quote input.");
     return mapError(e);
   }
 }
