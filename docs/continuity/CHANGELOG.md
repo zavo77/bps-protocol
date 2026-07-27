@@ -7,6 +7,54 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-27 — STAGE A COMPLETE: executor deployed + both deployments independently verified (post-Stage-A continuity)
+
+- **Type:** Read-only on-chain re-verification of BOTH Stage-A deployments + continuity documentation update. **No
+  signing, broadcast, transaction, deployment, Safe op, approval, funding, quote, settlement, config call, unpause,
+  restart, source verification, external write, commit, or push by Claude.** Prepared in an **isolated git worktree**
+  (`C:\Projects\bps-stage-a-continuity-20260727`, branch `ops/post-stage-a-continuity-20260727`, base `master`
+  `dec279480cbd7c61a7fb90c811c5cc9b211de26c`) so the active Launch Lab worktrees are untouched. Only 3 continuity/doc
+  files modified, uncommitted, pending founder review/merge.
+- **Executor DEPLOYED (by the founder, not Claude) + verified:** `GuardedSettlementExecutor` live at
+  `0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C`, tx `0x2464d29ef2ed89ff0d870cf77f9928515c884fd5dce53240e0831d0912978d23`
+  (explorer https://robinhoodchain.blockscout.com/tx/0x2464d29ef2ed89ff0d870cf77f9928515c884fd5dce53240e0831d0912978d23),
+  deployer `0x7116…2ba2` nonce 2, value 0, `to` null, status success, block **20529360** (2026-07-27T06:49:17Z),
+  gasLimit 3,248,384, gasUsed 2,146,124, effectiveGasPrice 40,904,000 wei, fee 87,785,056,096,000 wei. Live runtime hash
+  **`0xf864233b76b77d05fd95250a3641839941fc00fc4aed3ac736458be957273a8d`** (== the pre-deploy derived resolved hash;
+  pre-immutable template was `0x16c8af…770908`). `owner()` == Safe `0x62Ae5b22Dd28Ee338E5A447ed849f9C7008A5E62`,
+  `paused()` == **true**; immutables weth `0x0Bd7…AD73` / stockToken `0xd060…9EEC` / registry `0x71a1…687E`; **no
+  configuration** (priceGuard / approvedRouterCodeHash / approvedSelector / maxSellAmount[WETH] all zero); holds **no**
+  ETH/WETH/NVDA; **no** token approvals to registry or the feature-2 router.
+- **Guard re-verified unchanged:** `0x57538680194D9E15Ba78bf243B10B440f663078d`, tx `0xc3095c2e…dbb4256f`, nonce 1,
+  block 20167604 (2026-07-26T20:44:17Z), gasLimit 1,704,098, gasUsed 1,121,401, effectiveGasPrice 49,478,000 wei, fee
+  55,484,678,678,000 wei, live runtime `0xfcb2694b…857f4` (template `0x4c5859…ea92e8`); all 14 public immutable getters
+  match the frozen constructor args + live-read feed/token values (feed decimals 8/8, token decimals 18/18,
+  keccak("ETH / USD")=`0x62ddc8…1777`, keccak("RHNVDA / USD")=`0xf4d5d0…8b49`); holds no assets.
+- **Template vs deployed hash explanation:** Foundry `deployedBytecode` is a TEMPLATE with zeroed immutable
+  placeholders; the constructor writes the immutables into the runtime at deploy, so keccak(deployed runtime) DIFFERS
+  from the template. Deployed = resolved hashes (guard `0xfcb2694b…`, exec `0xf864233b…`); templates recorded for
+  provenance only.
+- **Independent dual-tool verification:** viem 2.55.8 (`getBytecode`+`keccak256`, `readContract`) AND Foundry
+  `cast` 1.7.1 (`codehash` EXTCODEHASH, `call`, `nonce`, `chain-id`) produced identical results for both runtime
+  hashes, executor owner/paused/immutables, chain id, and deployer nonce. Public RPC only.
+- **Gas-padding audit note (verified on-chain):** the repaired launcher displayed executor gas limit **2,809,791**
+  (== ceil(2,161,377 est × 1.3)); Rabby broadcast gas limit **3,248,384** (== on-chain tx.gas); executor gas used
+  **2,146,124** (== on-chain). The wallet-side gas padding did **not** alter calldata (tx input keccak ==
+  bundle deployDataHash `0x946450…`), value (0), nonce (2), created address, constructor immutables, deployed runtime
+  bytecode, or contract state.
+- **Chain state:** chain id **4663**; deployer `0x7116…2ba2` latest & pending nonce **3/3** (guard=1, executor=2
+  consumed; nothing after); no later calls / funding / token holdings / approvals / transfers on either contract; no
+  later stage occurred.
+- **Gates preserved (unchanged):** Stage A complete ≠ PCE-1 / Private Pilot / Production complete. Executor remains
+  **PAUSED / fail-closed / unconfigured**. Unrestricted public product **DISABLED**. Safe configuration, unpausing,
+  funding, approvals, quotes, and settlement EACH require a **separate** explicit founder authorization + fresh
+  preflight — none authorized now. B-1 OPEN, B-2/D-23 COUNSEL-PENDING, D-24 in force for production. BPS RWA Launch
+  Lab is a separate scope and was not touched.
+- **Continuity gate:** TRIGGERED (live executor deployment verified; Stage A milestone complete). Updated HANDOVER.md,
+  CURRENT_STATE.json, CHANGELOG.md in the isolated worktree. Validation: JSON parse OK; `git diff --check` clean.
+  No commit/push (pending founder review). Isolated worktree HEAD base master `dec2794…26c`; Launch Lab worktree
+  `C:\Projects\bps-experiment` left on `feature/bps-launch-lab-8h-vercel` (advancing externally; not touched).
+
 ## 2026-07-27 — STAGE A (step 1): guard deployment verified + executor runtime hash derived + launcher repaired
 
 - **Type:** Read-only on-chain verification + offline bytecode analysis + repair of the ephemeral (out-of-repo)
