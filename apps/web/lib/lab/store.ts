@@ -191,3 +191,10 @@ export async function getRecentSwaps(token: string, limit = 200): Promise<Indexe
     return null;
   }
 }
+
+/** Health probe: SELECT 1. Throws (sanitized upstream) on any failure. */
+export async function pingDatabase(): Promise<void> {
+  const pg = await getPg();
+  if (!pg) throw new Error("db-unavailable");
+  await pg.query("SELECT 1");
+}
