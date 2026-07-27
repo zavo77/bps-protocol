@@ -51,13 +51,13 @@ export async function quoteZeroExRoute(params: {
     const tx = j.transaction;
     if (!tx?.to || !tx.data || !j.buyAmount) return null;
     const transactionTarget = getAddress(tx.to);
+    // The approval target is EXACTLY the spender 0x returns (the AllowanceHolder
+    // in the allowance-holder flow). We approve only this — never the internal
+    // Settler. In the allowance-holder API the AllowanceHolder is both the
+    // spender and the transaction target, which is correct and expected; native
+    // ETH sells return no allowance (no approval needed).
     const spenderRaw = j.issues?.allowance?.spender ?? j.allowanceTarget ?? null;
     const allowanceTarget = spenderRaw ? getAddress(spenderRaw) : null;
-    // Never approve the Settler: the approval target must come from the
-    // allowance field and must not equal the transaction target.
-    if (allowanceTarget && allowanceTarget.toLowerCase() === transactionTarget.toLowerCase()) {
-      return null;
-    }
     const impact = j.estimatedPriceImpact ? Math.round(Number(j.estimatedPriceImpact) * 100) : null;
     return {
       routeId: "zeroEx",

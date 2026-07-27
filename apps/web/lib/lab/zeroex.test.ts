@@ -47,18 +47,39 @@ describe("quoteZeroExRoute", () => {
     expect(q?.routeId).toBe("zeroEx");
     expect(q?.allowanceTarget).toBe(ALLOWANCE_HOLDER);
     expect(q?.transactionTarget).toBe(SETTLER);
-    expect(q?.allowanceTarget).not.toBe(q?.transactionTarget);
   });
 
-  it("rejects a quote whose allowance target equals the transaction target (Settler-approval guard)", async () => {
+  it("uses the returned spender even when it equals the tx target (0x v2 allowance-holder)", async () => {
+    // In the allowance-holder flow the AllowanceHolder is BOTH the approval
+    // spender and the transaction target — this is correct, not a Settler
+    // approval. We approve exactly issues.allowance.spender.
+    process.env.ZEROX_API_KEY = "test-key";
+    const HOLDER = getAddress("0x0000000000001fF3684f28c67538d4D072C22734");
+    stub({
+      buyAmount: "600",
+      transaction: { to: HOLDER, data: "0xabcd", value: "0" },
+      issues: { allowance: { spender: HOLDER } },
+      liquidityAvailable: true,
+    });
+    const q = await quoteZeroExRoute(base);
+    expect(q?.allowanceTarget).toBe(HOLDER);
+    expect(q?.transactionTarget).toBe(HOLDER);
+  });
+
+  it("native-ETH sell returns no allowance target (no approval needed)", async () => {
     process.env.ZEROX_API_KEY = "test-key";
     stub({
       buyAmount: "600",
-      transaction: { to: SETTLER, data: "0xabcd", value: "0" },
-      issues: { allowance: { spender: SETTLER } },
+      transaction: {
+        to: getAddress("0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73"),
+        data: "0x1234",
+        value: "0",
+      },
+      issues: { allowance: null },
       liquidityAvailable: true,
     });
-    expect(await quoteZeroExRoute(base)).toBeNull();
+    const q = await quoteZeroExRoute(base);
+    expect(q?.allowanceTarget).toBeNull();
   });
 
   it("returns null when 0x reports no liquidity", async () => {

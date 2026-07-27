@@ -1,20 +1,22 @@
 "use client";
-// Embedded bidirectional trading card for a lab market. Two-step, wallet-signed:
-//   1. Get quote  → server returns executable route(s) (BPS Direct + optional 0x)
-//   2. Trade      → sign prepare-trade, run any approvals, then send the swap tx
-// Everything is honest about state: quoting, no-route, wrong chain, insufficient
-// balance, signing, pending, success (with a Blockscout receipt link) and safe
-// error messages. A disconnected wallet can never reach a signature. Restyled to
-// the Claude Design V4 lab system; the trade button is the ONE primary action.
+// Embedded bidirectional trading card for a lab market.
+//
+// Users pay/receive ETH / WETH / USDG — the market's RWA anchor is INTERNAL
+// routing detail and appears only as an "advanced" pay/receive option and inside
+// the collapsed route breakdown. Two-step, wallet-signed:
+//   1. Get quote  → server returns an executable route (one-step 0x, or composed
+//                   via the anchor, or advanced direct-anchor)
+//   2. Trade      → sign prepare-leg, run any approvals, send each leg in order
+//
+// Everything is honest: quoting, no-route, wrong chain, insufficient balance,
+// signing, per-leg pending, success (with a Blockscout receipt link per leg).
+// A disconnected wallet can never reach a signature. When the route is composed
+// the card NEVER claims atomicity — it states plainly it takes N wallet actions.
+// Styled to the lab design system; the trade/switch button is the ONE primary action.
 import { formatUnits } from "viem";
 import { EXPLORER_BASE_URL } from "@bps/launch-lab";
-import {
-  PRICE_IMPACT_WARN_BPS,
-  TRADE_DECIMALS,
-  useTokenBalances,
-  useTrade,
-  type TradeSide,
-} from "../../../../hooks/lab";
+import { PRICE_IMPACT_WARN_BPS, useTrade, type TradeSide } from "../../../../hooks/lab";
+import type { TradeToken } from "../../../../hooks/lab/use-trade";
 
 const SLIPPAGE_PRESETS: { label: string; bps: number }[] = [
   { label: "0.5%", bps: 50 },
@@ -22,7 +24,7 @@ const SLIPPAGE_PRESETS: { label: string; bps: number }[] = [
   { label: "3%", bps: 300 },
 ];
 
-function fmt(wei: string | bigint, decimals = TRADE_DECIMALS): string {
+function fmt(wei: string | bigint, decimals: number): string {
   try {
     return formatUnits(typeof wei === "bigint" ? wei : BigInt(wei), decimals);
   } catch {
@@ -37,42 +39,118 @@ function pillStyle(active: boolean): React.CSSProperties {
     : {};
 }
 
+/** A row of pay/receive token pills. The anchor sits under an "advanced" toggle. */
+function PayTokenSelector({
+  tokens,
+  anchor,
+  selected,
+  disabled,
+  onSelect,
+  testid,
+}: {
+  tokens: TradeToken[];
+  anchor: TradeToken | null;
+  selected: TradeToken;
+  disabled: boolean;
+  onSelect: (t: TradeToken) => void;
+  testid: string;
+}) {
+  return (
+    <div data-testid={testid}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {tokens.map((t) => (
+          <button
+            key={t.symbol}
+            type="button"
+            data-testid={`paytoken-${t.symbol}`}
+            aria-pressed={selected.address === t.address}
+            disabled={disabled}
+            onClick={() => onSelect(t)}
+            className="lab-pill"
+            style={{ cursor: "pointer", ...pillStyle(selected.address === t.address) }}
+          >
+            {t.symbol}
+          </button>
+        ))}
+      </div>
+      {anchor && (
+        <details
+          className="lab-disclosure"
+          style={{ marginTop: 8 }}
+          data-testid="paytoken-advanced"
+        >
+          <summary style={{ cursor: "pointer" }}>Advanced: route via the market anchor</summary>
+          <p className="lab-muted" style={{ fontSize: 12, margin: "8px 0" }}>
+            {anchor.symbol} is the market&apos;s internal anchor asset. Most users pay and receive
+            ETH, WETH, or USDG.
+          </p>
+          <button
+            type="button"
+            data-testid={`paytoken-${anchor.symbol}`}
+            aria-pressed={selected.address === anchor.address}
+            disabled={disabled}
+            onClick={() => onSelect(anchor)}
+            className="lab-pill"
+            style={{ cursor: "pointer", ...pillStyle(selected.address === anchor.address) }}
+          >
+            {anchor.symbol}
+          </button>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export function TradeCard({
   address,
   tokenSymbol = "token",
   explorer = EXPLORER_BASE_URL,
+  anchorSymbol,
+  anchorAddress,
+  anchorDecimals = 18,
   onTraded,
 }: {
   address: string;
   tokenSymbol?: string;
   explorer?: string;
+  anchorSymbol?: string;
+  anchorAddress?: string;
+  anchorDecimals?: number;
   onTraded?: () => void;
 }) {
-  const trade = useTrade(address, onTraded);
-  const balances = useTokenBalances(address);
+  const anchor =
+    anchorSymbol && anchorAddress
+      ? { symbol: anchorSymbol, address: anchorAddress as `0x${string}`, decimals: anchorDecimals }
+      : null;
+  const trade = useTrade(address, { onTraded, anchor });
 
   const {
     side,
     amount,
     slippageBps,
     status,
-    routes,
-    selectedRoute,
-    selectedRouteId,
+    quote,
     txHash,
+    legHashes,
+    legIndex,
+    legCount,
     error,
     isConnected,
     wrongChain,
     amountWei,
+    payTokens,
+    anchorToken,
+    payToken,
+    inputDecimals,
+    outputDecimals,
+    inputBalanceWei,
+    insufficient,
   } = trade;
 
   const isBuy = side === "buy";
-  // Buy spends GOOGL; sell spends the launch token.
-  const sellBalance = isBuy ? balances.googl : balances.token;
-  const sellSymbol = isBuy ? "GOOGL" : tokenSymbol;
-  const outputSymbol = isBuy ? tokenSymbol : "GOOGL";
-
-  const insufficient = sellBalance !== null && amountWei > 0n && amountWei > sellBalance.balance;
+  // Input asset: buy pays the pay token; sell sells the launched token.
+  const inputSymbol = isBuy ? payToken.symbol : tokenSymbol;
+  const outputSymbol = isBuy ? tokenSymbol : payToken.symbol;
 
   const busy =
     status === "quoting" ||
@@ -82,8 +160,10 @@ export function TradeCard({
     status === "awaiting-signature" ||
     status === "pending";
 
-  const impactBps = selectedRoute?.priceImpactBps ?? null;
+  const impactBps = quote?.totalPriceImpactBps ?? null;
   const highImpact = impactBps !== null && impactBps >= PRICE_IMPACT_WARN_BPS;
+  const composed = quote?.routeKind === "composed";
+  const multiStep = (quote?.walletActionCount ?? 1) > 1;
 
   return (
     <div data-testid="trade-card">
@@ -114,28 +194,29 @@ export function TradeCard({
         ))}
       </div>
 
-      {/* Connected-wallet balance for the relevant (sell) token */}
-      <div className="lab-kv">
-        <span>{sellSymbol} balance</span>
-        <span className="lab-data" data-testid="wallet-balance">
-          {!isConnected
-            ? "—"
-            : sellBalance
-              ? fmt(sellBalance.balance, sellBalance.decimals)
-              : balances.isLoading
-                ? "…"
-                : "—"}
-        </span>
-      </div>
-
-      {/* Amount + max / fraction shortcuts (sell only) */}
+      {/* -------- INPUT (You pay / You sell) -------- */}
       <label
         className="lab-label"
         htmlFor="trade-amount"
-        style={{ display: "block", margin: "14px 0 6px" }}
+        data-testid="amount-field-label"
+        style={{ display: "block", margin: "4px 0 6px" }}
       >
-        Amount ({sellSymbol})
+        {isBuy ? "You pay" : `You sell (${tokenSymbol})`}
       </label>
+
+      {isBuy && (
+        <div style={{ marginBottom: 8 }}>
+          <PayTokenSelector
+            tokens={payTokens}
+            anchor={anchorToken}
+            selected={payToken}
+            disabled={!isConnected || busy}
+            onSelect={trade.setPayToken}
+            testid="pay-selector"
+          />
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <input
           id="trade-amount"
@@ -147,19 +228,19 @@ export function TradeCard({
           disabled={!isConnected || busy}
           onChange={(e) => trade.setAmount(e.target.value)}
           style={{ flex: 1, fontVariantNumeric: "tabular-nums" }}
+          aria-label={isBuy ? "Amount to pay" : `Amount of ${tokenSymbol} to sell`}
         />
-        {!isBuy && (
-          <button
-            type="button"
-            data-testid="trade-max"
-            className="lab-btn lab-btn--ghost"
-            disabled={!isConnected || busy}
-            onClick={() => void trade.setMaxSell()}
-          >
-            Max
-          </button>
-        )}
+        <button
+          type="button"
+          data-testid="trade-max"
+          className="lab-btn lab-btn--ghost"
+          disabled={!isConnected || busy}
+          onClick={() => void trade.setMax()}
+        >
+          Max
+        </button>
       </div>
+
       {!isBuy && (
         <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
           {[25, 50, 75].map((pct) => (
@@ -169,7 +250,7 @@ export function TradeCard({
               data-testid={`trade-pct-${pct}`}
               className="lab-btn lab-btn--ghost"
               disabled={!isConnected || busy}
-              onClick={() => void trade.setSellFraction(pct)}
+              onClick={() => void trade.setInputFraction(pct)}
               style={{ flex: 1 }}
             >
               {pct}%
@@ -178,8 +259,45 @@ export function TradeCard({
         </div>
       )}
 
+      {/* Connected-wallet balance for the input asset */}
+      <div className="lab-kv" style={{ marginTop: 8 }}>
+        <span>{inputSymbol} balance</span>
+        <span className="lab-data" data-testid="wallet-balance">
+          {!isConnected
+            ? "—"
+            : inputBalanceWei !== null
+              ? fmt(inputBalanceWei, inputDecimals)
+              : "…"}
+        </span>
+      </div>
+
+      {/* -------- OUTPUT (You receive) -------- */}
+      <div style={{ marginTop: 16 }}>
+        <span className="lab-label">You receive</span>
+        {isBuy ? (
+          <div
+            className="lab-field"
+            data-testid="receive-readonly"
+            style={{ display: "flex", alignItems: "center", marginTop: 6, minHeight: 44 }}
+          >
+            {tokenSymbol}
+          </div>
+        ) : (
+          <div style={{ marginTop: 6 }}>
+            <PayTokenSelector
+              tokens={payTokens}
+              anchor={anchorToken}
+              selected={payToken}
+              disabled={!isConnected || busy}
+              onSelect={trade.setPayToken}
+              testid="receive-selector"
+            />
+          </div>
+        )}
+      </div>
+
       {/* Slippage presets + custom */}
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 16 }}>
         <span className="lab-label">Max slippage</span>
         <div
           style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}
@@ -226,18 +344,18 @@ export function TradeCard({
       </div>
 
       {/* Quote result */}
-      {selectedRoute && (
-        <div style={{ marginTop: 14 }} data-testid="quote-result">
+      {quote && (
+        <div style={{ marginTop: 16 }} data-testid="quote-result">
           <div className="lab-kv">
             <span>Expected output</span>
             <span className="lab-data" data-testid="expected-output">
-              {fmt(selectedRoute.buyAmount)} {outputSymbol}
+              {fmt(quote.expectedFinalOutputWei, outputDecimals)} {outputSymbol}
             </span>
           </div>
           <div className="lab-kv">
             <span>Minimum received</span>
             <span className="lab-data" data-testid="minimum-received">
-              {fmt(selectedRoute.minimumBuyAmount)} {outputSymbol}
+              {fmt(quote.minimumFinalOutputWei, outputDecimals)} {outputSymbol}
             </span>
           </div>
           <div className="lab-kv">
@@ -254,46 +372,51 @@ export function TradeCard({
           <div className="lab-kv">
             <span>Pool fee</span>
             <span className="lab-data" data-testid="pool-fee">
-              {selectedRoute.poolFee === null
-                ? "—"
-                : `${(selectedRoute.poolFee / 10_000).toFixed(2)}%`}
+              {quote.poolFeeUnits === null ? "—" : `${(quote.poolFeeUnits / 10_000).toFixed(2)}%`}
             </span>
           </div>
-          <div className="lab-kv">
-            <span>Route</span>
-            <span className="lab-data" data-testid="selected-route">
-              {selectedRoute.routeLabel}
-            </span>
-          </div>
-
-          {/* Route switch when more than one executable route exists — collapsed. */}
-          {routes.length > 1 && (
-            <details className="lab-disclosure" style={{ marginTop: 10 }}>
-              <summary style={{ cursor: "pointer" }}>Routing options ({routes.length})</summary>
-              <div
-                style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}
-                data-testid="route-switch"
-              >
-                {routes.map((r) => (
-                  <button
-                    key={r.routeId}
-                    type="button"
-                    data-testid={`route-${r.routeId}`}
-                    aria-pressed={selectedRouteId === r.routeId}
-                    onClick={() => trade.selectRoute(r.routeId)}
-                    className="lab-pill"
-                    style={{ cursor: "pointer", ...pillStyle(selectedRouteId === r.routeId) }}
-                  >
-                    {r.routeLabel} · {fmt(r.buyAmount)}
-                  </button>
-                ))}
-              </div>
-            </details>
+          {quote.zeroExFeeNote && (
+            <div className="lab-kv">
+              <span>0x fee</span>
+              <span className="lab-data" data-testid="zeroex-fee-note">
+                {quote.zeroExFeeNote}
+              </span>
+            </div>
           )}
 
-          {selectedRoute.warnings.length > 0 && (
+          {/* Route/legs live ONLY inside this collapsed disclosure. The summary is
+              always visible and states the step count honestly — never atomic when
+              the route is composed. */}
+          <details className="lab-disclosure" style={{ marginTop: 10 }} data-testid="route-details">
+            <summary style={{ cursor: "pointer" }} data-testid="route-summary">
+              Route details —{" "}
+              {multiStep
+                ? `${quote.walletActionCount} steps (via ${quote.anchorSymbol}), not one-click`
+                : quote.routeKind === "direct-anchor"
+                  ? `direct via ${quote.anchorSymbol}`
+                  : "1 step (single transaction)"}
+            </summary>
+            <div style={{ marginTop: 8 }} data-testid="route-legs">
+              {multiStep && (
+                <p style={{ color: "var(--warn)", fontSize: 13, margin: "0 0 8px" }}>
+                  This trade routes via {quote.anchorSymbol} and takes {quote.walletActionCount}{" "}
+                  separate wallet actions — it is not a single one-click swap.
+                </p>
+              )}
+              <ol style={{ margin: 0, paddingLeft: "1.2rem" }}>
+                {quote.legs.map((leg, i) => (
+                  <li key={`${leg.label}-${i}`} style={{ fontSize: 13, marginBottom: 4 }}>
+                    {leg.label}
+                    {leg.estimated ? " (estimated until the prior step confirms)" : ""}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </details>
+
+          {quote.warnings.length > 0 && (
             <ul data-testid="route-warnings" style={{ margin: "8px 0 0", paddingLeft: "1.1rem" }}>
-              {selectedRoute.warnings.map((w) => (
+              {quote.warnings.map((w) => (
                 <li key={w} style={{ color: "var(--warn)", fontSize: 13 }}>
                   {w}
                 </li>
@@ -303,7 +426,7 @@ export function TradeCard({
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions — exactly ONE primary button (trade, or switch when wrong chain). */}
       <div style={{ marginTop: 16 }}>
         {!isConnected ? (
           <p className="lab-muted" data-testid="trade-connect" style={{ fontSize: 13 }}>
@@ -327,19 +450,19 @@ export function TradeCard({
               className="lab-btn lab-btn--ghost"
               style={{ width: "100%" }}
               disabled={busy || amountWei <= 0n}
-              onClick={() => void trade.quote()}
+              onClick={() => void trade.getQuote()}
             >
-              {status === "quoting" ? "Quoting…" : selectedRoute ? "Refresh quote" : "Get quote"}
+              {status === "quoting" ? "Quoting…" : quote ? "Refresh quote" : "Get quote"}
             </button>
             <button
               type="button"
               data-testid="trade-button"
               className="lab-btn lab-btn--primary"
               style={{ width: "100%", marginTop: 8 }}
-              disabled={busy || !selectedRoute || insufficient || amountWei <= 0n}
+              disabled={busy || !quote || insufficient || amountWei <= 0n}
               onClick={() => void trade.prepareAndTrade()}
             >
-              {tradeButtonLabel(status, isBuy, insufficient)}
+              {tradeButtonLabel(status, isBuy, insufficient, composed, legIndex, legCount)}
             </button>
           </>
         )}
@@ -351,27 +474,38 @@ export function TradeCard({
         insufficient={insufficient}
         error={error}
         txHash={txHash}
+        legHashes={legHashes}
+        legIndex={legIndex}
+        legCount={legCount}
         explorer={explorer}
       />
     </div>
   );
 }
 
-function tradeButtonLabel(status: string, isBuy: boolean, insufficient: boolean): string {
+function tradeButtonLabel(
+  status: string,
+  isBuy: boolean,
+  insufficient: boolean,
+  composed: boolean,
+  legIndex: number,
+  legCount: number,
+): string {
   if (insufficient) return "Insufficient balance";
   switch (status) {
     case "needs-approval":
     case "approving":
       return "Approving…";
     case "simulating":
-      return "Simulating…";
+      return "Preparing…";
     case "awaiting-signature":
       return "Confirm in wallet…";
     case "pending":
-      return "Pending confirmation…";
+      return legCount > 1 ? `Step ${legIndex}/${legCount} pending…` : "Pending confirmation…";
     case "success":
       return "Traded";
     default:
+      if (composed) return isBuy ? "Buy (2 steps)" : "Sell (2 steps)";
       return isBuy ? "Buy" : "Sell";
   }
 }
@@ -381,12 +515,18 @@ function StatusLine({
   insufficient,
   error,
   txHash,
+  legHashes,
+  legIndex,
+  legCount,
   explorer,
 }: {
   status: string;
   insufficient: boolean;
   error: string | null;
   txHash: string | null;
+  legHashes: string[];
+  legIndex: number;
+  legCount: number;
   explorer: string;
 }) {
   return (
@@ -401,12 +541,17 @@ function StatusLine({
       )}
       {status === "no-route" && (
         <p data-testid="no-route" style={{ color: "var(--warn)", fontSize: 13, margin: 0 }}>
-          No Launch Lab route is available for this market.
+          No Launch Lab route is available for this pay/receive asset.
         </p>
       )}
       {(status === "needs-approval" || status === "approving") && (
         <p className="lab-muted" data-testid="approval-state" style={{ fontSize: 13, margin: 0 }}>
           Approving token allowance in your wallet…
+        </p>
+      )}
+      {status === "simulating" && (
+        <p className="lab-muted" data-testid="simulating-state" style={{ fontSize: 13, margin: 0 }}>
+          Preparing and simulating the transaction…
         </p>
       )}
       {status === "awaiting-signature" && (
@@ -416,32 +561,53 @@ function StatusLine({
       )}
       {status === "pending" && (
         <p className="lab-muted" data-testid="pending-state" style={{ fontSize: 13, margin: 0 }}>
-          Transaction submitted; awaiting confirmation…
+          {legCount > 1
+            ? `Step ${legIndex} of ${legCount} submitted; awaiting confirmation…`
+            : "Transaction submitted; awaiting confirmation…"}
         </p>
       )}
-      {status === "success" && txHash && (
-        <p data-testid="trade-success" style={{ color: "var(--good)", fontSize: 13, margin: 0 }}>
-          Trade confirmed.{" "}
-          <a
-            href={`${explorer}/tx/${txHash}`}
-            target="_blank"
-            rel="noreferrer"
-            data-testid="trade-tx-link"
-          >
-            View receipt ↗
-          </a>
-        </p>
+      {status === "success" && (
+        <div data-testid="trade-success" style={{ color: "var(--good)", fontSize: 13 }}>
+          <p style={{ margin: 0 }}>Trade confirmed.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
+            {legHashes.map((h, i) => (
+              <a
+                key={h}
+                href={`${explorer}/tx/${h}`}
+                target="_blank"
+                rel="noreferrer"
+                data-testid={`trade-tx-link-${i}`}
+              >
+                {legHashes.length > 1 ? `Step ${i + 1} receipt ↗` : "View receipt ↗"}
+              </a>
+            ))}
+            {legHashes.length === 0 && txHash && (
+              <a
+                href={`${explorer}/tx/${txHash}`}
+                target="_blank"
+                rel="noreferrer"
+                data-testid="trade-tx-link-0"
+              >
+                View receipt ↗
+              </a>
+            )}
+          </div>
+        </div>
       )}
       {status === "failure" && error && (
         <p data-testid="trade-error" style={{ color: "var(--bad)", fontSize: 13, margin: 0 }}>
           {error}
         </p>
       )}
-      {status !== "failure" && status !== "success" && !insufficient && error && (
-        <p data-testid="trade-note" style={{ color: "var(--warn)", fontSize: 13, margin: 0 }}>
-          {error}
-        </p>
-      )}
+      {status !== "failure" &&
+        status !== "success" &&
+        status !== "no-route" &&
+        !insufficient &&
+        error && (
+          <p data-testid="trade-note" style={{ color: "var(--warn)", fontSize: 13, margin: 0 }}>
+            {error}
+          </p>
+        )}
     </div>
   );
 }

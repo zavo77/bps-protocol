@@ -302,10 +302,20 @@ export function TokenMarketView({ address }: { address: string }) {
         <aside style={{ display: "grid", gap: 20, minWidth: 0 }}>
           <section className="lab-card" data-testid="trade-section">
             <h2 className="lab-h2">trade</h2>
+            <p
+              className="lab-label"
+              data-testid="trade-anchor-framing"
+              style={{ marginBottom: 12 }}
+            >
+              Market anchored to {snap.anchor.symbol}
+            </p>
             <TradeCard
               address={snap.tokenAddress}
               tokenSymbol={snap.tokenSymbol}
               explorer={explorer}
+              anchorSymbol={snap.anchor.symbol}
+              anchorAddress={snap.anchor.address}
+              anchorDecimals={snap.anchor.decimals}
               onTraded={handleTraded}
             />
             <p className="lab-muted" style={{ fontSize: 13, marginTop: 14 }}>

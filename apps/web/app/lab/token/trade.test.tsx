@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { NATIVE_ETH, PAYMENT_TOKENS } from "@bps/launch-lab";
 import { TradeCard } from "./[tokenAddress]/TradeCard";
 import { PriceChart } from "./[tokenAddress]/PriceChart";
 
@@ -18,6 +19,7 @@ const h = vi.hoisted(() => ({
   },
   fns: {
     readContract: vi.fn(),
+    getBalance: vi.fn(),
     waitForTransactionReceipt: vi.fn(),
     switchChainAsync: vi.fn(),
     writeContractAsync: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock("wagmi", () => ({
   useChainId: () => h.state.chainId,
   usePublicClient: () => ({
     readContract: h.fns.readContract,
+    getBalance: h.fns.getBalance,
     waitForTransactionReceipt: h.fns.waitForTransactionReceipt,
   }),
   useSwitchChain: () => ({ switchChainAsync: h.fns.switchChainAsync }),
@@ -41,58 +44,133 @@ vi.mock("wagmi", () => ({
 
 const TOKEN = "0x1111111111111111111111111111111111111111";
 const TAKER = "0x1000000000000000000000000000000000000001";
-const GOOGL = "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3";
-const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 const ROUTER = "0x2222222222222222222222222222222222222222";
+const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+const NVDA = "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC";
+const USDG = PAYMENT_TOKENS.find((t) => t.symbol === "USDG")!.address;
 
 const WEI = (n: number) => (BigInt(n) * 10n ** 18n).toString();
 
-const BUY_QUOTE = {
-  routes: [
+/** One-step buy: pay ETH → receive PRINT, single 0x transaction. */
+const ONE_STEP_BUY = {
+  marketToken: TOKEN,
+  side: "buy",
+  anchorSymbol: "GOOGL",
+  anchorAddress: "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3",
+  userInputToken: NATIVE_ETH,
+  userOutputToken: TOKEN,
+  routeKind: "one-step",
+  legs: [
     {
-      routeId: "bpsDirectV4",
-      routeLabel: "BPS Direct",
-      sellToken: GOOGL,
-      buyToken: TOKEN,
-      sellAmount: WEI(10),
-      buyAmount: WEI(5000),
-      minimumBuyAmount: WEI(4950),
-      estimatedGas: "500000",
-      priceImpactBps: 120,
-      poolFee: 10_000,
-      allowanceTarget: PERMIT2,
+      kind: "zeroEx",
+      label: "0x: ETH → PRINT",
+      inputToken: NATIVE_ETH,
+      outputToken: TOKEN,
+      inputAmountWei: WEI(1),
+      expectedOutputWei: WEI(5000),
+      minimumOutputWei: WEI(4950),
       transactionTarget: ROUTER,
       transactionData: "0x",
-      transactionValue: "0",
-      quoteBlock: "100",
-      quoteExpiry: Date.now() + 60_000,
-      warnings: [],
+      transactionValue: WEI(1),
+      allowanceTarget: null,
+      estimated: false,
     },
   ],
-  selected: "bpsDirectV4",
+  expectedFinalOutputWei: WEI(5000),
+  minimumFinalOutputWei: WEI(4950),
+  totalPriceImpactBps: 120,
+  poolFeeUnits: 10_000,
+  zeroExFeeNote: null,
+  walletActionCount: 1,
+  approvalsRequired: [],
+  quoteExpiry: Date.now() + 60_000,
+  warnings: [],
+};
+
+/** Composed buy: ETH → NVDA (0x), then NVDA → PRINT (BPS Direct). Two wallet actions. */
+const COMPOSED_BUY = {
+  marketToken: TOKEN,
   side: "buy",
-  tokenAddress: TOKEN,
-  taker: TAKER,
+  anchorSymbol: "NVDA",
+  anchorAddress: NVDA,
+  userInputToken: NATIVE_ETH,
+  userOutputToken: TOKEN,
+  routeKind: "composed",
+  legs: [
+    {
+      kind: "zeroEx",
+      label: "0x: ETH → NVDA",
+      inputToken: NATIVE_ETH,
+      outputToken: NVDA,
+      inputAmountWei: WEI(1),
+      expectedOutputWei: WEI(2),
+      minimumOutputWei: WEI(2),
+      transactionTarget: ROUTER,
+      transactionData: "0x",
+      transactionValue: WEI(1),
+      allowanceTarget: null,
+      estimated: false,
+    },
+    {
+      kind: "bpsDirect",
+      label: "BPS Direct: NVDA → PRINT",
+      inputToken: NVDA,
+      outputToken: TOKEN,
+      inputAmountWei: WEI(2),
+      expectedOutputWei: WEI(5000),
+      minimumOutputWei: WEI(4950),
+      transactionTarget: ROUTER,
+      transactionData: null,
+      transactionValue: "0",
+      allowanceTarget: PERMIT2,
+      estimated: true,
+    },
+  ],
+  expectedFinalOutputWei: WEI(5000),
+  minimumFinalOutputWei: WEI(4950),
+  totalPriceImpactBps: 200,
+  poolFeeUnits: 10_000,
+  zeroExFeeNote: null,
+  walletActionCount: 2,
+  approvalsRequired: [{ token: NVDA, spender: PERMIT2 }],
+  quoteExpiry: Date.now() + 60_000,
+  warnings: [],
 };
 
 function jsonResponse(status: number, body: unknown): Response {
   return { status, json: async () => body } as unknown as Response;
 }
 
+interface Call {
+  url: string;
+  body: Record<string, unknown> | null;
+}
 type Handler = (url: string, init?: RequestInit) => Response;
 
-function stubFetch(handler: Handler): string[] {
-  const calls: string[] = [];
+function stubFetch(handler: Handler): Call[] {
+  const calls: Call[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-      calls.push(url);
+      let body: Record<string, unknown> | null = null;
+      if (init?.body && typeof init.body === "string") {
+        try {
+          body = JSON.parse(init.body);
+        } catch {
+          body = null;
+        }
+      }
+      calls.push({ url, body });
       return handler(url, init);
     }),
   );
   return calls;
+}
+
+function bodyFor(calls: Call[], fragment: string): Record<string, unknown> | null {
+  return calls.find((c) => c.url.includes(fragment))?.body ?? null;
 }
 
 function wrap(ui: ReactNode) {
@@ -105,58 +183,140 @@ beforeEach(() => {
   h.state.isConnected = true;
   h.state.chainId = 4663;
   for (const fn of Object.values(h.fns)) fn.mockReset();
-  // Sensible default balances so useTokenBalances resolves to real bigints.
   h.fns.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
     if (functionName === "decimals") return 18;
     if (functionName === "balanceOf") return 1000n * 10n ** 18n;
     return 0n;
   });
+  h.fns.getBalance.mockResolvedValue(1000n * 10n ** 18n);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("TradeCard — quoting", () => {
-  it("renders expected output, minimum received, and the selected route for a buy quote", async () => {
+describe("TradeCard — pay/receive assets (ETH / WETH / USDG)", () => {
+  it("buy with ETH selected quotes inputToken=NATIVE_ETH, output=marketToken and renders expected output", async () => {
     const user = userEvent.setup();
-    stubFetch((url) => {
-      if (url.includes("/api/lab/quote")) return jsonResponse(200, { ok: true, data: BUY_QUOTE });
+    const calls = stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_BUY });
       return jsonResponse(404, { ok: false, error: "not found", code: "NOT_FOUND" });
     });
 
-    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" />);
+    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" />);
 
-    await user.type(screen.getByTestId("trade-amount"), "10");
+    await user.type(screen.getByTestId("trade-amount"), "1");
     await user.click(screen.getByTestId("quote-button"));
 
     await waitFor(() => expect(screen.getByTestId("expected-output")).toHaveTextContent(/5000/));
     expect(screen.getByTestId("expected-output")).toHaveTextContent(/PRINT/);
     expect(screen.getByTestId("minimum-received")).toHaveTextContent(/4950/);
-    expect(screen.getByTestId("selected-route")).toHaveTextContent(/BPS Direct/);
-    expect(screen.getByTestId("pool-fee")).toHaveTextContent(/1\.00%/);
     expect(screen.getByTestId("price-impact")).toHaveTextContent(/1\.20%/);
+    expect(screen.getByTestId("pool-fee")).toHaveTextContent(/1\.00%/);
+
+    const body = bodyFor(calls, "/api/lab/quote");
+    expect(body).not.toBeNull();
+    expect(body!.side).toBe("buy");
+    expect(body!.inputToken).toBe(NATIVE_ETH);
+    expect(body!.outputToken).toBe(TOKEN);
+    expect(body!.marketToken).toBe(TOKEN);
   });
 
-  it("shows the no-route state when the quote endpoint says the token is not a lab market", async () => {
+  it("buy with USDG selected quotes inputToken=USDG address", async () => {
     const user = userEvent.setup();
-    stubFetch((url) => {
+    const calls = stubFetch((url) => {
       if (url.includes("/api/lab/quote"))
-        return jsonResponse(404, {
-          ok: false,
-          error: "That token is not a Launch Lab GOOGL market.",
-          code: "NOT_A_LAB_MARKET",
+        return jsonResponse(200, { ok: true, data: ONE_STEP_BUY });
+      return jsonResponse(404, { ok: false, error: "not found", code: "NOT_FOUND" });
+    });
+
+    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" />);
+
+    await user.click(screen.getByTestId("paytoken-USDG"));
+    await user.type(screen.getByTestId("trade-amount"), "10");
+    await user.click(screen.getByTestId("quote-button"));
+
+    await waitFor(() => expect(bodyFor(calls, "/api/lab/quote")).not.toBeNull());
+    const body = bodyFor(calls, "/api/lab/quote");
+    expect(body!.side).toBe("buy");
+    expect(body!.inputToken).toBe(USDG);
+    expect(body!.outputToken).toBe(TOKEN);
+  });
+
+  it("sell quotes inputToken=marketToken and outputToken=the chosen pay asset (ETH)", async () => {
+    const user = userEvent.setup();
+    const calls = stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, {
+          ok: true,
+          data: {
+            ...ONE_STEP_BUY,
+            side: "sell",
+            userInputToken: TOKEN,
+            userOutputToken: NATIVE_ETH,
+          },
         });
       return jsonResponse(404, { ok: false, error: "not found", code: "NOT_FOUND" });
     });
 
-    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" />);
+    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" />);
 
-    await user.type(screen.getByTestId("trade-amount"), "10");
+    await user.click(screen.getByTestId("tab-sell"));
+    // Sell → the "You receive" side is the pay-asset selector; ETH is the default.
+    expect(screen.getByTestId("receive-selector")).toBeInTheDocument();
+    expect(screen.getByTestId("paytoken-ETH")).toHaveAttribute("aria-pressed", "true");
+
+    await user.type(screen.getByTestId("trade-amount"), "100");
     await user.click(screen.getByTestId("quote-button"));
 
-    await waitFor(() => expect(screen.getByTestId("no-route")).toBeInTheDocument());
-    expect(screen.getByTestId("no-route")).toHaveTextContent(/No Launch Lab route/i);
+    await waitFor(() => expect(bodyFor(calls, "/api/lab/quote")).not.toBeNull());
+    const body = bodyFor(calls, "/api/lab/quote");
+    expect(body!.side).toBe("sell");
+    expect(body!.inputToken).toBe(TOKEN);
+    expect(body!.outputToken).toBe(NATIVE_ETH);
+  });
+
+  it("the primary amount field is never labeled with the anchor symbol", async () => {
+    stubFetch(() => jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" }));
+
+    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" />);
+
+    const label = screen.getByTestId("amount-field-label");
+    expect(label).toHaveTextContent(/you pay/i);
+    expect(label).not.toHaveTextContent("NVDA");
+    // The amount input's accessible name must not carry the anchor symbol either.
+    expect(screen.getByTestId("trade-amount")).not.toHaveAccessibleName(/NVDA/);
+  });
+});
+
+describe("TradeCard — honesty about composed routes", () => {
+  it("a composed (2-step) route shows the step count and 'not one-click' with route details collapsed", async () => {
+    const user = userEvent.setup();
+    stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: COMPOSED_BUY });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" anchorAddress={NVDA} />,
+    );
+
+    await user.type(screen.getByTestId("trade-amount"), "1");
+    await user.click(screen.getByTestId("quote-button"));
+
+    await waitFor(() => expect(screen.getByTestId("route-details")).toBeInTheDocument());
+    // Route/legs are disclosed only inside a collapsed <details>.
+    expect(screen.getByTestId("route-details")).not.toHaveAttribute("open");
+    // The always-visible summary is honest: 2 steps, via the anchor, not one-click.
+    const summary = screen.getByTestId("route-summary");
+    expect(summary).toHaveTextContent(/2 steps/);
+    expect(summary).toHaveTextContent(/via NVDA/);
+    expect(summary).toHaveTextContent(/not one-click/i);
+    // The primary button never implies a single atomic swap.
+    expect(screen.getByTestId("trade-button")).toHaveTextContent(/2 steps/);
+    expect(screen.queryByText(/atomic/i)).toBeNull();
   });
 });
 
@@ -170,7 +330,7 @@ describe("TradeCard — sell shortcuts", () => {
     });
     stubFetch(() => jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" }));
 
-    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" />);
+    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" />);
 
     await user.click(screen.getByTestId("tab-sell"));
     await user.click(screen.getByTestId("trade-max"));
@@ -182,30 +342,28 @@ describe("TradeCard — sell shortcuts", () => {
 });
 
 describe("TradeCard — safety gates", () => {
-  it("a disconnected wallet cannot reach signing (no /trade/prepare request)", async () => {
+  it("a disconnected wallet cannot reach signing (no quote or prepare-leg request)", async () => {
     h.state.isConnected = false;
     h.state.address = undefined;
     const calls = stubFetch(() => jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" }));
 
-    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" />);
+    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" />);
 
     expect(screen.getByTestId("trade-connect")).toBeInTheDocument();
-    // No trade/quote action buttons are rendered while disconnected.
     expect(screen.queryByTestId("trade-button")).not.toBeInTheDocument();
     expect(screen.queryByTestId("quote-button")).not.toBeInTheDocument();
-    expect(calls.some((u) => u.includes("/api/lab/trade/prepare"))).toBe(false);
-    expect(calls.some((u) => u.includes("/api/lab/quote"))).toBe(false);
+    expect(calls.some((c) => c.url.includes("/api/lab/trade/prepare-leg"))).toBe(false);
+    expect(calls.some((c) => c.url.includes("/api/lab/quote"))).toBe(false);
   });
 
   it("shows the switch-chain control when connected to the wrong chain", async () => {
     h.state.chainId = 1;
     stubFetch(() => jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" }));
 
-    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" />);
+    wrap(<TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" />);
 
     const switchBtn = screen.getByTestId("switch-chain");
     expect(switchBtn).toHaveTextContent(/Switch to Robinhood Chain/i);
-    // The trade button is replaced by the switch control while on the wrong chain.
     expect(screen.queryByTestId("trade-button")).not.toBeInTheDocument();
   });
 });

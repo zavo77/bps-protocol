@@ -146,8 +146,10 @@ export async function POST(req: Request): Promise<Response> {
       minimumOutputWei = q.minimumBuyAmount;
     }
 
-    // Balance check (native ETH via getBalance; ERC-20 via balanceOf).
+    // Balance check. For native ETH the tx `value` carries the amount, so the
+    // requirement is `value` (== amountIn); for ERC-20 it is amountIn (value 0).
     const isNativeInput = inputToken.toLowerCase() === NATIVE_ETH.toLowerCase();
+    const required = isNativeInput ? value : amountIn;
     const balance = isNativeInput
       ? await client.getBalance({ address: taker })
       : ((await client.readContract({
@@ -156,7 +158,7 @@ export async function POST(req: Request): Promise<Response> {
           functionName: "balanceOf",
           args: [taker],
         })) as bigint);
-    if (balance < amountIn + (isNativeInput ? value : 0n)) {
+    if (balance < required) {
       return err("INSUFFICIENT_BALANCE", "Wallet balance is below the trade amount.", 409);
     }
 
