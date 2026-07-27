@@ -7,6 +7,51 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-27 — STAGE A (step 1): guard deployment verified + executor runtime hash derived + launcher repaired
+
+- **Type:** Read-only on-chain verification + offline bytecode analysis + repair of the ephemeral (out-of-repo)
+  Rabby launcher. **NO signing, broadcast, deploy, fund, Safe transaction, approval, transfer, swap, settlement,
+  unpause, or external contact by Claude; no private key/mnemonic/RPC/API secret read or exposed.** Repo change
+  is continuity/docs ONLY (HANDOVER.md + these continuity files); NO source/contract/bundle change. Start HEAD 5f71acc.
+- **Guard DEPLOYED + independently verified:** the founder broadcast the guard CREATE. ChainlinkSettlementPriceGuard
+  live at **0x57538680194D9E15Ba78bf243B10B440f663078d**, tx **0xc3095c2ed7d4b8365dde2b6a7d76220a75806c552e4f3e17361fa2aedbb4256f**,
+  deployer 0x7116...2ba2 nonce 1, block 20167604 (2026-07-26T20:44:17Z), gasUsed 1,121,401, value 0, to null,
+  status success — all confirmed via read-only RPC.
+- **CRITICAL CORRECTION (immutable-resolved vs template runtime hashes):** Foundry `deployedBytecode.object` is a
+  TEMPLATE with zeroed immutable placeholders, so the bundle's `runtimeBytecodeHash` (guard 0x4c5859...92e8,
+  executor 0x16c8af...0908) is the PRE-IMMUTABLE hash and can NEVER equal an on-chain runtime that has immutables.
+  Immutable-RESOLVED runtime hashes: **guard 0xfcb2694b60737532d4d44ede77750068cfb0c0756263c1aaceede57fc74857f4**
+  (== live), **executor 0xf864233b76b77d05fd95250a3641839941fc00fc4aed3ac736458be957273a8d** (derived; not yet deployed).
+- **Guard live==frozen proof (offline):** paris rebuild reproduces the bundle exactly (guard creation 0x9385b6...0b34 /
+  runtime template 0x4c5859...92e8 both match). Masked byte-compare of the paris template vs the live runtime: every
+  difference is confined to the 14 solc immutable reference ranges (nothing else differs; equal length 4485 B). Each of
+  the 14 immutables is consistent across all its reference sites and equals the independently-computed expected value —
+  frozen constructor args (WETH/NVDA/ETH-feed/NVDA-feed, sequencer=0, grace=0, maxAges=900/900) plus live-read derived
+  values (ETH/USD & RHNVDA/USD feed decimals=8, WETH/NVDA token decimals=18, feed description hashes
+  keccak("ETH / USD")=0x62ddc8...1777, keccak("RHNVDA / USD")=0xf4d5d0...8b49). All 14 public immutable getters match.
+  Reconstruct(template + expected immutables) hashes to exactly the live runtime.
+- **Executor expected runtime hash derived offline (two agreeing methods):** (a) AST-splice — bundle template + solc
+  immutableReferences with weth=0x0Bd7...AD73, stockToken=0xd060...9EEC, registry=0x71a1...687E (controller Safe is NOT
+  immutable); (b) read-only eth_call in contract-creation form against live mainnet state. Both == 0xf864233b...273a8d
+  (9256 B), differ from template 0x16c8af...0908. The simulation also confirms the executor constructor does not revert
+  against live state.
+- **Pre-executor chain recheck (read-only):** deployer latest nonce 2, pending nonce 2, guard code present, executor
+  address 0x17e0...f84C empty, balance 427902428602000 wei (~0.000428 ETH), gasPrice 0.048972 gwei — sufficient for the
+  executor deploy (~3x headroom).
+- **Ephemeral launcher repaired** (OS temp %TEMP%/bps-stage-a-launcher/server.mjs; NOT in repo; sha256
+  d2c5d5d3bfd18e5cd9cce160335af82f3ea85d6fac9d1ffa72dc1eb4d5ebe731): now EXECUTOR-ONLY (guard already deployed);
+  post-deploy validation compares the deployed code hash to the immutable-RESOLVED hashes (was comparing to the
+  pre-immutable template — would have failed every deploy and falsely disabled the executor); preflight enforces the
+  founder recheck (latest & pending nonce==2, guard present AND live runtime hash==resolved guard hash, executor empty,
+  balance>=gas*price); binds 127.0.0.1:8799, no key, single eth_sendTransaction, read-only RPC allowlist, server-side
+  viem keccak, startup self-checks. Smoke-tested read-only (page + /keccak + negative paths) then STOPPED. Broadcast
+  NOT performed — the human restarts it to broadcast the single executor CREATE.
+- **Governance unchanged:** PCE-1 authorizes only guard+executor deploy+verify; NO Safe config/unpause/fund/approve/
+  quote/settle (each later stage needs a separate go-signal). B-1 OPEN, B-2/D-23 COUNSEL-PENDING, D-24 in force for
+  production. Executor will deploy PAUSED / fail-closed.
+- **Continuity gate:** TRIGGERED (live deployment verified + corrected runtime-hash understanding + repaired execution
+  tool). Updated HANDOVER.md, CURRENT_STATE.json, CHANGELOG.md. Branch master, HEAD 5f71acc (unchanged; docs uncommitted).
+
 ## 2026-07-26 — TASK 10K-10: private canary execution-bundle finalization (PCE-1)
 
 - **Type:** Offline/read-only technical finalization + reproducible build-config pin + non-broadcast rehearsal

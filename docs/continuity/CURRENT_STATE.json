@@ -1,28 +1,23 @@
 {
   "schemaVersion": "1.0.0",
-  "updatedUtc": "2026-07-26T13:10:00Z",
+  "updatedUtc": "2026-07-27T05:44:12Z",
   "repositoryPath": "C:\\Projects\\bps-experiment",
   "branch": "master",
-  "head": "02f1a213791fbec7fbe316e5e5ca73c5fa3b4466 (parent of the TASK 10K-10 commit); the commit 'ops(canary): finalize private execution bundle' advances HEAD by one — run 'git rev-parse HEAD' to read the exact new hash.",
+  "head": "5f71acc2ddc178a4aca95a8eae42bf08033389e3 (ops(canary): finalize private execution bundle)",
   "workingTree": {
-    "dirty": false,
-    "note": "TASK 10K-10 committed (foundry.toml [profile.canary] evm pin + offline bundle artifacts + evidence + continuity; NO contract-logic change) as 'ops(canary): finalize private execution bundle'. forge-std v1.9.7 lives in gitignored packages/contracts/lib; run packages/contracts/tool/bootstrap-forge-std.{sh,ps1} on a fresh clone before forge test. Lists below = files this commit changed/added.",
+    "dirty": true,
+    "note": "Only continuity/doc files modified by the Stage-A guard-verification + launcher-repair task (HANDOVER.md + these continuity files). NO source/contract/bundle change. The repaired ephemeral launcher and the scratch paris rebuild live OUTSIDE the repo (in the OS temp dir) and are not tracked. forge-std v1.9.7 lives in gitignored packages/contracts/lib; run packages/contracts/tool/bootstrap-forge-std.{sh,ps1} on a fresh clone before forge test.",
     "modified": [
       "HANDOVER.md",
       "docs/continuity/CURRENT_STATE.json",
-      "docs/continuity/CHANGELOG.md",
-      "packages/contracts/foundry.toml"
+      "docs/continuity/CHANGELOG.md"
     ],
     "deleted": [],
     "untracked": [
-      "docs/audit/BPS_PRIVATE_CANARY_EXECUTION_BUNDLE_2026-07-26.md",
-      "docs/audit/BPS_PRIVATE_CANARY_EXECUTION_BUNDLE_2026-07-26.evidence.json",
-      "packages/contracts/deploy/canary-bundle/unsigned-deployment.json",
-      "packages/contracts/deploy/canary-bundle/unsigned-safe-transactions.json",
-      "packages/contracts/deploy/canary-bundle/verification-manifest.json"
+      "docs/launch-lab/ (pre-existing; not created or modified by this task)"
     ]
   },
-  "phase": "post-canary",
+  "phase": "stage-a-in-progress (guard DEPLOYED+verified; executor NOT yet deployed)",
   "privateCanaryExecutionBundle": {
     "task": "TASK 10K-10",
     "status": "PRIVATE_CANARY_EXECUTION_BUNDLE_READY",
@@ -32,11 +27,20 @@
     "executorRuntimeHash": "0x16c8afa9344bcbef44ceb073368d723ba7fba6f87fb83b74db9a9efded770908",
     "guardCreationHash": "0x9385b6b4bb6a94d3d09a2cd23abf2d449ac481a2c9f62c66ebf900c3eea20b34",
     "guardRuntimeHash": "0x4c5859271a39e5e9b86cff9932b433e292d79ba749ae3e6d66b8403ca5ea92e8",
+    "runtimeHashesArePreImmutableTemplates": "CRITICAL: executorRuntimeHash and guardRuntimeHash above are Foundry deployedBytecode TEMPLATES with ZEROED immutable placeholders. The ON-CHAIN runtime has constructor immutables spliced in, so its keccak DIFFERS. Never compare a deployed runtime against these template hashes — use resolvedRuntimeHashes below.",
+    "resolvedRuntimeHashes": {
+      "guard": "0xfcb2694b60737532d4d44ede77750068cfb0c0756263c1aaceede57fc74857f4",
+      "executor": "0xf864233b76b77d05fd95250a3641839941fc00fc4aed3ac736458be957273a8d",
+      "derivedUtc": "2026-07-27",
+      "methods": "guard: reconstruct(template + solc immutableReferences + frozen args + live-read feed/token values)==LIVE runtime, AND masked byte-compare confirms every live/template diff is confined to immutable ranges; executor: identical AST-splice AND a read-only eth_call creation-simulation against mainnet state — both methods agree."
+    },
     "deployer": "0x7116F2998e625651D310E97919a1c638a7F82ba2",
-    "deployerNonce": 1,
+    "deployerNonceAtBundleGen": 1,
+    "deployerNonceNow": 2,
     "predictedGuard": "0x57538680194D9E15Ba78bf243B10B440f663078d",
     "predictedExecutor": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
-    "predictedValidOnlyWhileNonce": 1,
+    "guardDeployedAtNonce1": true,
+    "executorDeploysAtNonce2": true,
     "maxAllInclusiveExposureUsd": 2.93,
     "exposureCapUsd": 130,
     "usd130CoversLifecycle": true,
@@ -53,6 +57,46 @@
       "packages/contracts/deploy/canary-bundle/unsigned-safe-transactions.json",
       "packages/contracts/deploy/canary-bundle/verification-manifest.json"
     ]
+  },
+  "stageAExecution": {
+    "authorization": "founder 'EXECUTE STAGE A' under PCE-1 — deploy+verify ONLY the frozen guard and executor; NO Safe config, unpause, WETH funding, approval, quote, or settlement.",
+    "guard": {
+      "status": "DEPLOYED_AND_VERIFIED",
+      "address": "0x57538680194D9E15Ba78bf243B10B440f663078d",
+      "deployTx": "0xc3095c2ed7d4b8365dde2b6a7d76220a75806c552e4f3e17361fa2aedbb4256f",
+      "deployerNonce": 1,
+      "block": 20167604,
+      "blockTimeUtc": "2026-07-26T20:44:17Z",
+      "gasUsed": 1121401,
+      "liveRuntimeHash": "0xfcb2694b60737532d4d44ede77750068cfb0c0756263c1aaceede57fc74857f4",
+      "verification": "Read-only RPC: receipt status success, from deployer, contractAddress==predicted, nonce 1, value 0, to null. Live runtime keccak == resolved guard hash. Masked byte-compare vs paris template: every difference confined to solc immutable reference ranges. All 14 immutables (each consistent across its reference sites) equal the frozen constructor args + live-read feed/token values. All 14 public immutable getters match. Reconstructed(template+expected immutables)==live runtime exactly."
+    },
+    "executor": {
+      "status": "NOT_DEPLOYED — expected runtime hash derived offline; awaiting human broadcast via repaired launcher",
+      "predictedAddress": "0x17e060c41d34E89147bBAa1C364f6A6e58d2f84C",
+      "deploysAtNonce": 2,
+      "expectedResolvedRuntimeHash": "0xf864233b76b77d05fd95250a3641839941fc00fc4aed3ac736458be957273a8d",
+      "immutables": {"weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", "stockToken": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC", "registry": "0x71a120CbBf3Ce7cD910a3c50fF77aFc62735687E", "note": "controller (Safe 0x62Ae...5E62) is NOT immutable — it is Ownable storage set at construction."},
+      "derivationCrossCheck": "AST-splice offline == read-only eth_call creation-simulation against live mainnet state == 0xf864233b...273a8d (both agree; differs from template 0x16c8af...0908). Simulation also confirms the executor constructor does not revert against live state."
+    },
+    "preExecutorChainState": {
+      "checkedUtc": "2026-07-27T05:44:12Z",
+      "deployerLatestNonce": 2,
+      "deployerPendingNonce": 2,
+      "guardCodePresent": true,
+      "executorAddressEmpty": true,
+      "deployerBalanceWei": "427902428602000",
+      "gasPriceWei": "48972000",
+      "balanceSufficientForExecutor": true
+    },
+    "launcher": {
+      "location": "OS temp (NOT in repo): %TEMP%/bps-stage-a-launcher/server.mjs",
+      "repairedUtc": "2026-07-27",
+      "sha256": "d2c5d5d3bfd18e5cd9cce160335af82f3ea85d6fac9d1ffa72dc1eb4d5ebe731",
+      "changes": "Now EXECUTOR-ONLY (guard already deployed). Post-deploy runtime validation compares the deployed code hash against the IMMUTABLE-RESOLVED expected hashes (guard 0xfcb2694b..., executor 0xf864233b...), NOT the pre-immutable template hashes (previous defect — would have failed every deploy). Preflight enforces the founder recheck: latest & pending nonce==2, guard present AND its live runtime hash == resolved guard hash, executor empty, balance >= executor gas*price. Binds 127.0.0.1:8799; no key; single eth_sendTransaction; read-only RPC allowlist; server-side viem keccak; startup self-checks (viem, bundle deploy-data, resolved!=template).",
+      "notRunning": "server was smoke-tested read-only then stopped; human restarts it to broadcast the executor",
+      "broadcastPerformed": false
+    }
   },
   "privateCanaryException": {
     "id": "PCE-1",
@@ -104,11 +148,11 @@
     "activatedAsExecutorController": false,
     "note": "Safe deployed + verified (29/29 checks). NOT activated — no GuardedSettlementExecutor exists. Owns/controls nothing. Evidence docs/audit/BPS_SAFE_CONTROLLER_DEPLOYMENT_2026-07-26.*"
   },
-  "latestCompletedMilestone": "TASK 10K-10 — private canary execution-bundle finalization (PCE-1; offline/read-only). KL-1 resolved (evm_version=paris in [profile.canary]); two clean builds byte-identical (executor creation 0xbf0d3b...0fa0 / runtime 0x16c8af...0908; guard creation 0x9385b6...0b34 / runtime 0x4c5859...92e8). Deployer nonce 1; predicted guard 0x5753...078d + executor 0x17e0...f84C (valid only while nonce==1). Offline unsigned bundle generated (deploy/canary-bundle/*). 18-step rehearsal mapped to existing tests; 513 Foundry / 252 rialto pass. Max all-inclusive exposure ~$2.93 vs $130 (~44x headroom). NO sign/broadcast/deploy/fund/Safe-tx. B-1 OPEN, B-2/D-23 COUNSEL-PENDING, D-24 in force; PCE-1 single-use not yet consumed. Status PRIVATE_CANARY_EXECUTION_BUNDLE_READY. Prior: PCE-1 (02f1a21)",
-  "currentTask": "none — PCE-1 execution bundle finalized (offline; PRIVATE_CANARY_EXECUTION_BUNDLE_READY); executor UNDEPLOYED; Safe a verified CANDIDATE controller (not active); B-1/B-2 incomplete; D-24 in force for production; PCE-1 not yet consumed; execution needs a separate founder EXECUTE go-signal",
+  "latestCompletedMilestone": "STAGE A (step 1 of 2) — guard DEPLOYED + independently verified, and executor expected runtime hash derived offline (2026-07-26/27). Guard ChainlinkSettlementPriceGuard live at 0x5753...078d (tx 0xc3095c2e..., nonce 1, block 20167604). CRITICAL CORRECTION: the bundle runtimeBytecodeHash fields (guard 0x4c5859...92e8, executor 0x16c8af...0908) are PRE-IMMUTABLE Foundry templates; the immutable-RESOLVED runtime hashes are guard 0xfcb2694b...857f4 (== live) and executor 0xf864233b...273a8d (derived by two agreeing methods). Live guard proven: masked byte-compare shows every live/template diff confined to solc immutable ranges; all 14 immutables + getters match frozen args + live feed/token reads; reconstruct==live. Ephemeral Rabby launcher repaired to executor-only + immutable-resolved validation. NO Safe config/unpause/fund/approve/quote/settle; executor NOT yet broadcast. Prior: TASK 10K-10 (5f71acc)",
+  "currentTask": "Stage A step 2 pending: executor NOT yet deployed. Repaired launcher (%TEMP%/bps-stage-a-launcher/server.mjs) is ready for the human to broadcast the single executor CREATE at nonce 2; it validates the deployed runtime against the resolved hash 0xf864233b...273a8d. Claude does not broadcast. After broadcast, run read-only Stage-A executor verification + continuity update.",
   "buildReadiness": "CANARY_BUILD_READY_EXECUTION_LOCKED",
-  "runtimeReadiness": "CANARY_NOT_READY (executor undeployed; PCE-1 bundle READY but execution requires a separate go-signal + open NVDA session + fresh live quote + human signatures/broadcasts + deployer gas funding if required)",
-  "nextTask": "(A) PCE-1 private canary ONLY on a separate founder EXECUTE go-signal: the offline bundle is READY (deploy/canary-bundle/* + docs/audit/BPS_PRIVATE_CANARY_EXECUTION_BUNDLE_2026-07-26.*). Remaining execution-time inputs only: deployer gas funding if required, human signatures/broadcasts (deployer EOA 2 CREATEs + 2-of-3 Safe + WETH source), a fresh live Rialto quote, an open NVDA session. Predicted addresses valid only while deployer nonce==1 (nonce change = hard abort + regenerate). Claude does not perform it. (B) Production (still fully gated): B-1 audit, D-23/B-2 counsel, returned ballot, a new D-24-replacing authorization",
+  "runtimeReadiness": "STAGE_A_GUARD_DEPLOYED_EXECUTOR_PENDING (guard live+verified; executor awaiting human broadcast via repaired launcher; NO Safe/unpause/fund/approve/quote/settle authorized — later PCE-1 stages need a separate go-signal + open NVDA session + fresh live quote)",
+  "nextTask": "(A) Stage A step 2: human broadcasts the executor CREATE (nonce 2) via the repaired launcher; then Claude runs read-only executor verification (receipt/addr/nonce/value; deployed runtime hash == 0xf864233b...273a8d; owner==Safe 0x62Ae...5E62; paused==true; weth/stockToken/registry immutables) and updates continuity. Executor deploys PAUSED/fail-closed. (B) Later PCE-1 stages (Safe config, unpause, WETH fund, approve, quote, settle) each require a separate bounded founder go-signal — NOT authorized now. (C) Production (still fully gated): B-1 audit, D-23/B-2 counsel, returned ballot, a new D-24-replacing authorization.",
   "chain": {
     "name": "Robinhood Chain Mainnet",
     "chainId": 4663,
