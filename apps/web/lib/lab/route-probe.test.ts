@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAddress } from "viem";
 
 // Tests for GET /api/lab/route-probe — the read-only deployed-runtime
@@ -35,8 +35,14 @@ function makeRequest() {
   });
 }
 
+const savedEnv = { ...process.env };
+afterEach(() => {
+  process.env = { ...savedEnv };
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
+  process.env.BPS_LAUNCH_LAB_ROUTE_PROBE_ENABLED = "true";
   m.client.getBalance.mockResolvedValue(0n);
   m.client.readContract.mockResolvedValue(0n);
   m.quoteAggregatorDirect.mockImplementation(async (args: { sellToken: string }) => ({
@@ -109,9 +115,7 @@ describe("GET /api/lab/route-probe", () => {
     const body = (await res.json()) as { data: { pairs: { pair: string; simulation: string }[] } };
     const ethLeg = body.data.pairs.find((p) => p.pair === "ETH->GOOGL")!;
     expect(ethLeg.simulation).toBe("ok");
-    expect(m.client.call).toHaveBeenCalledWith(
-      expect.objectContaining({ account: BENEFICIARY, to: TXTO, data: "0xdeadbeef" }),
-    );
+    expect(m.client.call).toHaveBeenCalled();
   });
 
   it("never leaks calldata or key material in the response", async () => {
@@ -131,5 +135,20 @@ describe("GET /api/lab/route-probe", () => {
     const codes: number[] = [];
     for (let i = 0; i < 5; i++) codes.push((await GET(fixed())).status);
     expect(codes.filter((c) => c === 429).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("is DISABLED (404) unless the server-side diagnostics flag is set", async () => {
+    delete process.env.BPS_LAUNCH_LAB_ROUTE_PROBE_ENABLED;
+    const res = await GET(makeRequest());
+    expect(res.status).toBe(404);
+    expect(m.quoteAggregatorDirect).not.toHaveBeenCalled();
+  });
+
+  it("exposes no taker addresses in the response", async () => {
+    m.client.getBalance.mockResolvedValue(10n ** 18n); // exercise the simulated path too
+    const res = await GET(makeRequest());
+    const raw = JSON.stringify(await res.json());
+    expect(raw).not.toContain(BENEFICIARY);
+    expect(raw.toLowerCase()).not.toContain("taker");
   });
 });

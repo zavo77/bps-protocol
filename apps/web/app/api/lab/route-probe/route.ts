@@ -1,19 +1,22 @@
-// GET /api/lab/route-probe — read-only diagnostic proving the DEPLOYED runtime
-// can obtain executable payment↔anchor quotes through the frozen priority chain
-// (Rialto → 1inch → 0x). Exists because the user quote API requires a launched
-// market token, while venue-side liquidity (payment↔anchor) must be verifiable
-// before the first launch and monitorable after.
+// GET /api/lab/route-probe — read-only OPERATOR DIAGNOSTIC, not a product
+// surface. Proves the deployed runtime can obtain executable payment↔anchor
+// quotes through the frozen priority chain (Rialto → 1inch → 0x); the user
+// quote API requires a launched market token, so venue-side liquidity must be
+// verifiable independently.
 //
+// DISABLED unless the server-side diagnostics flag
+// BPS_LAUNCH_LAB_ROUTE_PROBE_ENABLED=true is set (fail-closed 404 otherwise).
 // Fixed founder matrix only (no caller-chosen tokens), tightly rate-limited
 // (venue API quota), and fully sanitized: venue name, amounts, fee bps, spender,
-// and simulation status — never calldata, headers, or any key material. The
-// probe taker is the BPS beneficiary; simulation runs only when that wallet
-// actually holds the input (and allowance for ERC-20s) — otherwise it is
-// reported as not-simulated, since per-user simulation happens at prepare-leg.
+// and simulation status — never calldata, taker addresses, raw venue errors,
+// headers, or any key material. It NEVER submits a transaction: quoting plus
+// read-only eth_call simulation only. The internal probe taker is the BPS
+// beneficiary; simulation runs only when that wallet actually holds the input
+// (and allowance for ERC-20s) — otherwise it is reported as not-simulated,
+// since per-user simulation happens at prepare-leg.
 
 import { erc20Abi, formatUnits, getAddress, type Address } from "viem";
 import {
-  APPROVED_ANCHORS,
   getPaymentToken,
   getAnchorBySymbol,
   NATIVE_ETH,
@@ -68,6 +71,11 @@ function resolveToken(symbol: string): TokenRef | null {
 
 export async function GET(req: Request): Promise<Response> {
   try {
+    // Operator diagnostics flag — fail-closed: without it the route does not
+    // exist as far as the public is concerned.
+    if (process.env.BPS_LAUNCH_LAB_ROUTE_PROBE_ENABLED?.trim() !== "true") {
+      return err("NOT_FOUND", "Not found.", 404);
+    }
     // Tight limit: each call spends venue API quota on 8 quotes.
     if (rateLimited(`routeprobe:${clientKey(req)}`, 3)) {
       return err("RATE_LIMITED", "Too many probe requests.", 429);
@@ -166,13 +174,15 @@ export async function GET(req: Request): Promise<Response> {
         } else {
           simulationNote =
             balance < amount
-              ? "probe taker lacks input balance (per-user simulation runs at prepare-leg)"
-              : "probe taker lacks venue allowance (per-user simulation runs at prepare-leg)";
+              ? "probe wallet lacks input balance (per-user simulation runs at prepare-leg)"
+              : "probe wallet lacks venue allowance (per-user simulation runs at prepare-leg)";
         }
       } catch {
         simulation = "reverted";
       }
 
+      // Response carries NO taker addresses — only venue-public routing facts.
+      void simulationTaker;
       results.push({
         pair: `${sell.symbol}->${buy.symbol}`,
         executable: true,
@@ -185,7 +195,6 @@ export async function GET(req: Request): Promise<Response> {
         nativeNoApproval: sell.native ? reported.allowanceTarget === null : null,
         transactionTarget: reported.transactionTarget,
         simulation,
-        ...(simulationTaker ? { simulationTaker } : {}),
         ...(simulationNote ? { simulationNote } : {}),
       });
     }
@@ -193,7 +202,6 @@ export async function GET(req: Request): Promise<Response> {
     return ok({
       chainId: 4663, // adapters reject any quote not bound to 4663
       priority: ["rialto", "oneInch", "zeroEx"],
-      probeTaker: taker,
       pairs: results,
       checkedAt: new Date().toISOString(),
     });
