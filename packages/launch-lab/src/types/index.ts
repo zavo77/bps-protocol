@@ -2,7 +2,7 @@
 // Claude Design (UI). Breaking changes to this file require updating both lanes.
 // All financial values are bigint (wei/WAD) or fixed-point strings — never floats.
 
-import type { Address, Hex } from 'viem';
+import type { Address, Hex } from "viem";
 
 // ---------------------------------------------------------------------------
 // Chain / fixed configuration
@@ -13,7 +13,7 @@ export const ROBINHOOD_CHAIN_ID = 4663 as const;
 /** WAD = 1e18, the share denominator used by Doppler beneficiaries. */
 export const WAD = 10n ** 18n;
 
-export type FeePresetId = 'BALANCED_1' | 'CREATOR_2' | 'DEGEN_3' | 'DYNAMIC_PROTECTION';
+export type FeePresetId = "BALANCED_1" | "CREATOR_2" | "DEGEN_3" | "DYNAMIC_PROTECTION";
 
 export interface FeePreset {
   id: FeePresetId;
@@ -22,7 +22,7 @@ export interface FeePreset {
   poolFeeUnits: number;
   /** Human display, e.g. "1.00%". */
   displayFee: string;
-  mode: 'static' | 'decay';
+  mode: "static" | "decay";
   /**
    * DYNAMIC_PROTECTION is permanently disabled on chain 4663: the decay
    * multicurve initializer is not deployed there. UI must render it visibly
@@ -36,11 +36,11 @@ export interface FeePreset {
 // Anchor (canonical GOOGL)
 // ---------------------------------------------------------------------------
 
-export type AnchorVerificationStatus = 'unverified' | 'verifying' | 'verified' | 'mismatch';
+export type AnchorVerificationStatus = "unverified" | "verifying" | "verified" | "mismatch";
 
 export interface AnchorVerification {
   status: AnchorVerificationStatus;
-  symbol: 'GOOGL';
+  symbol: "GOOGL";
   /** Checksummed canonical address, fail-closed against the official API. */
   address: Address;
   name: string;
@@ -87,7 +87,7 @@ export interface BeneficiaryEntry {
 // ---------------------------------------------------------------------------
 
 export interface LaunchManifest {
-  platform: 'BPS Launch Lab';
+  platform: "BPS Launch Lab";
   appVersion: string;
   sourceCommit: string;
   chainId: typeof ROBINHOOD_CHAIN_ID;
@@ -102,7 +102,7 @@ export interface LaunchManifest {
   tokenDescriptionHash: Hex;
   tokenImageCid: string;
   tokenUri: string;
-  anchorSymbol: 'GOOGL';
+  anchorSymbol: "GOOGL";
   anchorAddress: Address;
   anchorDecimals: number;
   anchorMultiplier: string;
@@ -113,9 +113,9 @@ export interface LaunchManifest {
   feePreset: FeePresetId;
   exactPoolFeeUnits: number;
   beneficiaries: BeneficiaryEntry[];
-  migrationMode: 'noOp';
-  governanceMode: 'noOp';
-  initializerMode: 'rehype';
+  migrationMode: "noOp";
+  governanceMode: "noOp";
+  initializerMode: "rehype";
   resolvedDopplerModules: Record<string, Address>;
   transactionTarget: Address;
   /** Decimal string; always "0" for create. */
@@ -129,7 +129,7 @@ export interface LaunchManifest {
 // ---------------------------------------------------------------------------
 
 export interface LaunchSimulation {
-  status: 'ok';
+  status: "ok";
   manifestHash: Hex;
   transactionTarget: Address;
   calldataHash: Hex;
@@ -173,7 +173,9 @@ export interface LaunchReceiptResult {
   mismatches: string[];
 }
 
-export type MarketDatum<T> = { available: true; value: T } | { available: false; reason: 'awaiting-indexed-data' | 'unsupported' };
+export type MarketDatum<T> =
+  | { available: true; value: T }
+  | { available: false; reason: "awaiting-indexed-data" | "unsupported" };
 
 export interface MarketSnapshot {
   tokenAddress: Address;
@@ -216,44 +218,40 @@ export interface ProofRecord {
 // UI state enums (Claude Design renders every one of these)
 // ---------------------------------------------------------------------------
 
-export type WalletUiState =
-  | 'disconnected'
-  | 'wrong-chain'
-  | 'unauthorised'
-  | 'connected';
+export type WalletUiState = "disconnected" | "wrong-chain" | "unauthorised" | "connected";
 
 export type CreateFlowState =
-  | 'form-incomplete'
-  | 'form-invalid'
-  | 'image-uploading'
-  | 'metadata-confirmed'
-  | 'anchor-verifying'
-  | 'anchor-verified'
-  | 'anchor-mismatch'
-  | 'simulating'
-  | 'simulation-success'
-  | 'simulation-failure'
-  | 'broadcast-disabled'
-  | 'kill-switch-active'
-  | 'ready-to-launch'
-  | 'awaiting-signature'
-  | 'transaction-pending'
-  | 'confirmation-pending'
-  | 'receipt-decoding'
-  | 'launch-success'
-  | 'launch-mismatch';
+  | "form-incomplete"
+  | "form-invalid"
+  | "image-uploading"
+  | "metadata-confirmed"
+  | "anchor-verifying"
+  | "anchor-verified"
+  | "anchor-mismatch"
+  | "simulating"
+  | "simulation-success"
+  | "simulation-failure"
+  | "broadcast-disabled"
+  | "kill-switch-active"
+  | "ready-to-launch"
+  | "awaiting-signature"
+  | "transaction-pending"
+  | "confirmation-pending"
+  | "receipt-decoding"
+  | "launch-success"
+  | "launch-mismatch";
 
-export type MarketUiState = 'loading' | 'ready' | 'awaiting-indexed-data' | 'error';
+export type MarketUiState = "loading" | "ready" | "awaiting-indexed-data" | "error";
 
 export type TradeUiState =
-  | 'idle'
-  | 'quote-loading'
-  | 'quote-failure'
-  | 'ready'
-  | 'awaiting-signature'
-  | 'pending'
-  | 'success'
-  | 'failure';
+  | "idle"
+  | "quote-loading"
+  | "quote-failure"
+  | "ready"
+  | "awaiting-signature"
+  | "pending"
+  | "success"
+  | "failure";
 
 // ---------------------------------------------------------------------------
 // API envelopes (all /api/lab responses)
@@ -269,7 +267,7 @@ export interface LabPublicConfig {
   defaultFeePreset: FeePresetId;
   feePresets: FeePreset[];
   startingFdvUsd: number;
-  anchorSymbol: 'GOOGL';
+  anchorSymbol: "GOOGL";
   bpsFeeAddress: Address | null;
   explorerBaseUrl: string;
   /** Genesis market facts once launched (from the static registry). */

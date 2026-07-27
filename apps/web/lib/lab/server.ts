@@ -1,7 +1,7 @@
 // Server-only Launch Lab glue: RPC client, auth, and orchestration.
 // Never import from client components. Secrets stay in process.env.
 
-import 'server-only';
+import "server-only";
 import {
   createPublicClient,
   http,
@@ -11,7 +11,7 @@ import {
   verifyMessage,
   type Address,
   type PublicClient,
-} from 'viem';
+} from "viem";
 import {
   requireEnv,
   readServerFlags,
@@ -39,14 +39,14 @@ import {
   type LabPublicConfig,
   type PrepareLaunchPayload,
   type SignedRequest,
-} from '@bps/launch-lab';
+} from "@bps/launch-lab";
 
 export const labChain = defineChain({
   id: CHAIN_ID,
-  name: 'Robinhood Chain',
-  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  rpcUrls: { default: { http: ['https://rpc.mainnet.chain.robinhood.com'] } },
-  blockExplorers: { default: { name: 'Blockscout', url: EXPLORER_BASE_URL } },
+  name: "Robinhood Chain",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } },
+  blockExplorers: { default: { name: "Blockscout", url: EXPLORER_BASE_URL } },
 });
 
 let cachedClient: PublicClient | null = null;
@@ -54,7 +54,7 @@ let cachedClient: PublicClient | null = null;
 /** Server public client over the private RPC (falls back closed, not to public RPC). */
 export function getLabClient(): PublicClient {
   if (cachedClient) return cachedClient;
-  const { ROBINHOOD_CHAIN_RPC_URL } = requireEnv(['ROBINHOOD_CHAIN_RPC_URL'] as const);
+  const { ROBINHOOD_CHAIN_RPC_URL } = requireEnv(["ROBINHOOD_CHAIN_RPC_URL"] as const);
   cachedClient = createPublicClient({ chain: labChain, transport: http(ROBINHOOD_CHAIN_RPC_URL) });
   return cachedClient;
 }
@@ -73,7 +73,7 @@ export function publicConfig(): LabPublicConfig {
     defaultFeePreset: flags.defaultFeePreset,
     feePresets: [...FEE_PRESETS],
     startingFdvUsd: flags.startingFdvUsd,
-    anchorSymbol: 'GOOGL',
+    anchorSymbol: "GOOGL",
     bpsFeeAddress: flags.bpsFeeAddress,
     explorerBaseUrl: EXPLORER_BASE_URL,
     genesis: { launched: GENESIS_MARKET.launched, tokenAddress: GENESIS_MARKET.tokenAddress },
@@ -87,28 +87,33 @@ export function publicConfig(): LabPublicConfig {
  */
 export async function verifySignedRequest(
   req: SignedRequest,
-  expected: { action: SignedRequest['message']['action']; payloadHash: `0x${string}`; host: string },
+  expected: {
+    action: SignedRequest["message"]["action"];
+    payloadHash: `0x${string}`;
+    host: string;
+  },
 ): Promise<Address> {
   const { message, signature } = req;
-  if (message.action !== expected.action) throw new Error('AUTH_ACTION_MISMATCH');
-  if (message.chainId !== CHAIN_ID) throw new Error('AUTH_CHAIN_MISMATCH');
-  if (message.payloadHash !== expected.payloadHash) throw new Error('AUTH_PAYLOAD_MISMATCH');
+  if (message.action !== expected.action) throw new Error("AUTH_ACTION_MISMATCH");
+  if (message.chainId !== CHAIN_ID) throw new Error("AUTH_CHAIN_MISMATCH");
+  if (message.payloadHash !== expected.payloadHash) throw new Error("AUTH_PAYLOAD_MISMATCH");
   const hostOk = message.host === expected.host;
-  if (!hostOk) throw new Error('AUTH_HOST_MISMATCH');
+  if (!hostOk) throw new Error("AUTH_HOST_MISMATCH");
   const now = Date.now();
-  if (message.issuedAt > now + 60_000) throw new Error('AUTH_ISSUED_IN_FUTURE');
-  if (message.expiresAt < now) throw new Error('AUTH_EXPIRED');
-  if (message.expiresAt - message.issuedAt > SIGNATURE_MAX_AGE_MS) throw new Error('AUTH_WINDOW_TOO_LONG');
+  if (message.issuedAt > now + 60_000) throw new Error("AUTH_ISSUED_IN_FUTURE");
+  if (message.expiresAt < now) throw new Error("AUTH_EXPIRED");
+  if (message.expiresAt - message.issuedAt > SIGNATURE_MAX_AGE_MS)
+    throw new Error("AUTH_WINDOW_TOO_LONG");
   const text = canonicalize(message);
   const ok = await verifyMessage({
     address: message.wallet,
     message: text,
     signature: signature as `0x${string}`,
   });
-  if (!ok) throw new Error('AUTH_BAD_SIGNATURE');
+  if (!ok) throw new Error("AUTH_BAD_SIGNATURE");
   const flags = getFlags();
   if (!flags.creatorAllowlist.some((a) => a.toLowerCase() === message.wallet.toLowerCase())) {
-    throw new Error('AUTH_NOT_ALLOWLISTED');
+    throw new Error("AUTH_NOT_ALLOWLISTED");
   }
   return message.wallet;
 }
@@ -129,19 +134,27 @@ export interface PreparedLaunchBundle {
  * build beneficiaries + params, simulate the exact creation, produce the
  * manifest and unsigned transaction bound to the calldata hash.
  */
-export async function prepareLaunch(payload: PrepareLaunchPayload, appVersion: string, sourceCommit: string): Promise<PreparedLaunchBundle> {
+export async function prepareLaunch(
+  payload: PrepareLaunchPayload,
+  appVersion: string,
+  sourceCommit: string,
+): Promise<PreparedLaunchBundle> {
   const flags = getFlags();
-  if (!flags.enabled) throw new Error('LAB_DISABLED');
-  if (!flags.bpsFeeAddress) throw new Error('BPS_BENEFICIARY_UNCONFIGURED');
+  if (!flags.enabled) throw new Error("LAB_DISABLED");
+  if (!flags.bpsFeeAddress) throw new Error("BPS_BENEFICIARY_UNCONFIGURED");
   const preset = getFeePreset(payload.feePreset);
-  if (!preset.enabled) throw new Error('FEE_PRESET_DISABLED');
+  if (!preset.enabled) throw new Error("FEE_PRESET_DISABLED");
 
   const client = getLabClient();
   const anchor = await resolveAnchor(client, { bypassCache: true });
-  if (anchor.status !== 'verified') throw new Error(`ANCHOR_MISMATCH: ${anchor.mismatchReason}`);
+  if (anchor.status !== "verified") throw new Error(`ANCHOR_MISMATCH: ${anchor.mismatchReason}`);
 
   const modules = await resolveAndVerifyModules(client);
-  const bene = buildBeneficiaries(payload.creatorFeeAddress as Address, flags.bpsFeeAddress, modules.airlockOwner);
+  const bene = buildBeneficiaries(
+    payload.creatorFeeAddress as Address,
+    flags.bpsFeeAddress,
+    modules.airlockOwner,
+  );
 
   const params = buildLaunchParams({
     tokenName: payload.tokenName,
@@ -158,7 +171,7 @@ export async function prepareLaunch(payload: PrepareLaunchPayload, appVersion: s
   const sim = await simulateLaunch(client, modules.addresses.airlock as Address, params);
 
   const manifest: LaunchManifest = {
-    platform: 'BPS Launch Lab',
+    platform: "BPS Launch Lab",
     appVersion,
     sourceCommit,
     chainId: CHAIN_ID,
@@ -171,7 +184,7 @@ export async function prepareLaunch(payload: PrepareLaunchPayload, appVersion: s
     tokenDescriptionHash: hashDescription(payload.tokenDescription),
     tokenImageCid: payload.imageCid,
     tokenUri: payload.tokenUri,
-    anchorSymbol: 'GOOGL',
+    anchorSymbol: "GOOGL",
     anchorAddress: anchor.address,
     anchorDecimals: anchor.decimals,
     anchorMultiplier: anchor.currentMultiplier,
@@ -181,19 +194,19 @@ export async function prepareLaunch(payload: PrepareLaunchPayload, appVersion: s
     feePreset: payload.feePreset,
     exactPoolFeeUnits: preset.poolFeeUnits,
     beneficiaries: bene.entries,
-    migrationMode: 'noOp',
-    governanceMode: 'noOp',
-    initializerMode: 'rehype',
+    migrationMode: "noOp",
+    governanceMode: "noOp",
+    initializerMode: "rehype",
     resolvedDopplerModules: modules.addresses,
     transactionTarget: sim.transactionTarget,
-    transactionValue: '0',
+    transactionValue: "0",
     calldataHash: sim.calldataHash,
     createdAt: Date.now(),
   };
   const manifestHash = hashManifest(manifest);
 
   const simulation: LaunchSimulation = {
-    status: 'ok',
+    status: "ok",
     manifestHash,
     transactionTarget: sim.transactionTarget,
     calldataHash: sim.calldataHash,
@@ -209,7 +222,7 @@ export async function prepareLaunch(payload: PrepareLaunchPayload, appVersion: s
     from: payload.creatorAddress as Address,
     to: sim.transactionTarget,
     data: sim.data,
-    value: '0',
+    value: "0",
     gas: ((sim.gasEstimate * 125n) / 100n).toString(),
     manifestHash,
     calldataHash: sim.calldataHash,

@@ -1,8 +1,8 @@
-import { resolveAnchor } from '@bps/launch-lab';
-import { getLabClient } from '../../../../../lib/lab/server';
-import { mapError, ok } from '../../../../../lib/lab/http';
+import { resolveAnchor } from "@bps/launch-lab";
+import { getLabClient } from "../../../../../lib/lab/server";
+import { mapError, ok } from "../../../../../lib/lab/http";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
   try {

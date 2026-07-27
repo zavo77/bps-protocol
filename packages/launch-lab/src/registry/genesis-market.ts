@@ -2,7 +2,7 @@
 // so permanent launch facts are written HERE (by an engineer, from verified
 // receipts) and shipped via redeploy. Never fabricate values.
 
-import type { Address, Hex } from 'viem';
+import type { Address, Hex } from "viem";
 
 export interface GenesisMarketRecord {
   launched: boolean;
@@ -22,8 +22,8 @@ export interface GenesisMarketRecord {
 export const GENESIS_MARKET: GenesisMarketRecord = {
   launched: false,
   tokenAddress: null,
-  tokenName: 'PRINT',
-  tokenSymbol: 'PRINT',
+  tokenName: "PRINT",
+  tokenSymbol: "PRINT",
   poolId: null,
   launchTransactionHash: null,
   buyTransactionHash: null,

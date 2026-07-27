@@ -1,11 +1,11 @@
 // Genesis proof record: registry facts + live anchor verification.
 // Pre-launch it returns the pending state; nothing is ever fabricated.
 
-import { GENESIS_MARKET, resolveAnchor, type ProofRecord } from '@bps/launch-lab';
-import { getLabClient } from '../../../../lib/lab/server';
-import { mapError, ok } from '../../../../lib/lab/http';
+import { GENESIS_MARKET, resolveAnchor, type ProofRecord } from "@bps/launch-lab";
+import { getLabClient } from "../../../../lib/lab/server";
+import { mapError, ok } from "../../../../lib/lab/http";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function GET(req: Request): Promise<Response> {
   try {
@@ -17,7 +17,7 @@ export async function GET(req: Request): Promise<Response> {
     }
     const record: ProofRecord = {
       deploymentUrl: new URL(req.url).host,
-      sourceCommit: process.env.VERCEL_GIT_COMMIT_SHA ?? 'local-dev',
+      sourceCommit: process.env.VERCEL_GIT_COMMIT_SHA ?? "local-dev",
       manifest: null,
       manifestHash: GENESIS_MARKET.manifestHash,
       anchor,
@@ -28,7 +28,7 @@ export async function GET(req: Request): Promise<Response> {
       anchorReserveWei: null,
       notes: GENESIS_MARKET.launched
         ? []
-        : ['Genesis launch pending — checklist state; no launch has occurred yet.'],
+        : ["Genesis launch pending — checklist state; no launch has occurred yet."],
     };
     return ok(record);
   } catch (e) {

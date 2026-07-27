@@ -1,16 +1,19 @@
 // Market snapshot service — only real or explicitly-unavailable data.
 
-import 'server-only';
-import { erc20Abi, getAddress, type Address } from 'viem';
+import "server-only";
+import { erc20Abi, getAddress, type Address } from "viem";
 import {
   GENESIS_MARKET,
   resolveAnchor,
   type MarketDatum,
   type MarketSnapshot,
-} from '@bps/launch-lab';
-import { getLabClient } from './server';
+} from "@bps/launch-lab";
+import { getLabClient } from "./server";
 
-const unavailable = <T>(): MarketDatum<T> => ({ available: false, reason: 'awaiting-indexed-data' });
+const unavailable = <T>(): MarketDatum<T> => ({
+  available: false,
+  reason: "awaiting-indexed-data",
+});
 const of = <T>(value: T): MarketDatum<T> => ({ available: true, value });
 
 export async function readMarketSnapshot(tokenAddressRaw: string): Promise<MarketSnapshot> {
@@ -18,26 +21,36 @@ export async function readMarketSnapshot(tokenAddressRaw: string): Promise<Marke
   const client = getLabClient();
   const anchor = await resolveAnchor(client);
 
-  let name = '';
-  let symbol = '';
+  let name = "";
+  let symbol = "";
   let totalSupply: MarketDatum<string> = unavailable();
   let tokenUri: MarketDatum<string> = unavailable();
   const [nameR, symbolR, supplyR, uriR] = await Promise.allSettled([
-    client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: 'name' }),
-    client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: 'symbol' }),
-    client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: 'totalSupply' }),
+    client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: "name" }),
+    client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: "symbol" }),
+    client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: "totalSupply" }),
     client.readContract({
       address: tokenAddress,
-      abi: [{ type: 'function', name: 'tokenURI', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] }] as const,
-      functionName: 'tokenURI',
+      abi: [
+        {
+          type: "function",
+          name: "tokenURI",
+          stateMutability: "view",
+          inputs: [],
+          outputs: [{ type: "string" }],
+        },
+      ] as const,
+      functionName: "tokenURI",
     }),
   ]);
-  if (nameR.status === 'fulfilled') name = nameR.value as string;
-  if (symbolR.status === 'fulfilled') symbol = symbolR.value as string;
-  if (supplyR.status === 'fulfilled') totalSupply = of((supplyR.value as bigint).toString());
-  if (uriR.status === 'fulfilled') tokenUri = of(uriR.value as string);
+  if (nameR.status === "fulfilled") name = nameR.value as string;
+  if (symbolR.status === "fulfilled") symbol = symbolR.value as string;
+  if (supplyR.status === "fulfilled") totalSupply = of((supplyR.value as bigint).toString());
+  if (uriR.status === "fulfilled") tokenUri = of(uriR.value as string);
 
-  const isGenesis = GENESIS_MARKET.launched && GENESIS_MARKET.tokenAddress?.toLowerCase() === tokenAddress.toLowerCase();
+  const isGenesis =
+    GENESIS_MARKET.launched &&
+    GENESIS_MARKET.tokenAddress?.toLowerCase() === tokenAddress.toLowerCase();
 
   return {
     tokenAddress,
@@ -58,7 +71,9 @@ export async function readMarketSnapshot(tokenAddressRaw: string): Promise<Marke
     exactPoolFeeUnits: unavailable(),
     beneficiaries: unavailable(),
     launchTransactionHash:
-      isGenesis && GENESIS_MARKET.launchTransactionHash ? of(GENESIS_MARKET.launchTransactionHash) : unavailable(),
+      isGenesis && GENESIS_MARKET.launchTransactionHash
+        ? of(GENESIS_MARKET.launchTransactionHash)
+        : unavailable(),
     fetchedAt: Date.now(),
   };
 }

@@ -8,13 +8,7 @@
 // NoOpMigrator (state 4). Proven by live simulation 2026-07-27
 // (docs/launch-lab/SPIKE_LAUNCH_PROOF.json).
 
-import {
-  encodeFunctionData,
-  keccak256,
-  type Address,
-  type Hex,
-  type PublicClient,
-} from 'viem';
+import { encodeFunctionData, keccak256, type Address, type Hex, type PublicClient } from "viem";
 import {
   CHAIN_IDS,
   DopplerSDK,
@@ -24,9 +18,9 @@ import {
   airlockAbi,
   getAddresses,
   getAirlockOwner,
-} from '@whetstone-research/doppler-sdk/evm';
-import { getFeePreset, INITIAL_SUPPLY_WEI, SALE_INVENTORY_WEI, SPLIT } from '../config/index';
-import type { BeneficiaryEntry, FeePresetId } from '../types/index';
+} from "@whetstone-research/doppler-sdk/evm";
+import { getFeePreset, INITIAL_SUPPLY_WEI, SALE_INVENTORY_WEI, SPLIT } from "../config/index";
+import type { BeneficiaryEntry, FeePresetId } from "../types/index";
 
 export interface ResolvedModules {
   addresses: Record<string, Address>;
@@ -34,12 +28,12 @@ export interface ResolvedModules {
 }
 
 const REQUIRED_MODULES = [
-  'airlock',
-  'dopplerHookInitializer',
-  'rehypeDopplerHookInitializer',
-  'noOpMigrator',
-  'noOpGovernanceFactory',
-  'dopplerERC20V1Factory',
+  "airlock",
+  "dopplerHookInitializer",
+  "rehypeDopplerHookInitializer",
+  "noOpMigrator",
+  "noOpGovernanceFactory",
+  "dopplerERC20V1Factory",
 ] as const;
 
 /** Airlock ModuleState expectations (0 = NotWhitelisted). */
@@ -59,22 +53,23 @@ export async function resolveAndVerifyModules(client: PublicClient): Promise<Res
   const resolved: Record<string, Address> = {};
   for (const name of REQUIRED_MODULES) {
     const addr = all[name];
-    if (typeof addr !== 'string' || !addr.startsWith('0x') || addr === ZERO_ADDRESS) {
+    if (typeof addr !== "string" || !addr.startsWith("0x") || addr === ZERO_ADDRESS) {
       throw new Error(`Doppler module "${name}" is not configured for chain 4663.`);
     }
     const code = await client.getCode({ address: addr as Address });
-    if (!code || code === '0x') throw new Error(`Doppler module "${name}" has no bytecode at ${addr}.`);
+    if (!code || code === "0x")
+      throw new Error(`Doppler module "${name}" has no bytecode at ${addr}.`);
     resolved[name] = addr as Address;
   }
   const airlock = resolved.airlock;
-  if (!airlock) throw new Error('Airlock address unresolved.');
+  if (!airlock) throw new Error("Airlock address unresolved.");
   for (const [name, expected] of Object.entries(EXPECTED_WHITELIST)) {
     const moduleAddr = resolved[name];
     if (!moduleAddr) throw new Error(`Module "${name}" unresolved for whitelist check.`);
     const state = await client.readContract({
       address: airlock,
       abi: airlockAbi,
-      functionName: 'getModuleState',
+      functionName: "getModuleState",
       args: [moduleAddr],
     });
     if (Number(state) !== expected) {
@@ -92,17 +87,32 @@ export function buildBeneficiaries(
   airlockOwner: Address,
 ): { raw: { beneficiary: Address; shares: bigint }[]; entries: BeneficiaryEntry[] } {
   const labeled = [
-    { beneficiary: airlockOwner, shares: (WAD * SPLIT.protocolPct) / 100n, label: 'Doppler/Airlock owner', percent: `${SPLIT.protocolPct}%` },
-    { beneficiary: bpsFeeAddress, shares: (WAD * SPLIT.bpsFeePct) / 100n, label: 'BPS', percent: `${SPLIT.bpsFeePct}%` },
-    { beneficiary: creatorFeeAddress, shares: (WAD * SPLIT.creatorFeePct) / 100n, label: 'Creator fees', percent: `${SPLIT.creatorFeePct}%` },
+    {
+      beneficiary: airlockOwner,
+      shares: (WAD * SPLIT.protocolPct) / 100n,
+      label: "Doppler/Airlock owner",
+      percent: `${SPLIT.protocolPct}%`,
+    },
+    {
+      beneficiary: bpsFeeAddress,
+      shares: (WAD * SPLIT.bpsFeePct) / 100n,
+      label: "BPS",
+      percent: `${SPLIT.bpsFeePct}%`,
+    },
+    {
+      beneficiary: creatorFeeAddress,
+      shares: (WAD * SPLIT.creatorFeePct) / 100n,
+      label: "Creator fees",
+      percent: `${SPLIT.creatorFeePct}%`,
+    },
   ];
   const raw = labeled.map((b) => ({ beneficiary: b.beneficiary, shares: b.shares }));
   const sum = raw.reduce((a, b) => a + b.shares, 0n);
   if (sum !== WAD) throw new Error(`Beneficiary shares sum ${sum} != WAD.`);
   const unique = new Set(raw.map((b) => b.beneficiary.toLowerCase()));
-  if (unique.size !== raw.length) throw new Error('Beneficiary addresses must be unique.');
+  if (unique.size !== raw.length) throw new Error("Beneficiary addresses must be unique.");
   for (const b of raw) {
-    if (b.beneficiary === ZERO_ADDRESS) throw new Error('Zero address beneficiary rejected.');
+    if (b.beneficiary === ZERO_ADDRESS) throw new Error("Zero address beneficiary rejected.");
   }
   return {
     raw,
@@ -139,7 +149,7 @@ export function buildLaunchParams(input: LaunchBuildInput) {
   if (!preset.enabled) throw new Error(`Fee preset ${preset.id} is disabled on chain 4663.`);
   return new MulticurveBuilder(CHAIN_IDS.ROBINHOOD)
     .tokenConfig({
-      type: 'dopplerERC20V1',
+      type: "dopplerERC20V1",
       name: input.tokenName,
       symbol: input.tokenSymbol,
       tokenURI: input.tokenUri,
@@ -152,8 +162,16 @@ export function buildLaunchParams(input: LaunchBuildInput) {
     .withCurves({
       numerairePrice: input.anchorMidUsd,
       curves: [
-        { marketCap: { start: input.startingFdvUsd, end: 1_000_000 }, numPositions: 11, shares: (WAD * 60n) / 100n },
-        { marketCap: { start: 1_000_000, end: 'max' }, numPositions: 10, shares: (WAD * 40n) / 100n },
+        {
+          marketCap: { start: input.startingFdvUsd, end: 1_000_000 },
+          numPositions: 11,
+          shares: (WAD * 60n) / 100n,
+        },
+        {
+          marketCap: { start: 1_000_000, end: "max" },
+          numPositions: 10,
+          shares: (WAD * 40n) / 100n,
+        },
       ],
       fee: preset.poolFeeUnits,
       beneficiaries: input.beneficiaries,
@@ -163,7 +181,7 @@ export function buildLaunchParams(input: LaunchBuildInput) {
       startFee: preset.poolFeeUnits,
       endFee: preset.poolFeeUnits,
       durationSeconds: 0,
-      feeRoutingMode: 'routeToBeneficiaryFees',
+      feeRoutingMode: "routeToBeneficiaryFees",
       feeBeneficiaries: input.beneficiaries as [{ beneficiary: Address; shares: bigint }],
       feeDistributionInfo: {
         assetFeesToAssetBuybackWad: 0n,
@@ -176,8 +194,8 @@ export function buildLaunchParams(input: LaunchBuildInput) {
         numeraireFeesToLpWad: 0n,
       },
     })
-    .withGovernance({ type: 'noOp' })
-    .withMigration({ type: 'noOp' })
+    .withGovernance({ type: "noOp" })
+    .withMigration({ type: "noOp" })
     .withUserAddress(input.creatorAddress)
     .build();
 }
@@ -203,7 +221,7 @@ export async function simulateLaunch(
   const sim = await sdk.factory.simulateCreateMulticurve(params);
   const data = encodeFunctionData({
     abi: airlockAbi,
-    functionName: 'create',
+    functionName: "create",
     args: [sim.createParams],
   });
   const block = await client.getBlockNumber();

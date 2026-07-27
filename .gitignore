@@ -25,6 +25,8 @@ lcov.info
 .env.*
 !.env.example
 !.env.canary.example
+# Non-secret runtime-flag defaults for local dev (no credentials permitted here)
+!.env.development
 
 # Private keys and deployment secrets
 *.pem
@@ -61,3 +63,7 @@ apps/web/.env.local
 
 # Vercel project metadata (never commit)
 .vercel/
+
+.vercel
+.env*
+!.env.development

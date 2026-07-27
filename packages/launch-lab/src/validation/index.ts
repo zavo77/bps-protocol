@@ -1,16 +1,18 @@
 // Zod schemas for every /api/lab mutation payload + the EIP-191 auth envelope.
 
-import { z } from 'zod';
-import { isAddress } from 'viem';
+import { z } from "zod";
+import { isAddress } from "viem";
 
-export const addressSchema = z.string().refine((s): s is `0x${string}` => isAddress(s), 'Invalid address');
+export const addressSchema = z
+  .string()
+  .refine((s): s is `0x${string}` => isAddress(s), "Invalid address");
 
-export const feePresetSchema = z.enum(['BALANCED_1', 'CREATOR_2', 'DEGEN_3', 'DYNAMIC_PROTECTION']);
+export const feePresetSchema = z.enum(["BALANCED_1", "CREATOR_2", "DEGEN_3", "DYNAMIC_PROTECTION"]);
 
 /** Signed request envelope. The message the wallet signs is canonical JSON of `message`. */
 export const signedRequestSchema = z.object({
   message: z.object({
-    action: z.enum(['metadata-upload', 'prepare-launch']),
+    action: z.enum(["metadata-upload", "prepare-launch"]),
     wallet: addressSchema,
     chainId: z.literal(4663),
     payloadHash: z.string().regex(/^0x[0-9a-f]{64}$/),
@@ -26,10 +28,10 @@ export const prepareLaunchSchema = z.object({
   tokenName: z.string().min(1).max(48),
   tokenSymbol: z.string().regex(/^[A-Z0-9]{1,12}$/),
   tokenDescription: z.string().min(1).max(600),
-  tokenUri: z.string().startsWith('ipfs://').max(120),
+  tokenUri: z.string().startsWith("ipfs://").max(120),
   imageCid: z.string().min(10).max(80),
   metadataCid: z.string().min(10).max(80),
-  metadataProvider: z.literal('pinata'),
+  metadataProvider: z.literal("pinata"),
   startingFdvUsd: z.number().int().min(1_000).max(10_000_000),
   feePreset: feePresetSchema,
   creatorAddress: addressSchema,
@@ -39,7 +41,7 @@ export type PrepareLaunchPayload = z.infer<typeof prepareLaunchSchema>;
 
 export const quoteSchema = z.object({
   tokenAddress: addressSchema,
-  direction: z.enum(['buy', 'sell']),
+  direction: z.enum(["buy", "sell"]),
   /** Exact input amount in wei (decimal string). */
   amountInWei: z.string().regex(/^[0-9]{1,30}$/),
 });
