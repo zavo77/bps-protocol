@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decodeFunctionData, getAddress } from "viem";
 import {
+  translateQuoterError,
   buildSwapTransaction,
   directionToZeroForOne,
   minAmountOut,
@@ -124,5 +125,25 @@ describe("approval targets", () => {
 describe("safety constants", () => {
   it("reject ceiling is 15%", () => {
     expect(PRICE_IMPACT_REJECT_BPS).toBe(1_500);
+  });
+});
+
+describe("quoter error translation", () => {
+  it("maps the nested NotEnoughLiquidity selector (cause-chain data) to NO_POOL_LIQUIDITY", () => {
+    const raw = new Error('The contract function "quoteExactInputSingle" reverted with the following signature:\n0x6190b2b0');
+    (raw as Error & { cause: unknown }).cause = {
+      data: "0x6190b2b00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002 47a5ed734f18ad4279621e65dc2e176ca30ffbf1e8b90c71441ff1cc96d58d8569a7c2072".replace(/ /g, ""),
+    };
+    expect(translateQuoterError(raw).message).toBe("NO_POOL_LIQUIDITY");
+  });
+
+  it("maps an UnexpectedRevertBytes wrapper without the liquidity selector to QUOTER_REVERTED", () => {
+    const raw = new Error("reverted 0x6190b2b0");
+    expect(translateQuoterError(raw).message).toBe("QUOTER_REVERTED");
+  });
+
+  it("passes through unrelated errors unchanged", () => {
+    const raw = new Error("SOMETHING_ELSE");
+    expect(translateQuoterError(raw).message).toBe("SOMETHING_ELSE");
   });
 });

@@ -70,6 +70,16 @@ export async function POST(req: Request): Promise<Response> {
         409,
       );
     }
+    if (msg === "NO_POOL_LIQUIDITY") {
+      return err(
+        msg,
+        "The market pool does not hold enough liquidity for this side of the trade yet — a brand-new market gains sell-side liquidity after its first buys.",
+        409,
+      );
+    }
+    if (msg === "QUOTER_REVERTED") {
+      return err(msg, "The pool rejected this quote; try a different amount.", 409);
+    }
     if (msg === "AMOUNT_REQUIRED" || msg === "INVALID_SLIPPAGE")
       return err(msg, "Invalid quote input.");
     return mapError(e);

@@ -646,7 +646,7 @@ function StatusLine({
       )}
       {status === "no-route" && (
         <p data-testid="no-route" style={{ color: "var(--warn)", fontSize: 13, margin: 0 }}>
-          No Launch Lab route is available for this pay/receive asset.
+          {error ?? "No Launch Lab route is available for this pay/receive asset."}
         </p>
       )}
       {(status === "needs-approval" || status === "approving") && (

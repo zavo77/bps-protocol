@@ -407,6 +407,8 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
         case "ROUTE_UNAVAILABLE":
         case "NOT_A_LAB_MARKET":
         case "UNSUPPORTED_PAYMENT_TOKEN":
+        case "NO_POOL_LIQUIDITY":
+        case "QUOTER_REVERTED":
           setStatus("no-route");
           break;
         case "INSUFFICIENT_BALANCE":

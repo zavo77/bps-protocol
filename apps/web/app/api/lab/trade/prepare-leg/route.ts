@@ -262,6 +262,16 @@ export async function POST(req: Request): Promise<Response> {
     if (msg === "NOT_A_GOOGL_MARKET" || msg === "TOKEN_NOT_IN_POOL") {
       return err("NOT_A_LAB_MARKET", "That token is not a Launch Lab market.", 404);
     }
+    if (msg === "NO_POOL_LIQUIDITY") {
+      return err(
+        msg,
+        "The market pool does not hold enough liquidity for this side of the trade yet.",
+        409,
+      );
+    }
+    if (msg === "QUOTER_REVERTED") {
+      return err(msg, "The pool rejected this quote; try a different amount.", 409);
+    }
     return mapError(e);
   }
 }

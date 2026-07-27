@@ -70,5 +70,9 @@ export function mapError(e: unknown): NextResponse {
     return err(msg, "That fee preset is not available on this chain.", 400);
   if (msg === "BPS_BENEFICIARY_UNCONFIGURED")
     return err(msg, "Server configuration incomplete.", 503);
+  // Server-side only, sanitized: first line, URLs redacted (RPC endpoints are
+  // credential-bearing), truncated. Never reaches the client response.
+  const firstLine = (msg.split("\n")[0] ?? "").replace(/https?:\/\/\S+/g, "[url]").slice(0, 200);
+  console.error(`lab-api INTERNAL: ${firstLine}`);
   return err("INTERNAL", "Unexpected server error.", 500);
 }

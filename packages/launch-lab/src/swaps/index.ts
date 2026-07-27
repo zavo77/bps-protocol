@@ -113,6 +113,31 @@ export function directionToZeroForOne(
   return direction === "buy" ? anchorIsCurrency0 : !anchorIsCurrency0;
 }
 
+/** Translate raw V4 Quoter reverts into stable, user-mappable error slugs.
+ *  0x6190b2b0 = UnexpectedRevertBytes(bytes) wrapper; nested 0x7a5ed734 =
+ *  NotEnoughLiquidity(poolId) — a freshly launched multicurve pool holds only
+ *  the launched token, so token→anchor quotes revert until the first buys
+ *  seed anchor-side reserves. The nested selector lives in the revert DATA on
+ *  the error's cause chain, not in the message. Exported for tests. */
+export function translateQuoterError(e: unknown): Error {
+  let blob = e instanceof Error ? e.message : String(e);
+  let cur: unknown = e;
+  while (cur && typeof cur === "object") {
+    const c = cur as { data?: unknown; raw?: unknown; cause?: unknown; message?: unknown };
+    for (const v of [c.data, c.raw, c.message]) {
+      if (typeof v === "string") blob += ` ${v}`;
+    }
+    cur = c.cause;
+  }
+  if (blob.includes("7a5ed734") || blob.includes("NotEnoughLiquidity")) {
+    return new Error("NO_POOL_LIQUIDITY");
+  }
+  if (blob.includes("6190b2b0") || blob.includes("UnexpectedRevertBytes")) {
+    return new Error("QUOTER_REVERTED");
+  }
+  return e instanceof Error ? e : new Error(blob);
+}
+
 /** Exact-input quote through the V4 Quoter (hook-aware). */
 export async function quoteLabSwap(
   client: PublicClient,
@@ -123,12 +148,17 @@ export async function quoteLabSwap(
   if (amountInWei <= 0n) throw new Error("AMOUNT_REQUIRED");
   const sdk = new DopplerSDK({ publicClient: client, chainId: CHAIN_IDS.ROBINHOOD });
   const zeroForOne = directionToZeroForOne(direction, ctx.anchorIsCurrency0);
-  const res = await sdk.quoter.quoteExactInputV4({
-    poolKey: ctx.poolKey,
-    zeroForOne,
-    exactAmount: amountInWei,
-    hookData: "0x",
-  });
+  let res: Awaited<ReturnType<typeof sdk.quoter.quoteExactInputV4>>;
+  try {
+    res = await sdk.quoter.quoteExactInputV4({
+      poolKey: ctx.poolKey,
+      zeroForOne,
+      exactAmount: amountInWei,
+      hookData: "0x",
+    });
+  } catch (e) {
+    throw translateQuoterError(e);
+  }
   return {
     direction,
     amountInWei: amountInWei.toString(),
