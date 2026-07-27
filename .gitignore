@@ -67,3 +67,4 @@ apps/web/.env.local
 .vercel
 .env*
 !.env.development
+!.env.production
