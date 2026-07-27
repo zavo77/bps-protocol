@@ -139,3 +139,11 @@ Newest entries at the top. No secrets ever recorded here.
   fresh pool — market state, root-caused to nested NotEnoughLiquidity under UnexpectedRevertBytes).
 - Deployed-asset secret scans clean. 312+56+9 tests green. LL-4 closed; posture unchanged
   (public / broadcast false / kill true).
+
+## 2026-07-27 — route-probe gated + GENESIS LAUNCH CARD assembled (cc3e782)
+
+- route-probe: flag-gated (BPS_LAUNCH_LAB_ROUTE_PROBE_ENABLED), 404 in production, takers stripped.
+- 16-item final gate green. Card: docs/launch-lab/GENESIS_LAUNCH_CARD.json — final Pinata upload,
+  predicted token 0xdfcd0343…129c / poolId 0xbdee8caa…4743, gas 3,576,414 (~0.000135 ETH),
+  manifest 0xb54f8063…3f9d, calldata 0x123e339f…0776. Description PROPOSED, awaiting founder text.
+- Broadcast off, kill switch on, no signature requested.

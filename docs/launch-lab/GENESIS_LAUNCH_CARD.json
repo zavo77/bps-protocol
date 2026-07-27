@@ -1,0 +1,106 @@
+{
+  "card": "BPS LAUNCH LAB — GENESIS LAUNCH REVIEW CARD (irreversible action; founder signs in-browser)",
+  "generatedAtUtc": "2026-07-27T20:10:16.111Z",
+  "productionUrl": "https://bps-launch-lab.vercel.app",
+  "sourceCommit": "cc3e782b49f557dd2e020428f1c22b9e2507598c",
+  "appVersion": "0.0.0",
+  "token": {
+    "name": "PRINT",
+    "symbol": "PRINT",
+    "description": "PRINT is the genesis community market of the BPS RWA Launch Lab, paired with the Alphabet Class A (GOOGL) Robinhood Stock Token on Robinhood Chain.",
+    "descriptionStatus": "PROPOSED — confirm or replace before signing (re-hashes metadata + manifest)",
+    "imageIpfs": "ipfs://QmVnCzLDvRUzLmSg1KdcRTYqFHSJgsgAG8xSm6htZYT6Bc",
+    "metadataUri": "ipfs://QmPMQp1QZsaSkFfTgyEoKGFMNcFX4KFAMDA7BnxZiEJzd8"
+  },
+  "anchor": {
+    "name": "Alphabet Class A • Robinhood Token",
+    "symbol": "GOOGL",
+    "contract": "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3",
+    "decimals": 18,
+    "midUsdAtSimulation": "326.425000",
+    "currentMultiplier": "1.000000000000000000"
+  },
+  "wallets": {
+    "creator": "0x29244A2309B703F82E292A3db7df0e95d0cdca72",
+    "creatorFeeDestination": "0x261Cda9dADdfDC9A0b8de887718af516FA7ee9C2",
+    "bpsBeneficiary": "0xF7F2d76F6364c72ea860512d78ae07e54bBbF8A5",
+    "dopplerAirlockOwner": "0x21E2ce70511e4FE542a97708e89520471DAa7A66"
+  },
+  "economics": {
+    "initialSupply": "1000000000 PRINT",
+    "marketInventory": "1000000000 PRINT (creator allocation 0)",
+    "startingFdvUsd": 20500,
+    "feePreset": "BALANCED_1 (1.00% static)",
+    "exactPoolFeeUnits": 10000,
+    "split": [
+      {
+        "beneficiary": "0x21E2ce70511e4FE542a97708e89520471DAa7A66",
+        "sharesWad": "50000000000000000",
+        "label": "Doppler/Airlock owner",
+        "percent": "5%"
+      },
+      {
+        "beneficiary": "0xF7F2d76F6364c72ea860512d78ae07e54bBbF8A5",
+        "sharesWad": "100000000000000000",
+        "label": "BPS",
+        "percent": "10%"
+      },
+      {
+        "beneficiary": "0x261Cda9dADdfDC9A0b8de887718af516FA7ee9C2",
+        "sharesWad": "850000000000000000",
+        "label": "Creator fees",
+        "percent": "85%"
+      }
+    ]
+  },
+  "mechanics": {
+    "initializer": "rehype multicurve (DopplerHookInitializer + RehypeDopplerHookInitializer)",
+    "initializerAddresses": {
+      "dopplerHookInitializer": "0x4e3468951D49f2EEa976eD0D6e75fFCb44a9a544",
+      "rehypeDopplerHookInitializer": "0x9982538F41f2ae29ddb9d3D9307010052984FDbB"
+    },
+    "migrationMode": "noOp",
+    "governanceMode": "noOp",
+    "tokenStandard": "DopplerERC20V1 (no mint, no tax, no blacklist)"
+  },
+  "prediction": {
+    "predictedTokenAddress": "0xdfcd034394932C3CEcdC317D7650501189Dd129c",
+    "predictedPoolId": "0xbdee8caad4dc280869b3a4c1c3092d14e48592199d8221579e53ed81e7eb4743",
+    "note": "Valid for this exact calldata only; any input change (incl. description) changes both."
+  },
+  "integrity": {
+    "manifestHash": "0xb54f806372ad650561794e890882db7850a1ceb1603d359cc111e79a0f723f9d",
+    "calldataHash": "0x123e339f6e8c09bde1584fb1777a5f1aea1b9b51bbde5da2d3b4ef8350df0776",
+    "transactionTarget": "0xeb7C034704eF8Dcd2D32324c1545f62fB4aD0862",
+    "transactionValue": "0"
+  },
+  "simulation": {
+    "status": "ok",
+    "block": "21007227",
+    "timestampUtc": "2026-07-27T20:10:15.558Z",
+    "staleAfterUtc": "2026-07-27T20:13:15.558Z",
+    "gasEstimate": "3576414",
+    "gasLimitBound125pct": "4470517",
+    "gasPriceWei": "37764000",
+    "estimatedCostEth": "0.000135059698296",
+    "estimatedCostEthAtGasLimit": "0.000168824603988"
+  },
+  "paymentRouting": {
+    "status": "LIVE-VERIFIED in production (commit 48a7c8d): Rialto primary, all 8 payment↔anchor pairs executable; 1inch dormant (no key); 0x active fallback.",
+    "rialtoEthToGooglQuote": {
+      "executable": true,
+      "pair": "ETH->GOOGL (0.001 ETH)",
+      "buyAmountGoogl": "0.005945884090989145",
+      "minBuyAmountGoogl": "0.005886425250079253",
+      "platformFeeBps": 5,
+      "settlement": "allowance",
+      "chainId": 4663
+    }
+  },
+  "safety": {
+    "broadcastEnabled": false,
+    "killSwitchActive": true,
+    "accessMode": "public",
+    "signaturePolicy": "No signature requested or collected by this card. Founder signs in-browser only."
+  }
+}

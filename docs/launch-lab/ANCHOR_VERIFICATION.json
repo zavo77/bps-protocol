@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-27T12:56:57.100Z",
+  "generatedAt": "2026-07-27T20:06:28.107Z",
   "chainId": 4663,
   "anchors": [
     {
@@ -13,13 +13,13 @@
       "currentMultiplier": "1.000000000000000000",
       "status": "ASSET_STATUS_ACTIVE",
       "chainId": 4663,
-      "midUsd": 324.905,
+      "midUsd": 326.52,
       "simulation": {
         "status": "ok",
-        "predictedToken": "0xD098b99495c8344c806CF8B872bEabf3eda03Ea0",
-        "gas": "3530554"
+        "predictedToken": "0x9f0D8a8DB492Db3dd256D919A1CFc72C9e147d36",
+        "gas": "3530813"
       },
-      "verifiedAt": "2026-07-27T12:56:56.000Z"
+      "verifiedAt": "2026-07-27T20:06:26.902Z"
     },
     {
       "symbol": "NVDA",
@@ -32,13 +32,13 @@
       "currentMultiplier": "1.000000000000000000",
       "status": "ASSET_STATUS_ACTIVE",
       "chainId": 4663,
-      "midUsd": 208.33,
+      "midUsd": 196.485,
       "simulation": {
         "status": "ok",
-        "predictedToken": "0xA6Cf22808A8f0913B4F73F6e9d36bd6f7a92783C",
-        "gas": "3550333"
+        "predictedToken": "0x5114bDb7Ed5b8263C16D5672bF935fcBD6E0570f",
+        "gas": "3550592"
       },
-      "verifiedAt": "2026-07-27T12:56:56.288Z"
+      "verifiedAt": "2026-07-27T20:06:27.155Z"
     },
     {
       "symbol": "AAPL",
@@ -51,13 +51,13 @@
       "currentMultiplier": "1.000000000000000000",
       "status": "ASSET_STATUS_ACTIVE",
       "chainId": 4663,
-      "midUsd": 333.98,
+      "midUsd": 337.06,
       "simulation": {
         "status": "ok",
-        "predictedToken": "0xc554eDD06F2B5089aCf9A5C70406870374DF8af7",
-        "gas": "3528935"
+        "predictedToken": "0x07E006851171CAd7176a95e61445EB785E40DA5c",
+        "gas": "3549719"
       },
-      "verifiedAt": "2026-07-27T12:56:56.595Z"
+      "verifiedAt": "2026-07-27T20:06:27.590Z"
     },
     {
       "symbol": "TSLA",
@@ -70,13 +70,13 @@
       "currentMultiplier": "1.000000000000000000",
       "status": "ASSET_STATUS_ACTIVE",
       "chainId": 4663,
-      "midUsd": 316.595,
+      "midUsd": 309.5,
       "simulation": {
         "status": "ok",
-        "predictedToken": "0xCC0DEfA16951Fd0D717fbD76C47cB04e96898118",
-        "gas": "3530205"
+        "predictedToken": "0x5aA2AdF51137eB014A8B4672e92F65B9929b65B6",
+        "gas": "3530497"
       },
-      "verifiedAt": "2026-07-27T12:56:56.843Z"
+      "verifiedAt": "2026-07-27T20:06:27.848Z"
     },
     {
       "symbol": "SPCX",
@@ -89,13 +89,13 @@
       "currentMultiplier": "1.000000000000000000",
       "status": "ASSET_STATUS_ACTIVE",
       "chainId": 4663,
-      "midUsd": 113.145,
+      "midUsd": 113.24,
       "simulation": {
         "status": "ok",
-        "predictedToken": "0xfdF5462AaA9C6A80Fbd2271d2F76d51b3518B71F",
+        "predictedToken": "0x857e604Ab290D047a09Df707f223DDD57bf41B7e",
         "gas": "3530749"
       },
-      "verifiedAt": "2026-07-27T12:56:57.100Z"
+      "verifiedAt": "2026-07-27T20:06:28.107Z"
     }
   ]
 }

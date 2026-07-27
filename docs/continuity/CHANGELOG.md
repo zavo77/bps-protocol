@@ -7,6 +7,29 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-27 — LAUNCH LAB LANE: route-probe gated + FINAL GENESIS LAUNCH CARD assembled (commit cc3e782)
+
+- **Route-probe cleanup (founder-directed):** GET /api/lab/route-probe now requires server-side
+  `BPS_LAUNCH_LAB_ROUTE_PROBE_ENABLED=true` (fail-closed 404 default; verified 404 in Production).
+  Response stripped of all taker addresses; remains read-only, rate-limited, fixed-matrix, no raw venue
+  errors, no calldata or key material; never part of the product flow.
+- **16-item final gate:** 314 web + 56 launch-lab + 9 indexer tests; lint/typecheck/build/secret scans
+  clean; production health ok (commit cc3e782, public/broadcast-false/kill-true); Railway indexer health
+  ok (head 21004493, lag 3, knownPools 0); fresh-visitor walkthrough of /lab/launch + /lab/tokens clean
+  (no signature reachable while disconnected, honest empty states, zero console errors); all 5 anchors
+  re-verified live (GOOGL mid ≈$326.43); DB/provenance clean (13 external rows, 0 provenance-verified,
+  0 outstanding manifests, LL2_VERIFIED re-run).
+- **GENESIS LAUNCH CARD assembled** via the production code path (scripts/genesis-launch-card.mts →
+  docs/launch-lab/GENESIS_LAUNCH_CARD.json): FINAL Pinata upload (image
+  QmVnCzLDvRUzLmSg1KdcRTYqFHSJgsgAG8xSm6htZYT6Bc; metadata ipfs://QmPMQp1QZsaSkFfTgyEoKGFMNcFX4KFAMDA7BnxZiEJzd8);
+  exact rehype simulation at block 21007227 → predicted token `0xdfcd0343…129c`, poolId
+  `0xbdee8caa…4743`, gas 3,576,414 ≈ 0.000135 ETH; manifestHash `0xb54f8063…3f9d`; calldataHash
+  `0x123e339f…0776`; live Rialto ETH→GOOGL quote executable (5 bps, settlement=allowance).
+  **Token description is PROPOSED** (never canonically recorded) — founder confirms/replaces at review;
+  any change re-uploads metadata and re-hashes (predicted address + poolId change).
+- **No broadcast enabled, kill switch untouched, no signature requested.** The founder signs in-browser
+  via the public /lab/launch flow, which re-simulates fresh (3-minute staleness ceiling) before signing.
+
 ## 2026-07-27 — LAUNCH LAB LANE: RIALTO_API_KEY activated in Vercel — production Rialto routing live-verified (commits e3178a3 + 48a7c8d)
 
 - **Type:** Lane source change + Preview/Production redeploys (fail-closed) + live production verification.
