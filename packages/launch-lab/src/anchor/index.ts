@@ -63,8 +63,24 @@ export async function resolveAnchor(
       client.readContract({ address: GOOGL_ADDRESS, abi: erc20Abi, functionName: "symbol" }),
       client.readContract({ address: GOOGL_ADDRESS, abi: erc20Abi, functionName: "decimals" }),
     ]);
-  } catch {
-    return mismatch("On-chain ERC-20 reads failed for the canonical GOOGL address.");
+  } catch (e) {
+    const parts: string[] = [];
+    let cur: unknown = e;
+    for (let i = 0; i < 4 && cur; i++) {
+      const c = cur as {
+        shortMessage?: string;
+        details?: string;
+        message?: string;
+        cause?: unknown;
+      };
+      parts.push(c.shortMessage ?? c.details ?? c.message ?? String(cur));
+      cur = c.cause;
+    }
+    const detail = parts
+      .join(" <- ")
+      .replace(/https?:\/\/\S+/g, "[url]")
+      .slice(0, 300);
+    return mismatch(`On-chain ERC-20 reads failed for the canonical GOOGL address. (${detail})`);
   }
   if (symbol !== "GOOGL") return mismatch(`On-chain symbol "${symbol}" is not GOOGL.`);
   if (Number(decimals) !== 18) return mismatch(`On-chain decimals ${decimals} != 18.`);

@@ -4,6 +4,7 @@
 import "server-only";
 import {
   createPublicClient,
+  fallback,
   http,
   defineChain,
   keccak256,
@@ -51,11 +52,22 @@ export const labChain = defineChain({
 
 let cachedClient: PublicClient | null = null;
 
-/** Server public client over the private RPC (falls back closed, not to public RPC). */
+/**
+ * Server public client. Primary = the private RPC from env; fallback = the
+ * public rate-limited endpoint (repo policy: acceptable as a NON-critical
+ * fallback only). The private endpoint has shown quota exhaustion
+ * ("monthly capacity limit"), so reads must survive its failure.
+ */
 export function getLabClient(): PublicClient {
   if (cachedClient) return cachedClient;
   const { ROBINHOOD_CHAIN_RPC_URL } = requireEnv(["ROBINHOOD_CHAIN_RPC_URL"] as const);
-  cachedClient = createPublicClient({ chain: labChain, transport: http(ROBINHOOD_CHAIN_RPC_URL) });
+  cachedClient = createPublicClient({
+    chain: labChain,
+    transport: fallback([
+      http(ROBINHOOD_CHAIN_RPC_URL, { timeout: 10_000 }),
+      http("https://rpc.mainnet.chain.robinhood.com", { timeout: 10_000 }),
+    ]),
+  });
   return cachedClient;
 }
 
