@@ -48,6 +48,7 @@ Newest entries at the top. No secrets ever recorded here.
 - Local smoke against live chain + Railway Postgres: migrate OK; caught up ~460 blocks; restart resumed
   from persisted cursor (20686635 → 20686775); health 200 both runs. 6 unit tests; eslint/prettier clean.
 - Deployment handoff values issued to founder (root /, workspace-scoped npm commands, /health path).
+- **RAILWAY HEALTH GATE PASSED (2026-07-27, founder-verified):** production /health 200 (db ok, lag==confirmations==3, knownPools 0 pre-launch). **Production restart-resume VERIFIED**: redeploy via CLI; new instance (uptime 3s) continued cursors 20717152→20717549 from Postgres, no reset to start block. Indexed-history endpoint /api/lab/history/[address] live on production ({available:true, swaps:[], source: lab-indexer}); creation path has zero dependency on the indexer service.
 
 ## Milestones
 
