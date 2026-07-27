@@ -1,0 +1,570 @@
+"use client";
+// Launch Lab creation state machine over CreateFlowState.
+//
+// Sequence: form validation → metadata upload (Pinata via /api/lab/metadata) →
+// prepare (/api/lab/prepare: anchor re-verify + exact simulation + manifest) →
+// gating (broadcast flag, kill switch, wallet, chain, freshness) → send via the
+// wallet → wait for the receipt → decodeAndVerifyReceipt against the manifest.
+// Any manifest mismatch is a HARD STOP ('launch-mismatch'); the only exit is reset().
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { isAddress, getAddress, keccak256, type Address, type Hex, type PublicClient } from "viem";
+import { useAccount, useChainId, usePublicClient, useSendTransaction, useSwitchChain } from "wagmi";
+import {
+  CHAIN_ID,
+  decodeAndVerifyReceipt,
+  validateMetadataInput,
+  type AnchorVerification,
+  type CreateFlowState,
+  type FeePresetId,
+  type LabPublicConfig,
+  type LaunchManifest,
+  type LaunchReceiptResult,
+  type LaunchSimulation,
+  type MetadataInput,
+  type MetadataUploadResult,
+  type PreparedLaunchTransaction,
+  type PrepareLaunchPayload,
+  type WalletUiState,
+} from "@bps/launch-lab";
+import { errorMessage, isNotAllowlisted, labFetch } from "./api";
+import { useAnchor } from "./use-anchor";
+import { useLabConfig } from "./use-lab-config";
+import { useSignedRequest } from "./use-signed-request";
+import { useWalletUiState } from "./use-wallet-ui-state";
+
+export interface CreateFlowFormState {
+  tokenName: string;
+  tokenSymbol: string;
+  tokenDescription: string;
+  imageFile: File | null;
+  /** Integer USD. 0 = not yet initialised (defaults from server config). */
+  startingFdvUsd: number;
+  feePreset: FeePresetId;
+  /** Empty string = default to the connected wallet. */
+  creatorFeeAddress: string;
+}
+
+export interface PreparedLaunchBundle {
+  manifest: LaunchManifest;
+  manifestHash: Hex;
+  simulation: LaunchSimulation;
+  prepared: PreparedLaunchTransaction;
+}
+
+export interface CreateFlowGates {
+  walletConnected: boolean;
+  chainOk: boolean;
+  anchorVerified: boolean;
+  metadataConfirmed: boolean;
+  simulated: boolean;
+  simulationFresh: boolean;
+  broadcastEnabled: boolean;
+  killSwitchInactive: boolean;
+}
+
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME = ["image/png", "image/jpeg", "image/webp"];
+
+/**
+ * Fast client-side mirror of validateMetadataInput's synchronous rules (same
+ * regexes/limits) for keystroke feedback. The full validateMetadataInput —
+ * including image magic bytes — runs on the real bytes before upload, and the
+ * server re-validates authoritatively.
+ */
+export function liveFormErrors(form: CreateFlowFormState): string[] {
+  const errors: string[] = [];
+  if (form.tokenName !== "" && !/^[\x20-\x7E]{1,48}$/.test(form.tokenName)) {
+    errors.push("Token name must be 1-48 printable ASCII characters.");
+  }
+  if (form.tokenSymbol !== "" && !/^[A-Z0-9]{1,12}$/.test(form.tokenSymbol)) {
+    errors.push("Ticker must be 1-12 characters A-Z or 0-9.");
+  }
+  if (form.tokenDescription.length > 600) {
+    errors.push("Description must be 1-600 characters.");
+  }
+  if (/[<>]/.test(form.tokenDescription) || /[<>]/.test(form.tokenName)) {
+    errors.push("HTML characters are not allowed.");
+  }
+  if (form.imageFile) {
+    if (!ALLOWED_IMAGE_MIME.includes(form.imageFile.type)) {
+      errors.push("Image must be PNG, JPEG, or WebP.");
+    }
+    if (form.imageFile.size === 0 || form.imageFile.size > MAX_IMAGE_BYTES) {
+      errors.push("Image must be 1 byte to 4 MB.");
+    }
+  }
+  if (form.startingFdvUsd !== 0) {
+    if (
+      !Number.isInteger(form.startingFdvUsd) ||
+      form.startingFdvUsd < 1_000 ||
+      form.startingFdvUsd > 10_000_000
+    ) {
+      errors.push("Starting FDV must be a whole USD amount between 1,000 and 10,000,000.");
+    }
+  }
+  if (form.creatorFeeAddress.trim() !== "" && !isAddress(form.creatorFeeAddress.trim())) {
+    errors.push("Creator fee address is not a valid address.");
+  }
+  return errors;
+}
+
+function safeFilename(name: string): string {
+  const cleaned = name.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 80);
+  return /^[A-Za-z0-9._-]{1,80}$/.test(cleaned) ? cleaned : "token-image";
+}
+
+/** Explicit async/terminal phases; everything else is derived. */
+type FlowPhase =
+  | "idle"
+  | "image-uploading"
+  | "simulating"
+  | "simulation-failure"
+  | "awaiting-signature"
+  | "transaction-pending"
+  | "confirmation-pending"
+  | "receipt-decoding"
+  | "launch-success"
+  | "launch-mismatch";
+
+export interface CreateFlow {
+  form: CreateFlowFormState;
+  updateForm: (patch: Partial<CreateFlowFormState>) => void;
+  formComplete: boolean;
+  formErrors: string[];
+  metadata: MetadataUploadResult | null;
+  bundle: PreparedLaunchBundle | null;
+  manifest: LaunchManifest | null;
+  manifestHash: Hex | null;
+  simulation: LaunchSimulation | null;
+  prepared: PreparedLaunchTransaction | null;
+  simulationFresh: boolean;
+  simulationAgeMs: number | null;
+  flowState: CreateFlowState;
+  walletState: WalletUiState;
+  unauthorised: boolean;
+  error: string | null;
+  txHash: Hex | null;
+  receiptResult: LaunchReceiptResult | null;
+  config: LabPublicConfig | undefined;
+  anchor: AnchorVerification | undefined;
+  anchorLoading: boolean;
+  gates: CreateFlowGates;
+  canLaunch: boolean;
+  uploadMetadata: () => Promise<boolean>;
+  prepare: () => Promise<boolean>;
+  launch: () => Promise<void>;
+  reset: () => void;
+}
+
+export function useCreateFlow(): CreateFlow {
+  const router = useRouter();
+  const { address } = useAccount();
+  const chainId = useChainId();
+  const publicClient = usePublicClient();
+  const { sendTransactionAsync } = useSendTransaction();
+  const { switchChainAsync } = useSwitchChain();
+  const signRequest = useSignedRequest();
+
+  const configQuery = useLabConfig();
+  const anchorQuery = useAnchor();
+  const config = configQuery.data;
+  const anchor = anchorQuery.data;
+
+  const [form, setFormState] = useState<CreateFlowFormState>({
+    tokenName: "",
+    tokenSymbol: "",
+    tokenDescription: "",
+    imageFile: null,
+    startingFdvUsd: 0,
+    feePreset: "BALANCED_1",
+    creatorFeeAddress: "",
+  });
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const [metadata, setMetadata] = useState<MetadataUploadResult | null>(null);
+  const [bundle, setBundle] = useState<PreparedLaunchBundle | null>(null);
+  const [payloadUsed, setPayloadUsed] = useState<PrepareLaunchPayload | null>(null);
+  const [prepareRequested, setPrepareRequested] = useState(false);
+  const [phase, setPhase] = useState<FlowPhase>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [unauthorised, setUnauthorised] = useState(false);
+  const [txHash, setTxHash] = useState<Hex | null>(null);
+  const [receiptResult, setReceiptResult] = useState<LaunchReceiptResult | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const broadcastRef = useRef(false);
+
+  const walletState = useWalletUiState(config, { unauthorised });
+
+  // Defaults from server config once it arrives (first initialisation only).
+  useEffect(() => {
+    if (config && form.startingFdvUsd === 0) {
+      setFormState((f) => ({
+        ...f,
+        startingFdvUsd: config.startingFdvUsd,
+        feePreset: config.defaultFeePreset,
+      }));
+    }
+  }, [config, form.startingFdvUsd]);
+
+  // Freshness ticker (5 s) while a prepared transaction exists.
+  useEffect(() => {
+    if (!bundle) return;
+    const t = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(t);
+  }, [bundle]);
+
+  const updateForm = useCallback((patch: Partial<CreateFlowFormState>) => {
+    setFormState((f) => ({ ...f, ...patch }));
+    setUploadErrors([]);
+  }, []);
+
+  const formErrors = useMemo(
+    () => [...liveFormErrors(form), ...uploadErrors],
+    [form, uploadErrors],
+  );
+  const formComplete =
+    form.tokenName.trim() !== "" &&
+    form.tokenSymbol.trim() !== "" &&
+    form.tokenDescription.trim() !== "" &&
+    form.imageFile !== null;
+
+  const simulationFresh = bundle !== null && Date.now() <= bundle.prepared.staleAfter && now > 0;
+  const simulationAgeMs = bundle ? Math.max(0, now - bundle.simulation.simulationTimestamp) : null;
+
+  const anchorVerified = anchor?.status === "verified";
+  const chainOk = chainId === CHAIN_ID;
+  const gates: CreateFlowGates = {
+    walletConnected: walletState !== "disconnected",
+    chainOk: walletState !== "disconnected" && chainOk,
+    anchorVerified,
+    metadataConfirmed: metadata !== null && metadata.provider === "pinata",
+    simulated: bundle !== null,
+    simulationFresh,
+    broadcastEnabled: config?.broadcastEnabled === true,
+    killSwitchInactive: config !== undefined && config.killSwitchActive === false,
+  };
+
+  const flowState: CreateFlowState = useMemo(() => {
+    if (phase !== "idle") return phase;
+    if (!formComplete) return "form-incomplete";
+    if (formErrors.length > 0) return "form-invalid";
+    // Form done but metadata not yet confirmed → still an incomplete flow input.
+    if (!metadata) return "form-incomplete";
+    if (!prepareRequested && !bundle) return "metadata-confirmed";
+    if (!bundle) {
+      if (anchorQuery.isPending || anchor?.status === "verifying") return "anchor-verifying";
+      if (anchorQuery.isError || !anchor || anchor.status !== "verified") return "anchor-mismatch";
+      return "anchor-verified";
+    }
+    if (config?.killSwitchActive) return "kill-switch-active";
+    if (config && !config.broadcastEnabled) return "broadcast-disabled";
+    if (!anchorVerified) return "anchor-mismatch";
+    if (
+      walletState !== "connected" ||
+      !simulationFresh ||
+      !gates.metadataConfirmed ||
+      config === undefined
+    ) {
+      return "simulation-success";
+    }
+    return "ready-to-launch";
+  }, [
+    phase,
+    formComplete,
+    formErrors.length,
+    metadata,
+    prepareRequested,
+    bundle,
+    anchorQuery.isPending,
+    anchorQuery.isError,
+    anchor,
+    config,
+    anchorVerified,
+    walletState,
+    simulationFresh,
+    gates.metadataConfirmed,
+  ]);
+
+  const ensureChain = useCallback(async () => {
+    if (chainId !== CHAIN_ID) await switchChainAsync({ chainId: CHAIN_ID });
+  }, [chainId, switchChainAsync]);
+
+  const failFromError = useCallback((e: unknown) => {
+    if (isNotAllowlisted(e)) setUnauthorised(true);
+    setError(errorMessage(e));
+  }, []);
+
+  const uploadMetadata = useCallback(async (): Promise<boolean> => {
+    setError(null);
+    if (!address) {
+      setError("Connect a wallet before uploading metadata.");
+      return false;
+    }
+    const file = form.imageFile;
+    if (!file) {
+      setError("Choose a token image first.");
+      return false;
+    }
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const input: MetadataInput = {
+        tokenName: form.tokenName,
+        tokenSymbol: form.tokenSymbol,
+        tokenDescription: form.tokenDescription,
+        imageBytes: bytes,
+        imageMime: file.type as MetadataInput["imageMime"],
+        imageFilename: safeFilename(file.name || "token-image"),
+      };
+      const fullErrors = validateMetadataInput(input);
+      if (fullErrors.length > 0) {
+        setUploadErrors(fullErrors);
+        return false;
+      }
+      await ensureChain();
+      const payload = {
+        tokenName: form.tokenName,
+        tokenSymbol: form.tokenSymbol,
+        tokenDescription: form.tokenDescription,
+        imageHash: keccak256(bytes),
+        imageMime: file.type,
+      };
+      const envelope = await signRequest("metadata-upload", payload);
+      setPhase("image-uploading");
+      const fd = new FormData();
+      fd.append("envelope", JSON.stringify(envelope));
+      fd.append(
+        "fields",
+        JSON.stringify({
+          tokenName: form.tokenName,
+          tokenSymbol: form.tokenSymbol,
+          tokenDescription: form.tokenDescription,
+        }),
+      );
+      fd.append("image", file, input.imageFilename);
+      const result = await labFetch<MetadataUploadResult>("/api/lab/metadata", {
+        method: "POST",
+        body: fd,
+      });
+      setMetadata(result);
+      setBundle(null);
+      setPayloadUsed(null);
+      setPrepareRequested(false);
+      setPhase("idle");
+      return true;
+    } catch (e) {
+      setPhase("idle");
+      failFromError(e);
+      return false;
+    }
+  }, [address, form, ensureChain, signRequest, failFromError]);
+
+  const buildPayload = useCallback((): PrepareLaunchPayload | null => {
+    if (!address || !metadata) return null;
+    const feeRaw = form.creatorFeeAddress.trim();
+    const creatorFee = feeRaw === "" ? address : feeRaw;
+    if (!isAddress(creatorFee)) return null;
+    return {
+      tokenName: form.tokenName,
+      tokenSymbol: form.tokenSymbol,
+      tokenDescription: form.tokenDescription,
+      tokenUri: metadata.tokenUri,
+      imageCid: metadata.imageCid,
+      metadataCid: metadata.metadataCid,
+      metadataProvider: "pinata",
+      startingFdvUsd: Math.trunc(form.startingFdvUsd),
+      feePreset: form.feePreset,
+      creatorAddress: address,
+      creatorFeeAddress: getAddress(creatorFee) as Address,
+    };
+  }, [address, metadata, form]);
+
+  const prepare = useCallback(async (): Promise<boolean> => {
+    setError(null);
+    setPrepareRequested(true);
+    if (metadata && metadata.provider !== "pinata") {
+      setError("Token metadata is not a production IPFS upload; broadcast would be refused.");
+      return false;
+    }
+    const payload = buildPayload();
+    if (!payload) {
+      setError("Complete the form, upload metadata, and connect the creator wallet first.");
+      return false;
+    }
+    // Fail-closed anchor check before asking the wallet to sign anything.
+    const anchorNow = anchor ?? (await anchorQuery.refetch()).data;
+    if (!anchorNow || anchorNow.status !== "verified") {
+      setError(anchorNow?.mismatchReason ?? "GOOGL anchor verification failed.");
+      return false;
+    }
+    try {
+      await ensureChain();
+      const envelope = await signRequest("prepare-launch", payload);
+      setPhase("simulating");
+      const fresh = await labFetch<PreparedLaunchBundle>("/api/lab/prepare", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ envelope, payload }),
+      });
+      setBundle(fresh);
+      setPayloadUsed(payload);
+      setNow(Date.now());
+      setPhase("idle");
+      return true;
+    } catch (e) {
+      failFromError(e);
+      setPhase("simulation-failure");
+      return false;
+    }
+  }, [metadata, buildPayload, anchor, anchorQuery, ensureChain, signRequest, failFromError]);
+
+  /** Re-simulate via /api/lab/simulate (requires a fresh signature; 180 s rule). */
+  const resimulate = useCallback(async (): Promise<PreparedLaunchBundle | null> => {
+    if (!bundle || !payloadUsed) return null;
+    const envelope = await signRequest("prepare-launch", payloadUsed);
+    setPhase("simulating");
+    const fresh = await labFetch<{
+      simulation: LaunchSimulation;
+      prepared: PreparedLaunchTransaction;
+      manifestHash: Hex;
+    }>("/api/lab/simulate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ envelope, payload: payloadUsed }),
+    });
+    const merged: PreparedLaunchBundle = {
+      manifest: bundle.manifest,
+      manifestHash: fresh.manifestHash,
+      simulation: fresh.simulation,
+      prepared: fresh.prepared,
+    };
+    setBundle(merged);
+    setNow(Date.now());
+    return merged;
+  }, [bundle, payloadUsed, signRequest]);
+
+  const launch = useCallback(async (): Promise<void> => {
+    if (phase === "launch-mismatch" || phase === "launch-success") return; // hard stop / done
+    setError(null);
+    if (!config || !bundle || !address || !publicClient) {
+      setError("Launch prerequisites are missing.");
+      return;
+    }
+    if (config.killSwitchActive) {
+      setError("The kill switch is active; launches are halted.");
+      return;
+    }
+    if (!config.broadcastEnabled) {
+      setError("Broadcasting is disabled by server configuration.");
+      return;
+    }
+    if (!anchorVerified) {
+      setError("GOOGL anchor is not verified.");
+      return;
+    }
+    if (!metadata || metadata.provider !== "pinata") {
+      setError("Token metadata is not a broadcastable production IPFS upload.");
+      return;
+    }
+    broadcastRef.current = false;
+    try {
+      await ensureChain();
+      let active = bundle;
+      if (Date.now() > active.prepared.staleAfter) {
+        const fresh = await resimulate();
+        if (!fresh) throw new Error("Re-simulation before send failed.");
+        active = fresh;
+      }
+      setPhase("awaiting-signature");
+      const hash = await sendTransactionAsync({
+        to: active.prepared.to,
+        data: active.prepared.data,
+        value: 0n,
+        gas: BigInt(active.prepared.gas),
+        chainId: CHAIN_ID,
+      });
+      broadcastRef.current = true;
+      setTxHash(hash);
+      setPhase("transaction-pending");
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      setPhase("confirmation-pending");
+      // Give React a frame to render the confirmation state before decoding.
+      await new Promise((r) => setTimeout(r, 30));
+      setPhase("receipt-decoding");
+      const result = await decodeAndVerifyReceipt(
+        publicClient as unknown as PublicClient,
+        active.manifest,
+        active.simulation.predictedTokenAddress,
+        receipt,
+      );
+      setReceiptResult(result);
+      if (result.matchesManifest) {
+        setPhase("launch-success");
+        router.push(`/lab/token/${result.tokenAddress}`);
+      } else {
+        // HARD STOP: never continue past a manifest mismatch.
+        setPhase("launch-mismatch");
+      }
+    } catch (e) {
+      failFromError(e);
+      // After broadcast, a failure means the launch is UNVERIFIED — hard stop.
+      setPhase(broadcastRef.current ? "launch-mismatch" : "idle");
+    }
+  }, [
+    phase,
+    config,
+    bundle,
+    address,
+    publicClient,
+    anchorVerified,
+    metadata,
+    ensureChain,
+    resimulate,
+    sendTransactionAsync,
+    router,
+    failFromError,
+  ]);
+
+  const reset = useCallback(() => {
+    setMetadata(null);
+    setBundle(null);
+    setPayloadUsed(null);
+    setPrepareRequested(false);
+    setPhase("idle");
+    setError(null);
+    setUnauthorised(false);
+    setTxHash(null);
+    setReceiptResult(null);
+    setUploadErrors([]);
+    broadcastRef.current = false;
+  }, []);
+
+  return {
+    form,
+    updateForm,
+    formComplete,
+    formErrors,
+    metadata,
+    bundle,
+    manifest: bundle?.manifest ?? null,
+    manifestHash: bundle?.manifestHash ?? null,
+    simulation: bundle?.simulation ?? null,
+    prepared: bundle?.prepared ?? null,
+    simulationFresh,
+    simulationAgeMs,
+    flowState,
+    walletState,
+    unauthorised,
+    error,
+    txHash,
+    receiptResult,
+    config,
+    anchor,
+    anchorLoading: anchorQuery.isPending,
+    gates,
+    canLaunch: flowState === "ready-to-launch",
+    uploadMetadata,
+    prepare,
+    launch,
+    reset,
+  };
+}
