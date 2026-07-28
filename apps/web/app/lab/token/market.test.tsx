@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { createConfig, http } from "wagmi";
 import { FEE_PRESETS } from "@bps/launch-lab";
 import { robinhoodChain } from "../../../lib/chain";
@@ -50,7 +50,9 @@ const STATS = {
   marketCapUsd: "52500",
   anchorReserveWei: "57442260344809",
   remainingInventoryWei: "999950000000000000000000000",
-  liquidityUsd: "20521.55",
+  // Two honest components — NEVER summed into a single "Liquidity" number.
+  poolReserveUsd: "11.2079",
+  curveInventoryValueUsd: "1049947500",
   windows: {
     "5m": { volumeUsd: "0", buys: 0, sells: 0, priceChangePct: null },
     "1h": { volumeUsd: "11.2079", buys: 1, sells: 0, priceChangePct: null },
@@ -72,7 +74,10 @@ const TRADES = [
     anchorAmountWei: "57442260344809",
     usdValue: "11.2079",
     priceUsdAtTrade: "1.05",
+    /** transaction.from — the wallet shown in the Wallet column. */
     trader: "0x59D0e50779e5D9C4b2c4fdBb5e0AaB9a1B4e56aD",
+    /** Decoded Swap event sender (a router) — detail only, never the wallet. */
+    eventSender: "0x9eB7f2591E8f2f3860d1a1bbcCEc0BA9d5c40BdC",
   },
 ];
 
@@ -165,12 +170,33 @@ const LAB_CONFIG = {
   genesis: { launched: false, tokenAddress: null },
 };
 
-function stubLabFetch(snapshot: unknown, history?: { swaps: unknown[] }) {
+/** Honest default: the metadata endpoint has nothing for this token. */
+const NO_METADATA = {
+  available: false,
+  name: null,
+  description: null,
+  imageUrl: null,
+  tokenUri: null,
+  source: null,
+  fetchedAt: 1_753_600_000_000,
+};
+
+function stubLabFetch(
+  snapshot: unknown,
+  history?: { swaps: unknown[] },
+  metadata: unknown = NO_METADATA,
+) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/metadata")) {
+        return {
+          status: 200,
+          json: async () => ({ ok: true, data: metadata }),
+        } as unknown as Response;
+      }
       if (url.includes("/api/lab/token/")) {
         return {
           status: 200,
@@ -224,6 +250,10 @@ describe("Launch Lab token market page", () => {
     // The generic awaiting-indexed-data treatment is gone for snapshot values.
     expect(screen.queryByText("awaiting indexed data")).toBeNull();
 
+    // No metadata artwork → neutral monogram placeholder, never a stand-in image.
+    expect(screen.getByTestId("token-artwork-placeholder")).toBeInTheDocument();
+    expect(screen.queryByTestId("token-artwork")).toBeNull();
+
     // Stat strip: honest compact placeholders, plus the No-trades note.
     expect(screen.getByTestId("stat-price")).toHaveTextContent("—");
     expect(screen.getByTestId("stat-market-cap")).toHaveTextContent("—");
@@ -263,6 +293,37 @@ describe("Launch Lab token market page", () => {
     expect(screen.getByTestId("trades-24h-counts")).toHaveTextContent("24h: 3 buys · 1 sell");
   });
 
+  it("labels pool reserve and curve inventory value as separate rows — never summed, never 'Liquidity'", async () => {
+    stubLabFetch(LIVE_SNAPSHOT);
+    renderMarket();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("stat-pool-reserve")).toHaveTextContent("$11.21"),
+    );
+    expect(screen.getByText("Pool reserve")).toBeInTheDocument();
+    expect(screen.getByText("Curve inventory value")).toBeInTheDocument();
+    expect(screen.getByTestId("stat-curve-inventory")).toHaveTextContent("$1.05B");
+    // No stat is labelled "Liquidity" and the sum (11.2079 + 1049947500) is
+    // never displayed anywhere.
+    expect(screen.queryByText("Liquidity")).toBeNull();
+    expect(screen.queryByTestId("stat-liquidity")).toBeNull();
+    expect(document.body.textContent).not.toContain("1049947511");
+  });
+
+  it("labels the holder count 'Holder addresses' with its Blockscout source disclosed", async () => {
+    stubLabFetch(LIVE_SNAPSHOT);
+    renderMarket();
+
+    await waitFor(() => expect(screen.getByTestId("stat-holders")).toHaveTextContent("7"));
+    expect(screen.getByText("Holder addresses")).toBeInTheDocument();
+    expect(screen.queryByText("Holders")).toBeNull();
+    // The source is disclosed right next to the count.
+    expect(screen.getByTestId("stat-holders")).toContainElement(
+      screen.getByTestId("holders-source"),
+    );
+    expect(screen.getByTestId("holders-source")).toHaveTextContent("Blockscout");
+  });
+
   it("renders the live test buy in the recent-trades table with its Blockscout tx link", async () => {
     stubLabFetch(LIVE_SNAPSHOT);
     renderMarket();
@@ -280,6 +341,31 @@ describe("Launch Lab token market page", () => {
     // USD value and execution price come from the trade record.
     expect(row).toHaveTextContent("$11.21");
     expect(row).toHaveTextContent("$1.05");
+  });
+
+  it("shows the trader's wallet (transaction.from) in the Wallet column — the router event sender is detail only", async () => {
+    stubLabFetch(LIVE_SNAPSHOT);
+    renderMarket();
+
+    await waitFor(() =>
+      expect(screen.getByTestId(`trade-wallet-${LIVE_BUY_TX}`)).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("columnheader", { name: "Wallet" })).toBeInTheDocument();
+
+    const wallet = screen.getByTestId(`trade-wallet-${LIVE_BUY_TX}`);
+    // Shortened wallet address, linked to its Blockscout address page.
+    expect(wallet).toHaveTextContent("0x59D0…56aD");
+    expect(within(wallet).getByRole("link")).toHaveAttribute(
+      "href",
+      `https://robinhoodchain.blockscout.com/address/${TRADES[0]!.trader}`,
+    );
+    // The event sender (router) differs → exposed as labelled detail only.
+    expect(wallet).toHaveAttribute(
+      "title",
+      `Event sender (router): ${TRADES[0]!.eventSender}`,
+    );
+    // The router address is never displayed as the wallet.
+    expect(wallet.textContent).not.toContain("0x9eB7");
   });
 
   it("shows 'DEX Screener indexing…' while dexScreener is null and the verbatim link once present", async () => {
@@ -324,25 +410,56 @@ describe("Launch Lab token market page", () => {
     // Nothing on the page is hard-coded to GOOGL.
     expect(screen.queryAllByText(/GOOGL/)).toHaveLength(0);
   });
+
+  it("uses metadata artwork when available, else a neutral monogram — never another token's artwork", async () => {
+    const META = {
+      available: true,
+      name: "PRINT",
+      description: "Genesis lab market",
+      imageUrl: "https://example.com/artwork/print.png",
+      tokenUri: "https://example.com/artwork/print.json",
+      source: "token-uri",
+      fetchedAt: 1_753_600_000_000,
+    };
+    stubLabFetch(LIVE_SNAPSHOT, undefined, META);
+    const first = renderMarket();
+    await waitFor(() =>
+      expect(screen.getByTestId("token-artwork")).toHaveAttribute("src", META.imageUrl),
+    );
+    expect(screen.queryByTestId("token-artwork-placeholder")).toBeNull();
+    first.unmount();
+    vi.unstubAllGlobals();
+
+    // No metadata → neutral monogram placeholder. The old hardcoded PRINT
+    // artwork fallback is gone and must never return.
+    stubLabFetch(LIVE_SNAPSHOT);
+    renderMarket();
+    await waitFor(() =>
+      expect(screen.getByTestId("token-artwork-placeholder")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("token-artwork-placeholder")).toHaveTextContent("PRIN");
+    expect(screen.queryByTestId("token-artwork")).toBeNull();
+    expect(document.querySelector('img[src="/lab/print-token.png"]')).toBeNull();
+  });
 });
 
-describe("PriceChart — launch-price baseline", () => {
-  it("renders the chart from the launch baseline plus a single swap (baseline → first trade line)", async () => {
-    const swap = {
-      id: 1,
-      poolId: `0x${"ab".repeat(32)}`,
-      blockNumber: 8412345,
-      txHash: LIVE_BUY_TX,
-      amount0: "-57442260344809",
-      amount1: "1000000000000000000000",
-      sqrtPriceX96: "79228162514264337593543950336", // 2^96 → 1 anchor per token
-      tick: 0,
-      fee: 10000,
-      occurredAt: "2026-07-27T12:00:00.000Z",
-    };
-    stubLabFetch(LIVE_SNAPSHOT, { swaps: [swap] });
+describe("PriceChart — anchor-denominated series", () => {
+  /** sqrtPriceX96 = 2^96 → exactly 1 anchor per token (18/18 decimals). */
+  const SWAP = {
+    id: 1,
+    poolId: `0x${"ab".repeat(32)}`,
+    blockNumber: 8412345,
+    txHash: LIVE_BUY_TX,
+    amount0: "-57442260344809",
+    amount1: "1000000000000000000000",
+    sqrtPriceX96: "79228162514264337593543950336",
+    tick: 0,
+    fee: 10000,
+    occurredAt: "2026-07-27T12:00:00.000Z",
+  };
 
-    render(
+  function renderChart() {
+    return render(
       <Providers config={makeConfig()}>
         <PriceChart
           address={TOKEN}
@@ -350,32 +467,43 @@ describe("PriceChart — launch-price baseline", () => {
           anchorSymbol="GOOGL"
           anchorIsCurrency0={true}
           anchorDecimals={18}
-          anchorMidUsd="195.12"
-          startingPriceUsd="0.0205"
-          launchedAt="2026-07-26T12:00:00.000Z"
         />
       </Providers>,
     );
+  }
 
-    // Baseline + one swap = a two-point line, honestly rendered. (The baseline
-    // renders immediately; the swap point arrives when the history query lands.)
+  it("plots anchor-per-token from each swap's sqrtPriceX96 — the anchor USD midpoint is NEVER applied to historical points", async () => {
+    stubLabFetch(LIVE_SNAPSHOT, { swaps: [SWAP] });
+    renderChart();
+
     await waitFor(() =>
-      expect(screen.getByTestId("price-chart-svg")).toHaveAttribute("data-point-count", "2"),
+      expect(screen.getByTestId("price-chart-svg")).toHaveAttribute("data-point-count", "1"),
     );
-    const points = screen.getAllByTestId("price-point");
-    expect(points).toHaveLength(2);
-    expect(points[0]).toHaveAttribute("data-baseline", "true");
+    // 2^96 → exactly 1 GOOGL per PRINT. Under the banned retroactive USD
+    // conversion this point would read 195.12 (1 × today's midpoint).
+    const footer = screen.getByTestId("price-chart-footer");
+    expect(footer).toHaveTextContent("1.00000 GOOGL per PRINT");
+    expect(footer.textContent).not.toContain("195.12");
+    expect(footer.textContent).not.toContain("$");
+    // Axis and footer are anchor-denominated and disclose the USD rule.
+    expect(screen.getByTestId("axis-unit")).toHaveTextContent("GOOGL per PRINT");
+    expect(footer).toHaveTextContent(/derived from on-chain swaps/i);
+    expect(footer).toHaveTextContent(/USD values shown elsewhere use the live GOOGL midpoint/i);
+  });
+
+  it("renders no launch-price baseline point — a single swap is a single real point", async () => {
+    stubLabFetch(LIVE_SNAPSHOT, { swaps: [SWAP] });
+    renderChart();
+
+    await waitFor(() => expect(screen.getByTestId("price-chart-svg")).toBeInTheDocument());
+    expect(screen.getAllByTestId("price-point")).toHaveLength(1);
+    expect(document.querySelector("[data-baseline]")).toBeNull();
     expect(screen.queryByTestId("price-chart-empty")).toBeNull();
   });
 
-  it("keeps the honest empty state when there are zero swaps AND no baseline", async () => {
+  it("keeps the honest empty state when there are zero swaps", async () => {
     stubLabFetch(LIVE_SNAPSHOT, { swaps: [] });
-
-    render(
-      <Providers config={makeConfig()}>
-        <PriceChart address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" anchorMidUsd="195.12" />
-      </Providers>,
-    );
+    renderChart();
 
     await waitFor(() =>
       expect(screen.getByTestId("price-chart-empty")).toHaveTextContent(/Collecting market data/i),

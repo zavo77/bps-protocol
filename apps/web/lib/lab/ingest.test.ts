@@ -59,6 +59,7 @@ beforeEach(() => {
   m.client.getTransactionReceipt.mockResolvedValue({
     status: "success",
     blockNumber: 21552602n,
+    from: "0x78B256A742FA2c0F84EbdAf570fcdC16EE206024",
     logs: [
       {
         address: POOL_MANAGER,
@@ -77,9 +78,20 @@ describe("POST /api/lab/trade/ingest", () => {
     expect(res.status).toBe(200);
     expect(body.data.ingested).toBe(1);
     expect(body.data.swaps[0]!.amount0).toBe("-57442260344809");
-    // idempotent insert with ON CONFLICT DO NOTHING
+    // Idempotent: on conflict only the trader-identity columns are filled
+    // (COALESCE keeps existing values) — amounts are never overwritten.
     const insert = m.pg.query.mock.calls.find((c) => String(c[0]).includes("INSERT INTO lab_swaps"));
-    expect(String(insert![0])).toContain("ON CONFLICT (id) DO NOTHING");
+    const sql = String(insert![0]);
+    expect(sql).toContain("ON CONFLICT (id) DO UPDATE");
+    expect(sql).toContain("event_sender = COALESCE(lab_swaps.event_sender, EXCLUDED.event_sender)");
+    expect(sql).toContain(
+      "transaction_from = COALESCE(lab_swaps.transaction_from, EXCLUDED.transaction_from)",
+    );
+    expect(sql).not.toMatch(/DO UPDATE SET[\s\S]*amount0/);
+    // Trader identity: decoded event sender + receipt.from, both lowercased.
+    const params = insert![1] as unknown[];
+    expect(params).toContain("0xaa61254627b7392b0bc922097b10eb0587db2be7");
+    expect(params).toContain("0x78b256a742fa2c0f84ebdaf570fcdc16ee206024");
   });
 
   it("rejects unverified markets (404) without touching the chain", async () => {

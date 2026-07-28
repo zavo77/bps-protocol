@@ -156,9 +156,17 @@ describe("computeStats — honest metric definitions", () => {
     expect(stats.windows.all.buys).toBe(1);
   });
 
-  it("liquidity is pool-attributable (reserve + inventory value), non-null", () => {
-    expect(stats.liquidityUsd).not.toBeNull();
-    expect(Number(stats.liquidityUsd)).toBeGreaterThan(0);
+  it("pool reserve and curve inventory value are SEPARATE stats, never summed", () => {
+    // Pool reserve: real anchor tokens held by the pool (~0.0000574 GOOGL ≈ $0.019).
+    expect(stats.poolReserveUsd).not.toBeNull();
+    expect(Number(stats.poolReserveUsd)).toBeGreaterThan(0.017);
+    expect(Number(stats.poolReserveUsd)).toBeLessThan(0.021);
+    // Curve inventory value: unsold inventory × current price (≈ FDV here).
+    expect(stats.curveInventoryValueUsd).not.toBeNull();
+    expect(Number(stats.curveInventoryValueUsd)).toBeGreaterThan(19_000);
+    expect(Number(stats.curveInventoryValueUsd)).toBeLessThan(23_000);
+    // The dishonest summed "liquidity" metric must not exist.
+    expect("liquidityUsd" in (stats as unknown as Record<string, unknown>)).toBe(false);
   });
 });
 

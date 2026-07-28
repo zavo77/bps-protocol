@@ -5,6 +5,7 @@
 import { parseEventLogs, getAddress, type Address, type Hex } from "viem";
 import { airlockAbi, CHAIN_IDS, getAddresses } from "@whetstone-research/doppler-sdk/evm";
 import { getAnchorByAddress } from "@bps/launch-lab";
+import { extractLaunchFacts } from "../../../../lib/lab/launch-facts";
 import { getLabClient } from "../../../../lib/lab/server";
 import {
   invalidateLaunchCache,
@@ -55,7 +56,7 @@ export async function POST(req: Request): Promise<Response> {
   try {
     if (rateLimited(`launchreg:${clientKey(req)}`, 10))
       return err("RATE_LIMITED", "Too many requests.", 429);
-    const body = (await req.json()) as { transactionHash?: string };
+    const body = (await req.json()) as { transactionHash?: string; manifest?: unknown };
     const hash = body.transactionHash;
     if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash))
       return err("BAD_TX_HASH", "Invalid transaction hash.");
@@ -110,6 +111,12 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
+    // IMMUTABLE LAUNCH FACTS: persist the manifest's per-launch configuration so
+    // this market's historical display never changes when server defaults change.
+    // Hash-gated against the manifest THIS server issued at prepare time;
+    // registration itself never depends on it.
+    const launchManifest = extractLaunchFacts(body.manifest, issued.manifestHash);
+
     const block = await client.getBlock({ blockNumber: receipt.blockNumber });
     const anchor = getAnchorByAddress(args.numeraire);
     const inserted = await insertVerifiedLaunch({
@@ -122,6 +129,7 @@ export async function POST(req: Request): Promise<Response> {
       blockNumber: receipt.blockNumber.toString(),
       timestamp: Number(block.timestamp),
       manifestHash: issued.manifestHash,
+      launchManifest,
     });
     // Single-use: the matched manifest cannot verify another market.
     await consumeIssuedManifest(asset);

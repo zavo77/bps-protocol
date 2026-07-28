@@ -218,6 +218,10 @@ function stubFetch(handler: Handler): Call[] {
         }
       }
       calls.push({ url, body });
+      // The awaited BPS-leg ingestion endpoint always exists in the real app;
+      // serve it here so per-test handlers stay focused on quote/prepare-leg.
+      if (url.includes("/api/lab/trade/ingest"))
+        return jsonResponse(200, { ok: true, data: { ingested: 1, swaps: [] } });
       return handler(url, init);
     }),
   );
@@ -820,7 +824,7 @@ describe("TradeCard — final-gate additions (Rialto lane)", () => {
         return 0n;
       },
     );
-    stubFetch((url, init) => {
+    const calls = stubFetch((url, init) => {
       if (url.includes("/api/lab/quote"))
         return jsonResponse(200, { ok: true, data: COMPOSED_SELL });
       if (url.includes("/api/lab/trade/prepare-leg")) {
@@ -851,6 +855,12 @@ describe("TradeCard — final-gate additions (Rialto lane)", () => {
     expect(persisted!.actualReceivedAnchorWei).toBe(WEI(2));
     // Cancel keeps the anchor — the user is never forced onward.
     expect(screen.getByTestId("recovery-cancel")).toHaveTextContent(/keep NVDA/i);
+    // The confirmed BPS Direct leg was ingested immediately (awaited, not
+    // fire-and-forget) with the real tx hash — Rialto legs never trigger this.
+    const ingest = bodyFor(calls, "/api/lab/trade/ingest");
+    expect(ingest).not.toBeNull();
+    expect(ingest!.txHash).toBe(`0x${"66".repeat(32)}`);
+    expect(ingest!.marketToken).toBe(TOKEN);
   });
 
   it("SELL resume posts an aggregator leg (server runs the Rialto-first chain) with the ACTUAL amount", async () => {

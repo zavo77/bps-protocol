@@ -113,10 +113,13 @@ async function indexSwapRange(
     toBlock: to,
   });
   const blockTimes = new Map<string, number>();
+  // transaction.from cache — one getTransaction per unique tx hash per range.
+  const txFrom = new Map<string, string>();
   for (const l of logs) {
     if (l.blockNumber === null || !l.transactionHash || l.logIndex === null) continue;
     const args = l.args as {
       id: Hex;
+      sender: Hex;
       amount0: bigint;
       amount1: bigint;
       sqrtPriceX96: bigint;
@@ -130,10 +133,23 @@ async function indexSwapRange(
       const b = await client.getBlock({ blockNumber: l.blockNumber });
       blockTimes.set(bkey, Number(b.timestamp));
     }
+    if (!txFrom.has(l.transactionHash)) {
+      try {
+        const t = await client.getTransaction({ hash: l.transactionHash });
+        txFrom.set(l.transactionHash, t.from.toLowerCase());
+      } catch {
+        txFrom.set(l.transactionHash, "");
+      }
+    }
+    // Idempotent: amounts never overwritten; trader-identity columns are
+    // filled only when still null (backfills instant-ingested rows and
+    // vice versa — no duplicates either direction).
     await pool.query(
-      `INSERT INTO lab_swaps (id, pool_id, token_address, block_number, tx_hash, amount0, amount1, sqrt_price_x96, tick, fee, occurred_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,to_timestamp($11))
-       ON CONFLICT (id) DO NOTHING`,
+      `INSERT INTO lab_swaps (id, pool_id, token_address, block_number, tx_hash, amount0, amount1, sqrt_price_x96, tick, fee, occurred_at, event_sender, transaction_from)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,to_timestamp($11),$12,$13)
+       ON CONFLICT (id) DO UPDATE SET
+         event_sender = COALESCE(lab_swaps.event_sender, EXCLUDED.event_sender),
+         transaction_from = COALESCE(lab_swaps.transaction_from, EXCLUDED.transaction_from)`,
       [
         `${l.transactionHash}:${l.logIndex}`,
         args.id.toLowerCase(),
@@ -146,6 +162,8 @@ async function indexSwapRange(
         args.tick,
         args.fee,
         blockTimes.get(bkey),
+        args.sender ? args.sender.toLowerCase() : null,
+        txFrom.get(l.transactionHash) || null,
       ],
     );
   }

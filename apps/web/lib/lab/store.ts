@@ -53,6 +53,7 @@ export async function getPg(): Promise<PgPool | null> {
       `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS provenance_verified_at TIMESTAMPTZ`,
     );
     await pool.query(`ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS manifest_hash TEXT`);
+    await pool.query(`ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS launch_manifest JSONB`);
     // Issued-manifest ledger: every /api/lab/prepare records its predicted token
     // + creator. A launch is BPS only if its created token matches an issued
     // prediction by the same creator — external Doppler markets never do.
@@ -158,6 +159,8 @@ export interface VerifiedLaunchInsert {
   manifestHash: string;
   tokenName?: string;
   tokenSymbol?: string;
+  /** Immutable per-launch facts (hash-validated against the issued manifest). */
+  launchManifest?: Record<string, unknown> | null;
 }
 
 /**
@@ -172,12 +175,13 @@ export async function insertVerifiedLaunch(rec: VerifiedLaunchInsert): Promise<b
     await pg.query(
       `INSERT INTO lab_launches
          (token_address, token_name, token_symbol, creator, numeraire, anchor_symbol, pool_or_hook,
-          launch_tx, block_number, launched_at, launch_source, provenance_verified, provenance_verified_at, manifest_hash)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,to_timestamp($10),'bps-web',true,now(),$11)
+          launch_tx, block_number, launched_at, launch_source, provenance_verified, provenance_verified_at, manifest_hash, launch_manifest)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,to_timestamp($10),'bps-web',true,now(),$11,$12::jsonb)
        ON CONFLICT (token_address) DO UPDATE SET
          provenance_verified = true, launch_source = 'bps-web', provenance_verified_at = now(),
          manifest_hash = COALESCE(lab_launches.manifest_hash, EXCLUDED.manifest_hash),
-         anchor_symbol = COALESCE(lab_launches.anchor_symbol, EXCLUDED.anchor_symbol)`,
+         anchor_symbol = COALESCE(lab_launches.anchor_symbol, EXCLUDED.anchor_symbol),
+         launch_manifest = COALESCE(lab_launches.launch_manifest, EXCLUDED.launch_manifest)`,
       [
         rec.tokenAddress.toLowerCase(),
         rec.tokenName ?? "",
@@ -190,6 +194,7 @@ export async function insertVerifiedLaunch(rec: VerifiedLaunchInsert): Promise<b
         rec.blockNumber,
         rec.timestamp,
         rec.manifestHash,
+        rec.launchManifest ? JSON.stringify(rec.launchManifest) : null,
       ],
     );
     invalidateLaunchCache();

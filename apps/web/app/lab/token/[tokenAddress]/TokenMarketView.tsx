@@ -1,22 +1,22 @@
 "use client";
 // Public market page — Claude Design V4 lab aesthetic. Hierarchy (founder
 // spec): token identity header → stat strip (price / 24h change / market cap /
-// FDV / liquidity / 24h volume / holders / age + DEX Screener & Blockscout
-// links) → chart LEFT + TradeCard RIGHT (stacked on mobile, chart first) →
-// Recent trades table → collapsed "Market details". Every label derives from
-// the snapshot (dynamic anchor symbol — nothing hard-coded to a market).
-// Values the enriched snapshot populates render directly; when stats is null
-// the page shows honest compact placeholders ("—" / "No trades yet"), never a
-// fabricated value.
+// FDV / pool reserve / curve inventory value / 24h volume / holder addresses /
+// age + DEX Screener & Blockscout links) → chart LEFT + TradeCard RIGHT
+// (stacked on mobile, chart first) → Recent trades table → collapsed "Market
+// details". Every label derives from the snapshot (dynamic anchor symbol —
+// nothing hard-coded to a market). Values the enriched snapshot populates
+// render directly; when stats is null the page shows honest compact
+// placeholders ("—" / "No trades yet"), never a fabricated value. Pool reserve
+// and curve inventory value are ALWAYS separate rows — never summed, never
+// labelled "Liquidity".
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { EXPLORER_BASE_URL } from "@bps/launch-lab";
-import { useLabConfig, useMarket } from "../../../../hooks/lab";
+import { useLabConfig, useMarket, useTokenMetadata } from "../../../../hooks/lab";
 import { TradeCard } from "./TradeCard";
 import { PriceChart } from "./PriceChart";
-
-const IMAGE_RE = /^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)$/i;
 
 function short(v: string): string {
   return v.length > 14 ? `${v.slice(0, 8)}…${v.slice(-6)}` : v;
@@ -147,6 +147,7 @@ function Kv({ k, v }: { k: string; v: React.ReactNode }) {
 export function TokenMarketView({ address }: { address: string }) {
   const { data: config } = useLabConfig();
   const market = useMarket(address);
+  const { data: metadata } = useTokenMetadata(address);
   const queryClient = useQueryClient();
   const explorer = config?.explorerBaseUrl ?? EXPLORER_BASE_URL;
   const snap = market.data;
@@ -186,14 +187,11 @@ export function TokenMarketView({ address }: { address: string }) {
   const explorerTokenUrl = snap.explorerTokenUrl || `${explorer}/token/${snap.tokenAddress}`;
   const hasTrades = (stats?.swapCount ?? 0) > 0 || trades.length > 0;
 
-  // Artwork only when trivially available: an image tokenUri, or the frozen
-  // Genesis PRINT artwork for the PRINT market itself.
-  const tokenImage =
-    snap.tokenUri.available && IMAGE_RE.test(snap.tokenUri.value)
-      ? snap.tokenUri.value
-      : snap.tokenSymbol === "PRINT"
-        ? "/lab/print-token.png"
-        : null;
+  // Artwork ONLY from this token's metadata endpoint (tokenURI-derived). No
+  // hardcoded artwork fallback — another token's image must never appear here.
+  // When unavailable, a neutral monogram placeholder renders instead.
+  const tokenImage = metadata?.available && metadata.imageUrl ? metadata.imageUrl : null;
+  const monogram = (snap.tokenSymbol || snap.tokenName || "?").slice(0, 4).toUpperCase();
 
   const startingPriceUsd =
     stats?.startingPriceUsd ??
@@ -233,6 +231,7 @@ export function TokenMarketView({ address }: { address: string }) {
             alt=""
             width={88}
             height={88}
+            data-testid="token-artwork"
             style={{
               display: "block",
               borderRadius: 24,
@@ -240,7 +239,28 @@ export function TokenMarketView({ address }: { address: string }) {
               boxShadow: "var(--card-shadow)",
             }}
           />
-        ) : null}
+        ) : (
+          <div
+            aria-hidden="true"
+            data-testid="token-artwork-placeholder"
+            style={{
+              width: 88,
+              height: 88,
+              borderRadius: 24,
+              border: "1px solid var(--peach-grey)",
+              background: "var(--soft-peach)",
+              color: "var(--deep-ink)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: 600,
+              fontSize: 20,
+              letterSpacing: 1,
+            }}
+          >
+            {monogram}
+          </div>
+        )}
         <div style={{ flex: 1, minWidth: 240 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
             <h1 className="lab-h1" style={{ margin: 0 }}>
@@ -277,11 +297,30 @@ export function TokenMarketView({ address }: { address: string }) {
         <Stat label="24h" value={changeNode} testid="stat-change-24h" />
         <Stat label="Market cap" value={fmtUsdCompact(stats?.marketCapUsd)} testid="stat-market-cap" />
         <Stat label="FDV" value={fmtUsdCompact(stats?.fdvUsd)} testid="stat-fdv" />
-        <Stat label="Liquidity" value={fmtUsdCompact(stats?.liquidityUsd)} testid="stat-liquidity" />
+        {/* Two honest components, reported separately — never summed, never "Liquidity". */}
+        <Stat
+          label="Pool reserve"
+          value={fmtUsdCompact(stats?.poolReserveUsd)}
+          testid="stat-pool-reserve"
+        />
+        <Stat
+          label="Curve inventory value"
+          value={fmtUsdCompact(stats?.curveInventoryValueUsd)}
+          testid="stat-curve-inventory"
+        />
         <Stat label="24h volume" value={fmtUsdCompact(w24?.volumeUsd)} testid="stat-volume-24h" />
         <Stat
-          label="Holders"
-          value={snap.holderCount !== null && snap.holderCount !== undefined ? snap.holderCount.toLocaleString("en-US") : "—"}
+          label="Holder addresses"
+          value={
+            <>
+              {snap.holderCount !== null && snap.holderCount !== undefined
+                ? snap.holderCount.toLocaleString("en-US")
+                : "—"}{" "}
+              <span className="lab-muted" data-testid="holders-source" style={{ fontSize: 11 }}>
+                Blockscout
+              </span>
+            </>
+          }
           testid="stat-holders"
         />
         <Stat label="Age" value={fmtAge(snap.launchedAt)} testid="stat-age" />
@@ -326,11 +365,8 @@ export function TokenMarketView({ address }: { address: string }) {
             address={snap.tokenAddress}
             tokenSymbol={snap.tokenSymbol}
             anchorSymbol={anchorSymbol}
-            anchorIsCurrency0={stats?.anchorIsCurrency0 ?? true}
+            anchorIsCurrency0={stats?.anchorIsCurrency0}
             anchorDecimals={anchorDecimals}
-            anchorMidUsd={snap.anchor.midPriceUsd || null}
-            startingPriceUsd={startingPriceUsd}
-            launchedAt={snap.launchedAt}
           />
         </section>
 
@@ -400,7 +436,7 @@ export function TokenMarketView({ address }: { address: string }) {
                   <th>{anchorSymbol}</th>
                   <th>USD</th>
                   <th>Price</th>
-                  <th>Trader</th>
+                  <th>Wallet</th>
                   <th>Tx</th>
                 </tr>
               </thead>
@@ -424,7 +460,31 @@ export function TokenMarketView({ address }: { address: string }) {
                     </td>
                     <td className="lab-data">{fmtUsdCompact(t.usdValue)}</td>
                     <td className="lab-data">{fmtUsdPrice(t.priceUsdAtTrade)}</td>
-                    <td className="lab-data">{t.trader ? shortAddr(t.trader) : "—"}</td>
+                    {/* Wallet = transaction.from. The decoded event sender is
+                        usually a router — exposed only as detail, NEVER shown
+                        as the wallet. */}
+                    <td
+                      className="lab-data"
+                      data-testid={`trade-wallet-${t.txHash}`}
+                      title={
+                        t.eventSender &&
+                        (!t.trader || t.eventSender.toLowerCase() !== t.trader.toLowerCase())
+                          ? `Event sender (router): ${t.eventSender}`
+                          : undefined
+                      }
+                    >
+                      {t.trader ? (
+                        <a
+                          href={`${explorer}/address/${t.trader}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {shortAddr(t.trader)}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td>
                       <a
                         href={`${explorer}/tx/${t.txHash}`}

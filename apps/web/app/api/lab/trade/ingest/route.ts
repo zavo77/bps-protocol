@@ -75,10 +75,14 @@ export async function POST(req: Request): Promise<Response> {
         const b = await client.getBlock({ blockNumber: receipt.blockNumber });
         blockTime = Number(b.timestamp);
       }
+      // Idempotent: amounts are never overwritten; the trader-identity columns
+      // are filled only when still null (backfills indexer-first rows).
       await pg.query(
-        `INSERT INTO lab_swaps (id, pool_id, token_address, block_number, tx_hash, amount0, amount1, sqrt_price_x96, tick, fee, occurred_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,to_timestamp($11))
-         ON CONFLICT (id) DO NOTHING`,
+        `INSERT INTO lab_swaps (id, pool_id, token_address, block_number, tx_hash, amount0, amount1, sqrt_price_x96, tick, fee, occurred_at, event_sender, transaction_from)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,to_timestamp($11),$12,$13)
+         ON CONFLICT (id) DO UPDATE SET
+           event_sender = COALESCE(lab_swaps.event_sender, EXCLUDED.event_sender),
+           transaction_from = COALESCE(lab_swaps.transaction_from, EXCLUDED.transaction_from)`,
         [
           `${txHash}:${l.logIndex}`,
           args.id.toLowerCase(),
@@ -91,6 +95,8 @@ export async function POST(req: Request): Promise<Response> {
           args.tick,
           args.fee,
           blockTime,
+          args.sender.toLowerCase(),
+          receipt.from.toLowerCase(),
         ],
       );
       inserted.push({

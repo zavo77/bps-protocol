@@ -24,6 +24,7 @@ export {
   type UseTrade,
 } from "./use-trade";
 export { useHistory, type SwapRecord, type HistoryState } from "./use-history";
+export { useTokenMetadata, type TokenMetadata } from "./use-token-metadata";
 export { useTokenBalances, type TokenBalance, type TokenBalances } from "./use-token-balances";
 export { useMarkets, type UseMarkets, type MarketsSort, type MarketListItem } from "./use-markets";
 export { useProfile, type CreatorProfile, type ProfileMarket } from "./use-profile";

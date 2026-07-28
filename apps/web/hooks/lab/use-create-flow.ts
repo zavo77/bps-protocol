@@ -713,10 +713,13 @@ export function useCreateFlow(): CreateFlow {
         // Fire-and-forget: register the confirmed launch so the public list
         // updates promptly. The server verifies everything from chain and the
         // list is chain-reconstructed regardless, so failures are non-fatal.
+        // The manifest is included so the server can persist the immutable
+        // launch facts — it only stores them if the canonical hash matches the
+        // manifest it issued at prepare time.
         void labFetch<{ registered: boolean }>("/api/lab/launches", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ transactionHash: hash }),
+          body: JSON.stringify({ transactionHash: hash, manifest: active.manifest }),
         }).catch(() => {});
         setPhase("launch-success");
         router.push(`/lab/token/${result.tokenAddress}`);

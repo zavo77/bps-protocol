@@ -23,6 +23,7 @@
 // delta) and re-prepare leg 2 with that exact amount. Every prepare-leg call
 // needs a FRESH signed envelope (server enforces single-use replay protection).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   erc20Abi,
   formatUnits,
@@ -218,6 +219,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
   const { writeContractAsync } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
   const signRequest = useSignedRequest();
+  const queryClient = useQueryClient();
 
   const payTokens = useMemo<TradeToken[]>(
     () => PAYMENT_TOKENS.map((t) => ({ ...t, advanced: false })),
@@ -575,17 +577,51 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
         setError("Leg transaction reverted on-chain.");
         return null;
       }
-      // Immediate ingestion (fire-and-forget): the SERVER reads and verifies
-      // the receipt from chain — only the hash is sent. The background indexer
-      // reconciles later; inserts are idempotent, so this can never duplicate.
-      void labFetch("/api/lab/trade/ingest", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ txHash: hash, marketToken }),
-      }).catch(() => undefined);
+      // Immediate ingestion — AWAITED, but ONLY for the BPS Direct market-pool
+      // leg (Rialto payment↔anchor legs never touch this market's pool). The
+      // server reads and verifies the receipt from chain; only the hash is
+      // sent. Brief retry covers server-side RPC receipt propagation. After a
+      // successful idempotent insert, the market + history queries are
+      // invalidated and refetched so the trade is visible within seconds. The
+      // background indexer remains the reconciliation fallback — failure here
+      // never fails the trade.
+      if (payload.kind === "bpsDirect") {
+        const t1 = Date.now(); // T1: receipt confirmed client-side
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try {
+            await labFetch("/api/lab/trade/ingest", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ txHash: hash, marketToken }),
+            });
+            // T2: insertion confirmed. Invalidate + refetch both surfaces (T3).
+            await Promise.allSettled([
+              queryClient.invalidateQueries({
+                queryKey: ["lab", "market", marketToken.toLowerCase()],
+                refetchType: "all",
+              }),
+              queryClient.invalidateQueries({
+                queryKey: ["lab", "history", marketToken.toLowerCase()],
+                refetchType: "all",
+              }),
+            ]);
+            console.info(`[lab] trade ingested + refetched in ${Date.now() - t1}ms`);
+            break;
+          } catch {
+            if (attempt < 3) await new Promise((r) => setTimeout(r, 1_000));
+          }
+        }
+      }
       return hash;
     },
-    [publicClient, signAndPrepareLeg, writeContractAsync, sendTransactionAsync, marketToken],
+    [
+      publicClient,
+      signAndPrepareLeg,
+      writeContractAsync,
+      sendTransactionAsync,
+      marketToken,
+      queryClient,
+    ],
   );
 
   const prepareAndTrade = useCallback(async (): Promise<Hex | null> => {

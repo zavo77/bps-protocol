@@ -23,6 +23,7 @@ export const MIGRATIONS: readonly string[] = [
   `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS launch_source TEXT`,
   `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS provenance_verified BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS provenance_verified_at TIMESTAMPTZ`,
+  `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS launch_manifest JSONB`,
   `ALTER TABLE lab_launches ADD COLUMN IF NOT EXISTS manifest_hash TEXT`,
   `CREATE TABLE IF NOT EXISTS lab_prepared (
     predicted_token TEXT PRIMARY KEY,
@@ -57,6 +58,8 @@ export const MIGRATIONS: readonly string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS lab_swaps_pool_block ON lab_swaps (pool_id, block_number)`,
   `CREATE INDEX IF NOT EXISTS lab_swaps_token_block ON lab_swaps (token_address, block_number)`,
+  `ALTER TABLE lab_swaps ADD COLUMN IF NOT EXISTS event_sender TEXT`,
+  `ALTER TABLE lab_swaps ADD COLUMN IF NOT EXISTS transaction_from TEXT`,
   // Per-pool sync state: a newly verified market backfills its own swap history
   // from its launch block up to the global cursor before the global scan owns it.
   `CREATE TABLE IF NOT EXISTS lab_pool_sync (

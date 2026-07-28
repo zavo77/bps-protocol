@@ -42,7 +42,10 @@ export interface SwapRow {
   sqrtPriceX96: bigint;
   fee: number;
   occurredAt: string | null;
-  sender?: string | null;
+  /** Decoded PoolManager Swap event sender (usually a router). */
+  eventSender?: string | null;
+  /** transaction.from — the trader's wallet. */
+  transactionFrom?: string | null;
 }
 
 /** token1-per-token0 price scaled 1e18, raw wei terms. */
@@ -137,7 +140,10 @@ export interface MarketStats {
   marketCapUsd: string | null;
   anchorReserveWei: string;
   remainingInventoryWei: string;
-  liquidityUsd: string | null;
+  /** Pool reserve (anchor accumulated by this pool) valued in USD. */
+  poolReserveUsd: string | null;
+  /** Unsold curve inventory marked at the current price, in USD. */
+  curveInventoryValueUsd: string | null;
   windows: Record<"5m" | "1h" | "6h" | "24h" | "all", WindowStats>;
   lastTradeAt: string | null;
   swapCount: number;
@@ -152,7 +158,10 @@ export interface TradeRecord {
   anchorAmountWei: string;
   usdValue: string | null;
   priceUsdAtTrade: string | null;
+  /** transaction.from — displayed as "Wallet". */
   trader: string | null;
+  /** Decoded event sender (router); shown in details when it differs. */
+  eventSender: string | null;
 }
 
 const WINDOWS_MS: Record<"5m" | "1h" | "6h" | "24h", number> = {
@@ -166,7 +175,8 @@ export async function loadSwapLedger(tokenAddress: string): Promise<SwapRow[]> {
   const pg = await getPg();
   if (!pg) return [];
   const res = await pg.query(
-    `SELECT id, tx_hash, block_number, amount0, amount1, sqrt_price_x96, fee, occurred_at
+    `SELECT id, tx_hash, block_number, amount0, amount1, sqrt_price_x96, fee, occurred_at,
+            event_sender, transaction_from
      FROM lab_swaps WHERE lower(token_address) = $1 ORDER BY block_number ASC, id ASC`,
     [tokenAddress.toLowerCase()],
   );
@@ -179,6 +189,8 @@ export async function loadSwapLedger(tokenAddress: string): Promise<SwapRow[]> {
     sqrtPriceX96: BigInt(String(r.sqrt_price_x96)),
     fee: Number(r.fee ?? 0),
     occurredAt: r.occurred_at ? new Date(String(r.occurred_at)).toISOString() : null,
+    eventSender: r.event_sender ? String(r.event_sender) : null,
+    transactionFrom: r.transaction_from ? String(r.transaction_from) : null,
   }));
 }
 
@@ -217,7 +229,8 @@ export function computeStats(args: {
   let priceTokenPerAnchor: string | null = null;
   let fdvUsd: string | null = null;
   let marketCapUsd: string | null = null;
-  let liquidityUsd: string | null = null;
+  let poolReserveUsd: string | null = null;
+  let curveInventoryValueUsd: string | null = null;
   let usdX8: bigint | null = null;
 
   if (last) {
@@ -236,12 +249,14 @@ export function computeStats(args: {
     fdvUsd = formatScaled(fdvX8, 8, 2);
     const mcX8 = (usdX8 * circulating) / WAD;
     marketCapUsd = formatScaled(mcX8, 8, 6);
-    // Liquidity = anchor reserve (USD) + remaining inventory × price (USD).
+    // Reported SEPARATELY, never summed as "Liquidity" (founder P0.1): the
+    // pool's anchor reserve valued in USD, and the unsold curve inventory
+    // marked at the current price. An exact internal depth metric must exist
+    // before anything is presented as BPS liquidity.
     const midX8 = parseDecimalScaled(args.anchorMidUsd, 8);
     const anchorScale = 10n ** BigInt(args.anchorDecimals);
-    const reserveUsdX8 = (anchorReserve * midX8) / anchorScale;
-    const inventoryUsdX8 = (remainingInventory * usdX8) / WAD;
-    liquidityUsd = formatScaled(reserveUsdX8 + inventoryUsdX8, 8, 6);
+    poolReserveUsd = formatScaled((anchorReserve * midX8) / anchorScale, 8, 6);
+    curveInventoryValueUsd = formatScaled((remainingInventory * usdX8) / WAD, 8, 6);
   }
 
   const startingPriceUsd = args.startingFdvUsd
@@ -311,7 +326,8 @@ export function computeStats(args: {
     marketCapUsd,
     anchorReserveWei: anchorReserve.toString(),
     remainingInventoryWei: remainingInventory.toString(),
-    liquidityUsd,
+    poolReserveUsd,
+    curveInventoryValueUsd,
     windows: {
       "5m": windowStats(WINDOWS_MS["5m"]),
       "1h": windowStats(WINDOWS_MS["1h"]),
@@ -357,7 +373,8 @@ export function toTradeRecords(args: {
       anchorAmountWei: absA.toString(),
       usdValue: formatScaled((absA * midX8) / anchorScale, 8, 4),
       priceUsdAtTrade: formatScaled(usdX8, 8, 10),
-      trader: s.sender ?? null,
+      trader: s.transactionFrom ?? null,
+      eventSender: s.eventSender ?? null,
     });
   }
   return out;

@@ -1,17 +1,18 @@
 "use client";
-// Honest USD price history for a lab market. Pure inline SVG (no chart libs).
-// Each point is a REAL indexed swap: the USD price is the orientation-correct
-// conversion of the swap's sqrtPriceX96 (anchor may be currency0 OR currency1)
-// multiplied by the verified anchor USD midpoint — the same math the server
-// uses in lib/lab/market-data.ts, shared via lib/market-math.ts. When the
-// launch price + time are known, a REAL launch-price baseline point is
-// prepended so the chart renders a useful line after the FIRST trade.
-// Without the anchor context props the component falls back to the legacy raw
-// sqrt-price ratio (backwards compatible with existing callers/tests). When
-// there are zero swaps AND no baseline it shows "Collecting market data".
+// Authoritative anchor-denominated price history for a lab market. Pure inline
+// SVG (no chart libs). Each point is a REAL indexed swap: the price is the
+// orientation-correct ANCHOR-per-token conversion of the swap's sqrtPriceX96
+// (anchor may be currency0 OR currency1) via the shared lib/market-math
+// orientedPricesX18 — the same math the server uses in lib/lab/market-data.ts.
+// History is NEVER retroactively converted to USD: multiplying old swaps by
+// today's anchor midpoint fabricates a USD history that never traded. The
+// current token/USD price is a separate current statistic shown by the market
+// view. Without the anchor orientation props the component falls back to the
+// legacy raw sqrt-price ratio (backwards compatible with existing callers).
+// When there are zero swaps it shows the honest "Collecting market data".
 import { useMemo, useRef, useState } from "react";
 import { useHistory, type SwapRecord } from "../../../../hooks/lab";
-import { orientedPricesX18, usdPerLaunchedX8 } from "../../../../lib/market-math";
+import { orientedPricesX18 } from "../../../../lib/market-math";
 
 type Range = "1m" | "5m" | "1h" | "6h" | "24h" | "All";
 
@@ -64,12 +65,14 @@ function rawSwapPrice(s: SwapRecord): number | null {
   return null;
 }
 
-/** Orientation-correct USD price for one swap; null when it cannot be computed. */
-function usdSwapPrice(
+/**
+ * Orientation-correct ANCHOR-per-token price for one swap (display number,
+ * anchorPerLaunchedX18 / 1e18); null when it cannot be computed.
+ */
+function anchorSwapPrice(
   s: SwapRecord,
   anchorIsCurrency0: boolean,
   anchorDecimals: number,
-  anchorMidUsd: string,
 ): number | null {
   try {
     const sqrt = BigInt(s.sqrtPriceX96);
@@ -81,18 +84,16 @@ function usdSwapPrice(
       tokenDecimals: 18,
     });
     if (anchorPerLaunchedX18 <= 0n) return null;
-    const usdX8 = usdPerLaunchedX8(anchorPerLaunchedX18, anchorMidUsd);
-    const n = Number(usdX8) / 1e8;
+    const n = Number(anchorPerLaunchedX18) / 1e18;
     return Number.isFinite(n) && n > 0 ? n : null;
   } catch {
     return null;
   }
 }
 
-function fmtPrice(price: number, usdMode: boolean): string {
+function fmtPrice(price: number): string {
   const digits = price !== 0 && Math.abs(price) < 1 ? 4 : 6;
-  const s = price.toPrecision(digits);
-  return usdMode ? `$${s}` : s;
+  return price.toPrecision(digits);
 }
 
 function fmtTick(t: number, spanMs: number): string {
@@ -106,7 +107,6 @@ function fmtTick(t: number, spanMs: number): string {
 interface Point {
   t: number;
   price: number;
-  baseline?: boolean;
 }
 
 export interface PriceChartProps {
@@ -114,56 +114,41 @@ export interface PriceChartProps {
   tokenSymbol?: string;
   /** Anchor ticker for labels — never hard-coded to a specific market. */
   anchorSymbol?: string;
-  /** From stats.anchorIsCurrency0 — enables orientation-correct USD pricing. */
-  anchorIsCurrency0?: boolean;
+  /**
+   * From stats.anchorIsCurrency0 — REQUIRED (with anchorDecimals) for the
+   * anchor-denominated series; when missing the legacy raw fallback is used.
+   * `| undefined` is explicit so callers may pass stats?.anchorIsCurrency0
+   * directly under exactOptionalPropertyTypes.
+   */
+  anchorIsCurrency0?: boolean | undefined;
   /** From snapshot.anchor.decimals. */
-  anchorDecimals?: number;
-  /** From snapshot.anchor.midPriceUsd — enables USD mode when present. */
-  anchorMidUsd?: string | null;
-  /** Launch price baseline: USD price at launch (decimal string). */
-  startingPriceUsd?: string | null;
-  /** Launch price baseline: ISO launch time. */
-  launchedAt?: string | null;
+  anchorDecimals?: number | undefined;
 }
 
 export function PriceChart({
   address,
   tokenSymbol,
   anchorSymbol,
-  anchorIsCurrency0 = true,
-  anchorDecimals = 18,
-  anchorMidUsd = null,
-  startingPriceUsd = null,
-  launchedAt = null,
+  anchorIsCurrency0,
+  anchorDecimals,
 }: PriceChartProps) {
   const { available, swaps, isLoading } = useHistory(address);
   const [range, setRange] = useState<Range>("All");
-  const usdMode = Boolean(anchorMidUsd);
+  const anchorMode = anchorIsCurrency0 !== undefined && anchorDecimals !== undefined;
 
   const allPoints = useMemo<Point[]>(() => {
     const mapped: Point[] = [];
     for (const s of swaps) {
-      const price = anchorMidUsd
-        ? usdSwapPrice(s, anchorIsCurrency0, anchorDecimals, anchorMidUsd)
-        : rawSwapPrice(s);
+      const price =
+        anchorIsCurrency0 !== undefined && anchorDecimals !== undefined
+          ? anchorSwapPrice(s, anchorIsCurrency0, anchorDecimals)
+          : rawSwapPrice(s);
       if (price === null) continue;
       mapped.push({ t: toMs(s.occurredAt), price });
     }
     mapped.sort((a, b) => a.t - b.t);
-    // REAL launch-price baseline: first point at the launch time with the
-    // starting price, so baseline → first trade forms a line. USD mode only —
-    // mixing a USD baseline into raw-ratio prices would be dishonest.
-    if (usdMode && startingPriceUsd && launchedAt) {
-      const bt = Date.parse(launchedAt);
-      const bp = Number(startingPriceUsd);
-      if (Number.isFinite(bt) && Number.isFinite(bp) && bp > 0) {
-        if (mapped.length === 0 || bt <= mapped[0]!.t) {
-          mapped.unshift({ t: bt, price: bp, baseline: true });
-        }
-      }
-    }
     return mapped;
-  }, [swaps, anchorMidUsd, anchorIsCurrency0, anchorDecimals, usdMode, startingPriceUsd, launchedAt]);
+  }, [swaps, anchorIsCurrency0, anchorDecimals]);
 
   const points = useMemo<Point[]>(() => {
     if (range === "All" || allPoints.length === 0) return allPoints;
@@ -211,7 +196,7 @@ export function PriceChart({
           points={points}
           tokenSymbol={tokenSymbol}
           anchorSymbol={anchorSymbol}
-          usdMode={usdMode}
+          anchorMode={anchorMode}
         />
       )}
     </div>
@@ -222,12 +207,12 @@ function Chart({
   points,
   tokenSymbol,
   anchorSymbol,
-  usdMode,
+  anchorMode,
 }: {
   points: Point[];
   tokenSymbol: string | undefined;
   anchorSymbol: string | undefined;
-  usdMode: boolean;
+  anchorMode: boolean;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -238,6 +223,9 @@ function Chart({
   const padRight = 14;
   const padTop = 14;
   const padBottom = 26;
+
+  // "{anchorSymbol} per {tokenSymbol}" — the unit of every axis/tooltip value.
+  const unit = `${anchorSymbol ?? "anchor"} per ${tokenSymbol ?? "token"}`;
 
   const prices = points.map((p) => p.price);
   const times = points.map((p) => p.t);
@@ -259,7 +247,7 @@ function Chart({
       ? `${polyline} ${coords[coords.length - 1]!.cx.toFixed(2)},${height - padBottom} ${coords[0]!.cx.toFixed(2)},${height - padBottom}`
       : null;
   const latest = prices[prices.length - 1]!;
-  const swapCount = points.filter((p) => !p.baseline).length;
+  const swapCount = points.length;
 
   // A few small muted axis ticks.
   const priceTicks = [minPrice, minPrice + priceSpan / 2, maxPrice];
@@ -294,7 +282,11 @@ function Chart({
         width="100%"
         preserveAspectRatio="xMidYMid meet"
         role="img"
-        aria-label={`Price history for ${tokenSymbol ?? "token"}${usdMode ? " in USD" : ""} (derived from ${swapCount} swaps)`}
+        aria-label={
+          anchorMode
+            ? `Price history for ${tokenSymbol ?? "token"} in ${unit} (derived from ${swapCount} swaps)`
+            : `Price history for ${tokenSymbol ?? "token"} (derived from ${swapCount} swaps)`
+        }
         data-testid="price-chart-svg"
         data-point-count={points.length}
         onPointerMove={handlePointer}
@@ -307,6 +299,19 @@ function Chart({
           touchAction: "none",
         }}
       >
+        {/* y-axis unit — the series is anchor-denominated, never USD history */}
+        {anchorMode ? (
+          <text
+            x={padLeft}
+            y={10}
+            textAnchor="start"
+            fontSize="10"
+            fill="var(--warm-grey)"
+            data-testid="axis-unit"
+          >
+            {unit}
+          </text>
+        ) : null}
         {/* y (price) axis ticks */}
         {priceTicks.map((p, i) => {
           const ty = y(p);
@@ -328,7 +333,7 @@ function Chart({
                 fontSize="10"
                 fill="var(--warm-grey)"
               >
-                {fmtPrice(p, usdMode)}
+                {fmtPrice(p)}
               </text>
             </g>
           );
@@ -357,9 +362,8 @@ function Chart({
             cx={c.cx}
             cy={c.cy}
             r={points.length > 40 ? 1.5 : 3}
-            fill={points[i]!.baseline ? "var(--warm-grey)" : "var(--signal-orange)"}
+            fill="var(--signal-orange)"
             data-testid="price-point"
-            data-baseline={points[i]!.baseline ? "true" : undefined}
           />
         ))}
 
@@ -391,7 +395,7 @@ function Chart({
               fill="var(--deep-ink)"
               fontWeight="600"
             >
-              {fmtPrice(hoverPoint.price, usdMode)}
+              {anchorMode ? `${fmtPrice(hoverPoint.price)} ${unit}` : fmtPrice(hoverPoint.price)}
             </text>
             <text
               x={tooltipOnLeft ? hoverCoord.cx - 8 : hoverCoord.cx + 8}
@@ -407,18 +411,17 @@ function Chart({
                 minute: "2-digit",
                 hour12: false,
               })}
-              {hoverPoint.baseline ? " · launch price" : ""}
             </text>
           </g>
         )}
       </svg>
-      <p className="lab-muted" style={{ fontSize: 13, marginTop: 8 }}>
-        {usdMode ? (
+      <p className="lab-muted" data-testid="price-chart-footer" style={{ fontSize: 13, marginTop: 8 }}>
+        {anchorMode ? (
           <>
-            Latest price: {fmtPrice(latest, true)} per {tokenSymbol ?? "token"} · {swapCount} real
-            swap{swapCount === 1 ? "" : "s"}
-            {points.some((p) => p.baseline) ? " · launch-price baseline" : ""}. Derived from
-            on-chain swaps and the verified {anchorSymbol ?? "anchor"} midpoint; not a price
+            Latest price: {fmtPrice(latest)} {unit} · {swapCount} real swap
+            {swapCount === 1 ? "" : "s"}. Anchor-denominated series derived from on-chain swaps —
+            each point is that swap&apos;s {unit} price, never a retroactive USD conversion. USD
+            values shown elsewhere use the live {anchorSymbol ?? "anchor"} midpoint. Not a price
             oracle.
           </>
         ) : (
