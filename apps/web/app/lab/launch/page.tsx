@@ -8,15 +8,15 @@
 // identity, gas, block, or hash is prefilled — every value shown comes from real
 // hook / manifest data. The print-token image appears only as an optional upload
 // placeholder, never as a prefilled token.
-import { useState, type ReactNode } from "react";
-import { useSwitchChain } from "wagmi";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { usePublicClient, useSwitchChain } from "wagmi";
+import { formatEther } from "viem";
 import {
   CHAIN_ID,
   EXPLORER_BASE_URL,
   SPLIT,
   type CreateFlowState,
   type FeePresetId,
-  type LaunchManifest,
 } from "@bps/launch-lab";
 import { useCreateFlow } from "../../../hooks/lab";
 import { ConnectWalletButton } from "../ConnectWalletButton";
@@ -63,13 +63,12 @@ const FLOW_STATE_INFO: Record<CreateFlowState, { label: string; detail: string }
     detail: "The launch simulation failed. Review the error and prepare again.",
   },
   "broadcast-disabled": {
-    label: "Broadcast disabled",
-    detail: "Server configuration currently disables broadcasting launches.",
+    label: "Launches unavailable",
+    detail: "Market launches are temporarily unavailable.",
   },
   "kill-switch-active": {
-    label: "Creation halted",
-    detail:
-      "Launch creation is switched off by the server (kill switch or disabled access mode). All launches are halted.",
+    label: "Launches unavailable",
+    detail: "Market launches are temporarily unavailable.",
   },
   "ready-to-launch": {
     label: "Ready to launch",
@@ -138,17 +137,6 @@ function SubHead({ children }: { children: ReactNode }) {
   );
 }
 
-function Gate({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <li style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0" }}>
-      <span className={ok ? "lab-pill lab-pill--good" : "lab-pill lab-pill--bad"}>
-        {ok ? "pass" : "blocked"}
-      </span>
-      <span style={{ fontSize: 14, color: "var(--charcoal)" }}>{label}</span>
-    </li>
-  );
-}
-
 const activePillStyle = {
   background: "var(--deep-ink)",
   color: "#fff",
@@ -158,13 +146,57 @@ const activePillStyle = {
 export default function LabCreatePage() {
   const flow = useCreateFlow();
   const { switchChain } = useSwitchChain();
+  const publicClient = usePublicClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [feeMode, setFeeMode] = useState<"connected" | "custom">("connected");
+  const [estFeeEth, setEstFeeEth] = useState<string | null>(null);
+
+  // Wallet change / disconnect / Start over → the wizard returns to Step 1.
+  useEffect(() => {
+    if (flow.resetEpoch > 0) {
+      setStep(1);
+      setFeeMode("connected");
+    }
+  }, [flow.resetEpoch]);
+
+  // Human-readable network-fee estimate for the review screen.
+  const gasEstimate = flow.simulation?.gasEstimate ?? null;
+  useEffect(() => {
+    let alive = true;
+    setEstFeeEth(null);
+    if (!gasEstimate || !publicClient) return;
+    publicClient
+      .getGasPrice()
+      .then((price) => {
+        if (!alive) return;
+        const wei = price * BigInt(gasEstimate);
+        setEstFeeEth(Number(formatEther(wei)).toPrecision(2));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [gasEstimate, publicClient]);
+
+  // Artwork preview for the review screen (object URL from the uploaded file).
+  const artworkUrl = useMemo(
+    () => (flow.form.imageFile ? URL.createObjectURL(flow.form.imageFile) : null),
+    [flow.form.imageFile],
+  );
+  useEffect(() => {
+    return () => {
+      if (artworkUrl) URL.revokeObjectURL(artworkUrl);
+    };
+  }, [artworkUrl]);
 
   const explorer = flow.config?.explorerBaseUrl ?? EXPLORER_BASE_URL;
   const anchors = flow.config?.anchors ?? [];
   const selectedAnchor = anchors.find((a) => a.symbol === flow.form.anchorSymbol);
   const info = FLOW_STATE_INFO[flow.flowState];
+  // Launches closed by the server → one plain public message, no diagnostics.
+  const launchesClosed =
+    flow.config !== undefined &&
+    !(flow.gates.broadcastEnabled && flow.gates.killSwitchInactive && flow.gates.creationEnabled);
   const busy =
     flow.flowState === "image-uploading" ||
     flow.flowState === "simulating" ||
@@ -175,12 +207,6 @@ export default function LabCreatePage() {
 
   const disconnected = flow.walletState === "disconnected";
   const wrongChain = flow.walletState === "wrong-chain";
-
-  const startingPriceUsd = (m: LaunchManifest): string => {
-    const fdv = Number(m.startingFdvUsdFixed);
-    if (!Number.isFinite(fdv)) return "—";
-    return (fdv / 1_000_000_000).toFixed(12).replace(/0+$/, "").replace(/\.$/, "");
-  };
 
   const selectFeeConnected = () => {
     setFeeMode("connected");
@@ -292,6 +318,16 @@ export default function LabCreatePage() {
             </span>
           );
         })}
+        <button
+          type="button"
+          className="lab-btn lab-btn--ghost"
+          data-testid="start-over"
+          onClick={() => flow.startOver()}
+          disabled={busy}
+          style={{ marginLeft: "auto", fontSize: 13 }}
+        >
+          Start over
+        </button>
       </nav>
 
       {/* Errors surface inline, next to the work — no internal state chrome. */}
@@ -804,188 +840,163 @@ export default function LabCreatePage() {
             through a verified no-op migration and locked-market configuration.
           </div>
 
-          <SubHead>token identity</SubHead>
-          <Row k="Name" v={flow.manifest.tokenName} mono={false} />
-          <Row k="Symbol" v={flow.manifest.tokenSymbol} mono={false} />
-          <Row k="Description hash" v={flow.manifest.tokenDescriptionHash} />
-          <Row k="Token URI" v={flow.manifest.tokenUri} />
-          <Row k="Image CID" v={flow.manifest.tokenImageCid} />
-
-          <SubHead>anchor (quote asset)</SubHead>
-          <Row
-            k="Anchor"
-            v={`${flow.manifest.anchorSymbol} (decimals ${flow.manifest.anchorDecimals})`}
-          />
-          <Row
-            k="Anchor address"
-            v={
-              <a
-                href={`${explorer}/address/${flow.manifest.anchorAddress}`}
-                target="_blank"
-                rel="noreferrer"
+          {/* ---- consumer summary: what you're launching, in plain terms ---- */}
+          <div
+            style={{ display: "flex", gap: 18, alignItems: "center", marginTop: 20 }}
+            data-testid="review-identity"
+          >
+            {artworkUrl ? (
+              <img
+                src={artworkUrl}
+                alt={`${flow.manifest.tokenName} artwork`}
+                width={72}
+                height={72}
+                style={{ borderRadius: 18, objectFit: "cover" }}
+              />
+            ) : null}
+            <div>
+              <div
+                style={{
+                  fontSize: 26,
+                  fontWeight: 800,
+                  letterSpacing: "-0.03em",
+                  color: "var(--deep-ink)",
+                }}
               >
-                {flow.manifest.anchorAddress}
-              </a>
-            }
-          />
-          <Row k="Anchor multiplier" v={flow.manifest.anchorMultiplier} />
-
-          <SubHead>supply and pricing</SubHead>
-          <Row k="Initial supply (wei)" v={flow.manifest.initialSupply} />
-          <Row k="Sale inventory (wei)" v={flow.manifest.saleInventory} />
-          <Row k="Starting FDV (USD)" v={flow.manifest.startingFdvUsdFixed} />
-          <Row k="Starting price (USD, FDV / 1e9)" v={startingPriceUsd(flow.manifest)} />
-
-          <SubHead>fees</SubHead>
-          <Row k="Fee preset" v={flow.manifest.feePreset} />
-          <Row k="Exact pool fee units" v={String(flow.manifest.exactPoolFeeUnits)} />
-
-          <SubHead>beneficiaries</SubHead>
-          <div className="lab-scroll-x">
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: 13,
-                minWidth: 520,
-              }}
-            >
-              <thead>
-                <tr>
-                  {["Label", "Address", "Percent", "Shares (WAD)"].map((h) => (
-                    <th
-                      key={h}
-                      className="lab-label"
-                      style={{ textAlign: "left", padding: "8px 10px" }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {flow.manifest.beneficiaries.map((b) => (
-                  <tr key={`${b.beneficiary}-${b.label}`}>
-                    <td style={{ padding: "8px 10px" }}>{b.label}</td>
-                    <td className="lab-data" style={{ padding: "8px 10px" }}>
-                      {b.beneficiary}
-                    </td>
-                    <td className="lab-data" style={{ padding: "8px 10px" }}>
-                      {b.percent}
-                    </td>
-                    <td className="lab-data" style={{ padding: "8px 10px" }}>
-                      {b.sharesWad}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                {flow.manifest.tokenName}{" "}
+                <span className="lab-muted" style={{ fontWeight: 600, fontSize: 18 }}>
+                  ${flow.manifest.tokenSymbol}
+                </span>
+              </div>
+              <div className="lab-muted" style={{ fontSize: 14, marginTop: 4, maxWidth: 560 }}>
+                {flow.form.tokenDescription}
+              </div>
+            </div>
           </div>
 
-          <SubHead>modes</SubHead>
-          <Row k="Migration mode" v={flow.manifest.migrationMode} />
-          <Row k="Governance mode" v={flow.manifest.governanceMode} />
-          <Row k="Initializer mode" v={flow.manifest.initializerMode} />
-
-          <SubHead>resolved Doppler modules</SubHead>
-          {Object.entries(flow.manifest.resolvedDopplerModules).map(([name, addr]) => (
+          <div style={{ marginTop: 20 }} data-testid="review-summary">
             <Row
-              key={name}
-              k={name}
-              v={
-                <a href={`${explorer}/address/${addr}`} target="_blank" rel="noreferrer">
-                  {addr}
-                </a>
-              }
+              k="Paired with"
+              v={`${selectedAnchor?.name ?? flow.manifest.anchorSymbol} (${flow.manifest.anchorSymbol})`}
+              mono={false}
             />
-          ))}
-
-          <SubHead>prediction and integrity</SubHead>
-          <Row k="Predicted token address" v={flow.simulation.predictedTokenAddress} />
-          <Row k="Predicted pool id" v={flow.simulation.predictedPoolId} />
-          <Row k="Transaction target" v={flow.manifest.transactionTarget} />
-          <Row k="Transaction value" v={flow.manifest.transactionValue} />
-          <Row k="Gas estimate" v={flow.simulation.gasEstimate} />
-          <Row k="Gas limit (sent)" v={flow.prepared.gas} />
-          <Row k="Manifest hash" v={flow.manifestHash ?? "—"} />
-          <Row k="Calldata hash" v={flow.manifest.calldataHash} />
-          <Row k="Simulation block" v={flow.simulation.simulationBlock} />
-          <Row
-            k="Simulation age"
-            v={
-              flow.simulationAgeMs !== null
-                ? `${Math.round(flow.simulationAgeMs / 1000)} s ${flow.simulationFresh ? "(fresh)" : "(STALE — will re-simulate before sending)"}`
-                : "—"
-            }
-          />
-
-          <SubHead>parties</SubHead>
-          <Row k="Creator" v={flow.manifest.creatorAddress} />
-          <Row k="Creator fee address" v={flow.manifest.creatorFeeAddress} />
-          <Row k="BPS fee address" v={flow.manifest.bpsFeeAddress} />
-          <Row k="Protocol fee address (Airlock owner)" v={flow.manifest.protocolFeeAddress} />
-          <Row k="Chain id" v={String(flow.manifest.chainId)} />
-          <Row
-            k="App version / commit"
-            v={`${flow.manifest.appVersion} / ${flow.manifest.sourceCommit}`}
-          />
-
-          {/* ---- launch ---- */}
-          <SubHead>launch</SubHead>
-          {flow.config && flow.config.publicBeta.launchesToday !== null ? (
-            <p className="lab-muted" style={{ fontSize: 13 }} data-testid="public-beta-capacity">
-              Public beta: {flow.config.publicBeta.launchesToday} of{" "}
-              {flow.config.publicBeta.publicDailyLaunchCap} launches today
-            </p>
-          ) : null}
-          <ul
-            style={{ listStyle: "none", paddingLeft: 0, margin: "8px 0 0" }}
-            data-testid="launch-checklist"
-          >
-            <Gate ok={flow.gates.walletConnected} label="Wallet connected" />
-            <Gate ok={flow.gates.chainOk} label={`On Robinhood Chain (${CHAIN_ID})`} />
-            <Gate ok={flow.gates.anchorVerified} label="Anchor verified" />
-            <Gate ok={flow.gates.metadataConfirmed} label="Metadata confirmed (production IPFS)" />
-            <Gate
-              ok={flow.gates.simulated && flow.gates.simulationFresh}
-              label="Simulation fresh (re-simulated automatically if stale)"
+            <Row
+              k="Supply"
+              v={`${(Number(flow.manifest.initialSupply) / 1e18).toLocaleString()} ${flow.manifest.tokenSymbol}`}
+              mono={false}
             />
-            <Gate ok={flow.gates.broadcastEnabled} label="Broadcast enabled (server flag)" />
-            <Gate ok={flow.gates.killSwitchInactive} label="Kill switch inactive" />
-            <Gate ok={flow.gates.creationEnabled} label="Creation enabled (access mode)" />
-            <Gate ok={flow.gates.termsAccepted} label="Acknowledgement accepted" />
-          </ul>
-          <button
-            className="lab-btn lab-btn--primary"
-            style={{ marginTop: 16 }}
-            data-testid="launch-button"
-            disabled={!flow.canLaunch || busy}
-            onClick={() => void flow.launch()}
-          >
-            Launch market
-          </button>
+            <Row
+              k="Starting value (FDV)"
+              v={`$${Number(flow.manifest.startingFdvUsdFixed).toLocaleString()}`}
+              mono={false}
+            />
+            <Row
+              k="Trading fee"
+              v={`${(flow.manifest.exactPoolFeeUnits / 10_000).toFixed(2)}% per swap`}
+              mono={false}
+            />
+            <Row
+              k="Fee split"
+              v={`${SPLIT.creatorFeePct.toString()}% you · ${SPLIT.bpsFeePct.toString()}% BPS Launch Lab · ${SPLIT.protocolPct.toString()}% Doppler`}
+              mono={false}
+            />
+            <Row k="Your fee destination" v={short(flow.manifest.creatorFeeAddress)} />
+            <Row
+              k="Estimated network fee"
+              v={estFeeEth ? `~${estFeeEth} ETH` : "—"}
+              mono={false}
+            />
 
-          <div style={{ marginTop: 18 }}>
-            <div className="lab-kv">
-              <span>status</span>
-              <span className="lab-data" data-testid="launch-status">
-                {info.label}
-              </span>
-            </div>
-            <p className="lab-muted" style={{ fontSize: 14, marginTop: 8 }}>
-              {info.detail}
-            </p>
-            {flow.txHash ? (
+          </div>
+
+          {/* Everything technical lives here, collapsed. Human-facing values stay above. */}
+          <details style={{ marginTop: 18 }} data-testid="advanced-details">
+            <summary className="lab-label" style={{ cursor: "pointer" }}>
+              Advanced contract details
+            </summary>
+            <div style={{ marginTop: 12 }}>
+              <Row k="Predicted token address" v={flow.simulation.predictedTokenAddress} />
+              <Row k="Predicted pool id" v={flow.simulation.predictedPoolId} />
+              <Row k="Manifest hash" v={flow.manifestHash ?? "—"} />
+              <Row k="Calldata hash" v={flow.manifest.calldataHash} />
+              <Row k="Metadata URI" v={flow.manifest.tokenUri} />
               <Row
-                k="Launch transaction"
+                k="Anchor contract"
                 v={
-                  <a href={`${explorer}/tx/${flow.txHash}`} target="_blank" rel="noreferrer">
-                    {short(flow.txHash)}
+                  <a
+                    href={`${explorer}/address/${flow.manifest.anchorAddress}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {flow.manifest.anchorAddress}
                   </a>
                 }
               />
-            ) : null}
-          </div>
+              <Row k="Creator wallet" v={flow.manifest.creatorAddress} />
+              <Row k="Creator fee wallet" v={flow.manifest.creatorFeeAddress} />
+              <Row k="Migration / governance" v={`${flow.manifest.migrationMode} / ${flow.manifest.governanceMode}`} mono={false} />
+              <Row k="Chain id" v={String(flow.manifest.chainId)} />
+              <Row k="Simulation block" v={flow.simulation.simulationBlock} />
+              <Row k="Gas estimate" v={flow.simulation.gasEstimate} />
+              {Object.entries(flow.manifest.resolvedDopplerModules).map(([name, addr]) => (
+                <Row
+                  key={name}
+                  k={`Module: ${name}`}
+                  v={
+                    <a href={`${explorer}/address/${addr}`} target="_blank" rel="noreferrer">
+                      {addr}
+                    </a>
+                  }
+                />
+              ))}
+              {flow.manifest.beneficiaries.map((b) => (
+                <Row
+                  key={`${b.beneficiary}-${b.label}`}
+                  k={`Beneficiary ${b.label} (${b.percent})`}
+                  v={`${b.beneficiary} · ${b.sharesWad} WAD`}
+                />
+              ))}
+            </div>
+          </details>
+
+          {launchesClosed ? (
+            <p
+              className="lab-card lab-card--peach"
+              style={{ marginTop: 18, fontSize: 15 }}
+              data-testid="launches-closed"
+            >
+              Market launches are temporarily unavailable.
+            </p>
+          ) : (
+            <button
+              className="lab-btn lab-btn--primary"
+              style={{ marginTop: 18, width: "100%" }}
+              data-testid="launch-button"
+              disabled={!flow.canLaunch || busy}
+              onClick={() => void flow.launch()}
+            >
+              Launch market
+            </button>
+          )}
+
+          {/* Runtime progress only — shown while the launch is actually moving. */}
+          {busy || flow.txHash || flow.flowState === "launch-mismatch" ? (
+            <div style={{ marginTop: 14 }}>
+              <p className="lab-muted" style={{ fontSize: 14, margin: 0 }} data-testid="launch-status">
+                {info.detail}
+              </p>
+              {flow.txHash ? (
+                <Row
+                  k="Transaction"
+                  v={
+                    <a href={`${explorer}/tx/${flow.txHash}`} target="_blank" rel="noreferrer">
+                      {short(flow.txHash)}
+                    </a>
+                  }
+                />
+              ) : null}
+            </div>
+          ) : null}
 
           {flow.flowState === "launch-success" && flow.receiptResult ? (
             <div

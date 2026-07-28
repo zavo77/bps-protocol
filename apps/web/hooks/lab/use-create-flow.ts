@@ -170,7 +170,79 @@ export interface CreateFlow {
   prepare: () => Promise<boolean>;
   launch: () => Promise<void>;
   reset: () => void;
+  /** Full wizard reset (form + wallet-bound state + persisted draft). */
+  startOver: () => void;
+  /** Increments whenever the wizard must return to Step 1 (wallet change, start over). */
+  resetEpoch: number;
 }
+
+// ---- wallet-scoped draft persistence (text fields only; never image bytes,
+// never acknowledgement, never metadata/manifest/prepared state). Drafts exist
+// ONLY for a connected wallet, keyed by chain + address, so a fresh visitor or
+// a different wallet always starts empty. ----
+const DRAFT_KEYS = [
+  "tokenName",
+  "tokenSymbol",
+  "tokenDescription",
+  "startingFdvUsd",
+  "feePreset",
+  "creatorFeeAddress",
+  "anchorSymbol",
+] as const;
+type DraftShape = Pick<CreateFlowFormState, (typeof DRAFT_KEYS)[number]>;
+
+function draftKey(chainId: number, address: string): string {
+  return `bps.lab.launchDraft.v1.${chainId}.${address.toLowerCase()}`;
+}
+
+function saveDraft(chainId: number, address: string, form: CreateFlowFormState): void {
+  if (typeof window === "undefined") return;
+  try {
+    const draft: Partial<DraftShape> = {};
+    for (const k of DRAFT_KEYS) (draft as Record<string, unknown>)[k] = form[k];
+    window.localStorage.setItem(draftKey(chainId, address), JSON.stringify(draft));
+  } catch {
+    /* storage unavailable — drafts simply don't persist */
+  }
+}
+
+function loadDraft(chainId: number, address: string): Partial<DraftShape> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(draftKey(chainId, address));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of DRAFT_KEYS) {
+      if (k in parsed) out[k] = parsed[k];
+    }
+    if (typeof out.tokenName !== "string" || typeof out.tokenSymbol !== "string") return null;
+    return out as Partial<DraftShape>;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft(chainId: number, address: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(draftKey(chainId, address));
+  } catch {
+    /* ignore */
+  }
+}
+
+const EMPTY_FORM: CreateFlowFormState = {
+  tokenName: "",
+  tokenSymbol: "",
+  tokenDescription: "",
+  imageFile: null,
+  startingFdvUsd: 0,
+  feePreset: "BALANCED_1",
+  creatorFeeAddress: "",
+  anchorSymbol: "GOOGL",
+  termsAccepted: false,
+};
 
 export function useCreateFlow(): CreateFlow {
   const router = useRouter();
@@ -186,17 +258,8 @@ export function useCreateFlow(): CreateFlow {
   const config = configQuery.data;
   const anchor = anchorQuery.data;
 
-  const [form, setFormState] = useState<CreateFlowFormState>({
-    tokenName: "",
-    tokenSymbol: "",
-    tokenDescription: "",
-    imageFile: null,
-    startingFdvUsd: 0,
-    feePreset: "BALANCED_1",
-    creatorFeeAddress: "",
-    anchorSymbol: "GOOGL",
-    termsAccepted: false,
-  });
+  const [form, setFormState] = useState<CreateFlowFormState>(EMPTY_FORM);
+  const [resetEpoch, setResetEpoch] = useState(0);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [metadata, setMetadata] = useState<MetadataUploadResult | null>(null);
   const [bundle, setBundle] = useState<PreparedLaunchBundle | null>(null);
@@ -222,6 +285,64 @@ export function useCreateFlow(): CreateFlow {
       }));
     }
   }, [config, form.startingFdvUsd]);
+
+  // ---- wallet identity boundary ----
+  // The wizard's wallet-bound state (metadata, manifest, prepared tx, review)
+  // belongs to exactly ONE (chainId, address). When the address changes or the
+  // wallet disconnects after having been connected, EVERYTHING — including the
+  // typed form — is cleared and the wizard returns to Step 1, so no visitor can
+  // ever see a previous wallet's draft. A first-time connect (disconnected →
+  // connected) keeps what the same visitor just typed, then hydrates any saved
+  // draft for that wallet into still-empty fields.
+  const identityRef = useRef<string | null>(null);
+  useEffect(() => {
+    const identity = address ? `${chainId}:${address.toLowerCase()}` : null;
+    const prev = identityRef.current;
+    identityRef.current = identity;
+    if (prev === identity) return;
+    if (prev !== null) {
+      // A wallet WAS present and the identity changed (new wallet or disconnect):
+      // hard reset — wallet-bound state, form, terms, everything.
+      setFormState(EMPTY_FORM);
+      setMetadata(null);
+      setBundle(null);
+      setPayloadUsed(null);
+      setPrepareRequested(false);
+      setPhase("idle");
+      setError(null);
+      setUnauthorised(false);
+      setTxHash(null);
+      setReceiptResult(null);
+      setUploadErrors([]);
+      broadcastRef.current = false;
+      setResetEpoch((n) => n + 1);
+    }
+    if (identity && address) {
+      // Hydrate this wallet's saved draft into fields that are still empty.
+      const draft = loadDraft(chainId, address);
+      if (draft) {
+        setFormState((f) => ({
+          ...f,
+          tokenName: f.tokenName || (draft.tokenName ?? ""),
+          tokenSymbol: f.tokenSymbol || (draft.tokenSymbol ?? ""),
+          tokenDescription: f.tokenDescription || (draft.tokenDescription ?? ""),
+          creatorFeeAddress: f.creatorFeeAddress || (draft.creatorFeeAddress ?? ""),
+          anchorSymbol: draft.anchorSymbol ?? f.anchorSymbol,
+          startingFdvUsd: f.startingFdvUsd || (draft.startingFdvUsd ?? 0),
+          feePreset: draft.feePreset ?? f.feePreset,
+        }));
+      }
+    }
+  }, [address, chainId]);
+
+  // Persist the connected wallet's TEXT draft (never image bytes, never the
+  // acknowledgement, never metadata/manifest/prepared state). Disconnected
+  // visitors are never persisted — a fresh visitor always starts empty.
+  useEffect(() => {
+    if (!address) return;
+    const t = setTimeout(() => saveDraft(chainId, address, form), 400);
+    return () => clearTimeout(t);
+  }, [address, chainId, form]);
 
   // Freshness ticker (5 s) while a prepared transaction exists.
   useEffect(() => {
@@ -605,6 +726,19 @@ export function useCreateFlow(): CreateFlow {
     broadcastRef.current = false;
   }, []);
 
+  // "Start over": everything reset — form, wallet-bound state, and the
+  // persisted draft for the current wallet — back to an empty Step 1.
+  const startOver = useCallback(() => {
+    if (address) clearDraft(chainId, address);
+    setFormState(
+      config
+        ? { ...EMPTY_FORM, startingFdvUsd: config.startingFdvUsd, feePreset: config.defaultFeePreset }
+        : EMPTY_FORM,
+    );
+    reset();
+    setResetEpoch((n) => n + 1);
+  }, [address, chainId, config, reset]);
+
   return {
     form,
     updateForm,
@@ -633,5 +767,7 @@ export function useCreateFlow(): CreateFlow {
     prepare,
     launch,
     reset,
+    startOver,
+    resetEpoch,
   };
 }
