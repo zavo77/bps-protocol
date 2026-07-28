@@ -7,6 +7,40 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: ★ MAG8 SELL CANARY PASSED — verified end-to-end; brake RESTORED
+
+- **The human sell executed and verified.** Tx 0x9017bd7a…e0f114: SUCCESS, block 21797213
+  (18:11:24Z), nonce 11, to = the already-approved Rialto router 0xC941…59bD, selector 0x77963966,
+  gas 840,313/1,517,939 @0.028434 gwei = 23,893,459,842,000 wei. Route: 100 MAG8 → OUR verified
+  pool 0x1ffc403e…4509 (Swap log 6: amount1 −100e18 MAG8, amount0 +6,243,158,079,931 wei GOOGL;
+  1% pool fee 62,431,580,799 wei to collector+hook) → GOOGL→USDG ($0.002064) → USDG→WETH pool
+  (second Swap log, different poolId — correctly NOT ingested) → 1,081,082,011,004 wei WETH − 5 bps
+  Rialto fee 540,541,005 wei → **1,080,541,469,999 wei ETH delivered to the wallet** (exact by
+  balance math). Balances: MAG8 891.428→791.428 (−100 exact), GOOGL 0 (never touched the wallet —
+  nothing stranded), ETH 147,887,263,124,031 → 125,074,344,752,030 (proceeds arrived exactly; net
+  negative only because gas ≫ the $0.002 canary size — arithmetic, not a defect).
+- **Ingestion timing (production logs captured live):** prepare-leg 200 18:11:14.3 (attemptId
+  db822876…, venue rialto, sim ok, NO approvals, single preparation — no re-sign, no re-prepare);
+  block 18:11:24.000 (=earliest T1); **T2 ingest 200 = 18:11:26.370 (T1→T2 ≤ 2,370 ms)**; **T3
+  awaited market+history refetch 200 = 18:11:27.74 (T1→T3 ≤ 3,746 ms — ≤5s TARGET MET)**.
+  Immediate ingestion SUCCEEDED; the background indexer only reconfirmed idempotently.
+- **Public data:** exactly one new Sell row (tx match, Wallet 0x78b2…6024, event sender/router
+  0xa9fd…1d27 retained separately, 100 MAG8 / 6,243,158,079,931 wei GOOGL, correct block+time);
+  chart GOOGL-per-MAG8 with the sell moving anchor-per-token DOWN (sqrt 315496595… → 315497086…);
+  Pool reserve $0.018835 → $0.017137 (ledger-exact); 24h volume $0.021316 = buy $0.0192 + sell
+  $0.002 (absolute GOOGL-side); current USD price (0.0000211) separate from history. Minor
+  cosmetic: 24h priceChangePct renders "-0" for a sub-rounding drop.
+- **Persistence:** 1 row per txHash:logIndex; no dupes after indexer polls, after `railway up -d`
+  RESTART (fresh uptime 39s, state=current, tracked=1, pools=1, no errors), or across repeated API
+  reloads (2 swaps, 2 unique ids every time).
+- **UX:** wallet broadcast exactly ONE transaction (nonce 11) — no EIP-191, no ERC-20/Permit2
+  approval (receipt's 6 Approval logs are all INTERNAL router allowances, none owner=wallet).
+  Founder to confirm Rabby showed exactly one confirmation prompt.
+- **Brake RESTORED:** BPS_LAUNCH_LAB_SELL_PAUSED=true + redeploy (health cd8168979002, public /
+  broadcast false / kill true); live-verified sell→SELL_PAUSED, buy→rialto available, creation
+  closed. No application code changed. **VERDICT: MAG8 SELL CANARY PASSED.** PRINT acceptance
+  remains NOT complete.
+
 ## 2026-07-28 — LAUNCH LAB LANE: ONE MAG8 SELL CANARY AUTHORISED — brake lifted, read-only checks passed
 
 - Founder authorised one MAG8 sell canary. Production env: BPS_LAUNCH_LAB_SELL_PAUSED=false (set
