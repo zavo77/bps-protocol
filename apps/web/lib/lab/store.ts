@@ -14,12 +14,12 @@ import type { LabServerFlags, LaunchRecord } from "@bps/launch-lab";
 const CACHE_TTL_MS = 60_000;
 let launchCache: { at: number; records: LaunchRecord[] } | null = null;
 
-type PgPool = {
+export type PgPool = {
   query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
 };
 let pgPool: PgPool | null | undefined;
 
-async function getPg(): Promise<PgPool | null> {
+export async function getPg(): Promise<PgPool | null> {
   if (pgPool !== undefined) return pgPool;
   const url = process.env.DATABASE_URL;
   if (!url) {

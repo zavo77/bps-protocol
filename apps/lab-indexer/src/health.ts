@@ -20,6 +20,7 @@ export function startHealthServer(port: number): http.Server {
           lagBlocks: status.lagBlocks,
           trackedMarkets: status.trackedMarkets,
           knownPools: status.knownPools,
+          markets: status.markets,
           lastPollOkAt: status.lastPollOkAt,
           lastError: status.lastError,
         }),

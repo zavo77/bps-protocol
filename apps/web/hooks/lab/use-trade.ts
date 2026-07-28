@@ -575,9 +575,17 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
         setError("Leg transaction reverted on-chain.");
         return null;
       }
+      // Immediate ingestion (fire-and-forget): the SERVER reads and verifies
+      // the receipt from chain — only the hash is sent. The background indexer
+      // reconciles later; inserts are idempotent, so this can never duplicate.
+      void labFetch("/api/lab/trade/ingest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ txHash: hash, marketToken }),
+      }).catch(() => undefined);
       return hash;
     },
-    [publicClient, signAndPrepareLeg, writeContractAsync, sendTransactionAsync],
+    [publicClient, signAndPrepareLeg, writeContractAsync, sendTransactionAsync, marketToken],
   );
 
   const prepareAndTrade = useCallback(async (): Promise<Hex | null> => {

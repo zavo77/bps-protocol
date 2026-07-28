@@ -56,6 +56,17 @@ export const MIGRATIONS: readonly string[] = [
     occurred_at TIMESTAMPTZ
   )`,
   `CREATE INDEX IF NOT EXISTS lab_swaps_pool_block ON lab_swaps (pool_id, block_number)`,
+  `CREATE INDEX IF NOT EXISTS lab_swaps_token_block ON lab_swaps (token_address, block_number)`,
+  // Per-pool sync state: a newly verified market backfills its own swap history
+  // from its launch block up to the global cursor before the global scan owns it.
+  `CREATE TABLE IF NOT EXISTS lab_pool_sync (
+    pool_id TEXT PRIMARY KEY,
+    token_address TEXT NOT NULL,
+    start_block BIGINT NOT NULL,
+    last_indexed_block BIGINT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('backfilling','current')),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
 ] as const;
 
 export function createPool(databaseUrl: string): pg.Pool {
@@ -79,20 +90,33 @@ export interface TrackedMarket {
   numeraire: string;
   poolOrHook: string;
   poolId: string | null;
+  /** Launch block from lab_launches.block_number (null if unparsable). */
+  blockNumber: bigint | null;
 }
 
 /** Load provenance-verified BPS markets — the ONLY markets the indexer tracks. */
 export async function loadTrackedMarkets(pool: pg.Pool): Promise<TrackedMarket[]> {
   const res = await pool.query(
-    `SELECT token_address, numeraire, pool_or_hook, pool_id
+    `SELECT token_address, numeraire, pool_or_hook, pool_id, block_number
      FROM lab_launches WHERE provenance_verified = true`,
   );
-  return (res.rows as Record<string, string | null>[]).map((r) => ({
-    tokenAddress: String(r.token_address),
-    numeraire: String(r.numeraire),
-    poolOrHook: String(r.pool_or_hook),
-    poolId: r.pool_id ? String(r.pool_id) : null,
-  }));
+  return (res.rows as Record<string, string | null>[]).map((r) => {
+    let blockNumber: bigint | null = null;
+    if (r.block_number !== null && r.block_number !== undefined) {
+      try {
+        blockNumber = BigInt(String(r.block_number));
+      } catch {
+        blockNumber = null;
+      }
+    }
+    return {
+      tokenAddress: String(r.token_address),
+      numeraire: String(r.numeraire),
+      poolOrHook: String(r.pool_or_hook),
+      poolId: r.pool_id ? String(r.pool_id) : null,
+      blockNumber,
+    };
+  });
 }
 
 /** Enrich a verified market with its resolved poolId (never classifies). */
@@ -112,5 +136,57 @@ export async function setCursor(pool: pg.Pool, stream: string, block: bigint): P
     `INSERT INTO lab_indexer_cursor (stream, last_block, updated_at) VALUES ($1, $2, now())
      ON CONFLICT (stream) DO UPDATE SET last_block = EXCLUDED.last_block, updated_at = now()`,
     [stream, block.toString()],
+  );
+}
+
+export interface PoolSyncRow {
+  poolId: string;
+  tokenAddress: string;
+  startBlock: bigint;
+  lastIndexedBlock: bigint;
+  state: "backfilling" | "current";
+}
+
+/** All per-pool sync rows (restart-safe backfill bookkeeping). */
+export async function loadPoolSync(pool: pg.Pool): Promise<PoolSyncRow[]> {
+  const res = await pool.query(
+    `SELECT pool_id, token_address, start_block, last_indexed_block, state FROM lab_pool_sync`,
+  );
+  return (res.rows as Record<string, string | number>[]).map((r) => ({
+    poolId: String(r.pool_id),
+    tokenAddress: String(r.token_address),
+    startBlock: BigInt(String(r.start_block)),
+    lastIndexedBlock: BigInt(String(r.last_indexed_block)),
+    state: String(r.state) === "current" ? "current" : "backfilling",
+  }));
+}
+
+/** Register a pool's sync row once; never overwrites existing progress. */
+export async function registerPoolSync(pool: pg.Pool, row: PoolSyncRow): Promise<void> {
+  await pool.query(
+    `INSERT INTO lab_pool_sync (pool_id, token_address, start_block, last_indexed_block, state, updated_at)
+     VALUES ($1, $2, $3, $4, $5, now())
+     ON CONFLICT (pool_id) DO NOTHING`,
+    [
+      row.poolId,
+      row.tokenAddress.toLowerCase(),
+      row.startBlock.toString(),
+      row.lastIndexedBlock.toString(),
+      row.state,
+    ],
+  );
+}
+
+/** Persist backfill progress / state transition for a pool. */
+export async function setPoolSyncProgress(
+  pool: pg.Pool,
+  poolId: string,
+  lastIndexedBlock: bigint,
+  state: "backfilling" | "current",
+): Promise<void> {
+  await pool.query(
+    `UPDATE lab_pool_sync SET last_indexed_block = $2, state = $3, updated_at = now()
+     WHERE pool_id = $1`,
+    [poolId, lastIndexedBlock.toString(), state],
   );
 }
