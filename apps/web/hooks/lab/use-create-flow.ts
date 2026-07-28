@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isAddress, getAddress, keccak256, type Address, type Hex, type PublicClient } from "viem";
-import { useAccount, useChainId, usePublicClient, useSendTransaction, useSwitchChain } from "wagmi";
+import { useAccount, usePublicClient, useSendTransaction, useSwitchChain } from "wagmi";
 import {
   CHAIN_ID,
   decodeAndVerifyReceipt,
@@ -246,8 +246,15 @@ const EMPTY_FORM: CreateFlowFormState = {
 
 export function useCreateFlow(): CreateFlow {
   const router = useRouter();
-  const { address } = useAccount();
-  const chainId = useChainId();
+  // The WALLET's actual chain. wagmi's useChainId() reflects only the app
+  // config (always 4663 here) and cannot see a wallet sitting on another chain
+  // — using it caused the live raw-ChainMismatchError P0. All chain gating and
+  // draft scoping below use the account chain.
+  const { address, chainId: walletChainId } = useAccount();
+  const chainId = walletChainId ?? CHAIN_ID;
+  // Hard-stop only when a CONNECTED wallet sits on another chain; while
+  // disconnected the connect prompts handle the flow.
+  const chainBlocked = walletChainId !== undefined && walletChainId !== CHAIN_ID;
   const publicClient = usePublicClient();
   const { sendTransactionAsync } = useSendTransaction();
   const { switchChainAsync } = useSwitchChain();
@@ -301,9 +308,10 @@ export function useCreateFlow(): CreateFlow {
     identityRef.current = identity;
     if (prev === identity) return;
     if (prev !== null) {
-      // A wallet WAS present and the identity changed (new wallet or disconnect):
-      // hard reset — wallet-bound state, form, terms, everything.
-      setFormState(EMPTY_FORM);
+      const prevAddress = prev.split(":")[1] ?? null;
+      const sameAddress = prevAddress !== null && prevAddress === (address?.toLowerCase() ?? null);
+      // Wallet-bound state (metadata, manifest, prepared tx, review, errors)
+      // is ALWAYS invalidated when the account or chain changes.
       setMetadata(null);
       setBundle(null);
       setPayloadUsed(null);
@@ -316,6 +324,13 @@ export function useCreateFlow(): CreateFlow {
       setUploadErrors([]);
       broadcastRef.current = false;
       setResetEpoch((n) => n + 1);
+      // The typed FORM is wiped only when the ACCOUNT changed (or disconnected)
+      // — never show one wallet's draft to another. A chain-only switch by the
+      // same account (e.g. Mainnet → Robinhood Chain) keeps their typed text so
+      // the flow resumes safely after switching networks.
+      if (!sameAddress) {
+        setFormState(EMPTY_FORM);
+      }
     }
     if (identity && address) {
       // Hydrate this wallet's saved draft into fields that are still empty.
@@ -431,8 +446,11 @@ export function useCreateFlow(): CreateFlow {
   ]);
 
   const ensureChain = useCallback(async () => {
-    if (chainId !== CHAIN_ID) await switchChainAsync({ chainId: CHAIN_ID });
-  }, [chainId, switchChainAsync]);
+    if (walletChainId !== CHAIN_ID) await switchChainAsync({ chainId: CHAIN_ID });
+  }, [walletChainId, switchChainAsync]);
+
+  /** Hard stop for every wallet-bound step while off Robinhood Chain. */
+  const WRONG_CHAIN_MESSAGE = "Switch to Robinhood Chain to continue.";
 
   const failFromError = useCallback((e: unknown) => {
     if (isNotAllowlisted(e)) setUnauthorised(true);
@@ -443,6 +461,10 @@ export function useCreateFlow(): CreateFlow {
     setError(null);
     if (!address) {
       setError("Connect a wallet before uploading metadata.");
+      return false;
+    }
+    if (chainBlocked) {
+      setError(WRONG_CHAIN_MESSAGE);
       return false;
     }
     const file = form.imageFile;
@@ -501,7 +523,7 @@ export function useCreateFlow(): CreateFlow {
       failFromError(e);
       return false;
     }
-  }, [address, form, ensureChain, signRequest, failFromError]);
+  }, [address, chainBlocked, form, ensureChain, signRequest, failFromError]);
 
   const buildPayload = useCallback((): PrepareLaunchPayload | null => {
     if (!address || !metadata) return null;
@@ -529,6 +551,10 @@ export function useCreateFlow(): CreateFlow {
 
   const prepare = useCallback(async (): Promise<boolean> => {
     setError(null);
+    if (chainBlocked) {
+      setError(WRONG_CHAIN_MESSAGE);
+      return false;
+    }
     if (!form.termsAccepted) {
       setError(
         "Check the acknowledgement box (experimental, unaffiliated, irreversible) before preparing a launch.",
@@ -575,6 +601,7 @@ export function useCreateFlow(): CreateFlow {
       return false;
     }
   }, [
+    chainBlocked,
     form.termsAccepted,
     config,
     metadata,
@@ -614,6 +641,12 @@ export function useCreateFlow(): CreateFlow {
   const launch = useCallback(async (): Promise<void> => {
     if (phase === "launch-mismatch" || phase === "launch-success") return; // hard stop / done
     setError(null);
+    // The launch transaction can NEVER be sent while the wallet is on another
+    // chain — hard stop before anything reaches the wallet.
+    if (chainBlocked) {
+      setError(WRONG_CHAIN_MESSAGE);
+      return;
+    }
     if (!config || !bundle || !address || !publicClient) {
       setError("Launch prerequisites are missing.");
       return;
@@ -698,6 +731,7 @@ export function useCreateFlow(): CreateFlow {
     }
   }, [
     phase,
+    chainBlocked,
     config,
     bundle,
     address,

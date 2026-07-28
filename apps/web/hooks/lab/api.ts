@@ -52,10 +52,39 @@ const FRIENDLY_CODE_MESSAGES: Record<string, string> = {
   LIMIT_DAILY_CAP: "Today's public-beta launch cap has been reached. Try again tomorrow.",
 };
 
+/** Friendly copy for wallet/provider error shapes users actually hit. */
+function walletErrorMessage(msg: string, name: string): string | null {
+  const m = msg.toLowerCase();
+  if (name === "ChainMismatchError" || m.includes("does not match the target chain") || m.includes("chain mismatch")) {
+    return "Wrong network — switch to Robinhood Chain and try again.";
+  }
+  if (name === "UserRejectedRequestError" || m.includes("user rejected") || m.includes("user denied")) {
+    return "Request was declined in the wallet.";
+  }
+  if (m.includes("insufficient funds")) {
+    return "The wallet does not have enough ETH for this action.";
+  }
+  return null;
+}
+
+/**
+ * User-facing error text. NEVER exposes raw provider/viem errors — those carry
+ * multi-line dumps with request arguments and calldata. Unknown errors are
+ * reduced to their first line, stripped of hex blobs and URLs, and capped.
+ */
 export function errorMessage(e: unknown): string {
   if (e instanceof LabApiError) {
     return `${FRIENDLY_CODE_MESSAGES[e.code] ?? e.message} (${e.code})`;
   }
-  if (e instanceof Error) return e.message;
-  return String(e);
+  if (e instanceof Error) {
+    const friendly = walletErrorMessage(e.message, e.name);
+    if (friendly) return friendly;
+    const firstLine = (e.message.split("\n")[0] ?? "")
+      .replace(/0x[0-9a-fA-F]{10,}/g, "…")
+      .replace(/https?:\/\/\S+/g, "")
+      .trim()
+      .slice(0, 160);
+    return firstLine || "Something went wrong. Please try again.";
+  }
+  return "Something went wrong. Please try again.";
 }

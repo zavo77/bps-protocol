@@ -8,7 +8,7 @@
 // terminology (IPFS/metadata/anchor/flow-state/server flags) appears anywhere;
 // everything technical sits inside the collapsed "Advanced details" on review.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { usePublicClient, useSwitchChain } from "wagmi";
+import { useAccount, usePublicClient, useSwitchChain } from "wagmi";
 import { formatEther } from "viem";
 import {
   CHAIN_ID,
@@ -80,13 +80,77 @@ const activePillStyle = {
   borderColor: "var(--deep-ink)",
 } as const;
 
+/** wallet_addEthereumChain params for Robinhood Chain (founder-specified). */
+const ADD_CHAIN_PARAMS = {
+  chainId: "0x1237",
+  chainName: "Robinhood Chain",
+  nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+  rpcUrls: ["https://rpc.mainnet.chain.robinhood.com"],
+  blockExplorerUrls: ["https://robinhoodchain.blockscout.com"],
+} as const;
+
+function isUserRejection(e: unknown): boolean {
+  const m = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
+  const code = (e as { code?: number })?.code;
+  return code === 4001 || m.includes("user rejected") || m.includes("user denied");
+}
+
+function isUnknownChain(e: unknown): boolean {
+  const m = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
+  const code = (e as { code?: number })?.code;
+  return code === 4902 || m.includes("unrecognized chain") || m.includes("try adding the chain");
+}
+
 export default function LabCreatePage() {
   const flow = useCreateFlow();
-  const { switchChain } = useSwitchChain();
+  const { switchChainAsync } = useSwitchChain();
+  const { connector } = useAccount();
   const publicClient = usePublicClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [feeMode, setFeeMode] = useState<"connected" | "custom">("connected");
   const [showConnect, setShowConnect] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
+
+  // Switch the wallet to Robinhood Chain; if the wallet doesn't know the
+  // chain, request adding it, then switch again. Raw wallet errors never
+  // reach the user — only concise retry copy.
+  const switchNetwork = async () => {
+    setSwitchError(null);
+    setSwitching(true);
+    try {
+      await switchChainAsync({ chainId: CHAIN_ID });
+    } catch (e) {
+      if (isUnknownChain(e)) {
+        try {
+          const provider = (await connector?.getProvider?.()) as
+            | { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> }
+            | undefined;
+          if (provider) {
+            await provider.request({
+              method: "wallet_addEthereumChain",
+              params: [ADD_CHAIN_PARAMS],
+            });
+            await switchChainAsync({ chainId: CHAIN_ID });
+          } else {
+            setSwitchError("Couldn't reach the wallet — try switching networks in the wallet itself.");
+          }
+        } catch (e2) {
+          setSwitchError(
+            isUserRejection(e2)
+              ? "Network switch was declined — try again."
+              : "Couldn't add Robinhood Chain — try switching networks in the wallet itself.",
+          );
+        }
+      } else if (isUserRejection(e)) {
+        setSwitchError("Network switch was declined — try again.");
+      } else {
+        setSwitchError("Couldn't switch networks — try again.");
+      }
+    } finally {
+      setSwitching(false);
+    }
+  };
   // Network fee: "calculating" → an ETH figure, or "wallet" when the estimate
   // is unavailable. Never a bare dash.
   const [estFee, setEstFee] = useState<"calculating" | "wallet" | string>("calculating");
@@ -224,15 +288,29 @@ export default function LabCreatePage() {
         </nav>
       </header>
 
+      {/* Wrong network → the launch flow is STOPPED behind this clean state.
+          Nothing wallet-bound (metadata, envelope, simulation, launch) can run
+          until the wallet's active chain is Robinhood Chain. */}
       {wrongChain ? (
-        <button
-          className="lab-btn lab-btn--primary"
-          style={{ marginBottom: 16 }}
-          onClick={() => switchChain({ chainId: CHAIN_ID })}
-          data-testid="switch-chain"
-        >
-          Switch to Robinhood Chain
-        </button>
+        <section className="lab-card" style={{ marginBottom: 16 }} data-testid="switch-chain-card">
+          <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Switch to Robinhood Chain</h2>
+          <p className="lab-muted" style={{ fontSize: 14, margin: "8px 0 14px" }}>
+            This market launches on Robinhood Chain.
+          </p>
+          <button
+            className="lab-btn lab-btn--primary"
+            onClick={() => void switchNetwork()}
+            disabled={switching}
+            data-testid="switch-chain"
+          >
+            {switching ? "Switching…" : "Switch network"}
+          </button>
+          {switchError ? (
+            <p style={{ color: "var(--bad)", fontSize: 13, marginTop: 10 }} data-testid="switch-error">
+              {switchError}
+            </p>
+          ) : null}
+        </section>
       ) : null}
       {flow.unauthorised ? (
         <p className="lab-pill lab-pill--bad" style={{ marginBottom: 16 }} data-testid="unauthorised">
@@ -246,7 +324,7 @@ export default function LabCreatePage() {
       ) : null}
 
       {/* ---------------- Step 1 · Launch a token ---------------- */}
-      {step === 1 ? (
+      {!wrongChain && step === 1 ? (
         <section className="lab-card">
           <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
             <div style={{ flex: "0 0 148px" }}>
@@ -375,7 +453,7 @@ export default function LabCreatePage() {
       ) : null}
 
       {/* ---------------- Step 2 · Choose the market ---------------- */}
-      {step === 2 ? (
+      {!wrongChain && step === 2 ? (
         <section className="lab-card" data-testid="pair-step">
           <p style={{ fontSize: 15, margin: "0 0 14px", color: "var(--charcoal)" }}>
             What should {ticker} be paired with?
@@ -554,7 +632,7 @@ export default function LabCreatePage() {
       ) : null}
 
       {/* ---------------- Step 3 · Review your market ---------------- */}
-      {step === 3 && flow.manifest && flow.simulation && flow.prepared ? (
+      {!wrongChain && step === 3 && flow.manifest && flow.simulation && flow.prepared ? (
         <section className="lab-card" data-testid="review">
           <div
             style={{ display: "flex", gap: 18, alignItems: "center" }}
@@ -781,7 +859,7 @@ export default function LabCreatePage() {
           ) : null}
         </section>
       ) : null}
-      {step === 3 && !flow.manifest ? (
+      {!wrongChain && step === 3 && !flow.manifest ? (
         <section className="lab-card">
           <p className="lab-await">Nothing to review yet — go back and continue from the market step.</p>
         </section>

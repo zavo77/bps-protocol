@@ -34,7 +34,6 @@ import {
 } from "viem";
 import {
   useAccount,
-  useChainId,
   usePublicClient,
   useSendTransaction,
   useSwitchChain,
@@ -210,8 +209,10 @@ function parseAmountWei(amount: string, decimals: number): bigint {
 
 export function useTrade(marketToken: string, options?: UseTradeOptions): UseTrade {
   const { onTraded, anchor, marketSymbol } = options ?? {};
-  const { address, isConnected } = useAccount();
-  const chainId = useChainId();
+  // The WALLET's actual chain (useChainId() only mirrors the app config and
+  // cannot detect a wallet on another network — the live raw-error P0).
+  const { address, isConnected, chainId: walletChainId } = useAccount();
+  const chainId = walletChainId ?? CHAIN_ID;
   const publicClient = usePublicClient();
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();

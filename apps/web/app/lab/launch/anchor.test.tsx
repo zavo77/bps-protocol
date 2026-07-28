@@ -29,7 +29,7 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("wagmi", () => ({
-  useAccount: () => ({ address: h.state.address, isConnected: h.state.isConnected }),
+  useAccount: () => ({ address: h.state.address, isConnected: h.state.isConnected, chainId: h.state.chainId }),
   useChainId: () => h.state.chainId,
   usePublicClient: () => ({
     waitForTransactionReceipt: h.fns.waitForTransactionReceipt,
