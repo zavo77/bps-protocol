@@ -7,6 +7,14 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — ⚠ LAUNCH LAB LANE: advisor session REOPENED with the chain-gate fix live
+
+- Founder accepted the wallet-network P0 fix and re-authorized the session. Production env set to
+  public / broadcast TRUE / kill FALSE; redeployed; health-verified at commit 10bb2b097a63 — a verified
+  git descendant of the 47032dd chain-gate fix. Preview remains fail-closed. /lab/launch 200.
+- Engineering stopped at the live public site (no wallet/wizard/metadata/manifest/signature/trade).
+- Standing post-session plan: immediate fail-closed restore + redeploy + full acceptance verification.
+
 ## 2026-07-28 — LAUNCH LAB LANE: P0 live wallet-chain failure fixed; production restored fail-closed (commit 47032dd)
 
 - **Live failure (advisor session):** a connected wallet on Ethereum Mainnet (chainId 1) reached launch
