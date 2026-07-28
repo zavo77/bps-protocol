@@ -7,6 +7,20 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: pre-canary provenance check PASSED (no redeploy)
+
+- Branch `feature/bps-launch-lab-8h-vercel` pushed to origin (zavo77/bps-protocol) through `3b99a0c`
+  (was local-only past `5bb2ff7`). Production /api/lab/health commit `60c344e51d4f` == the pushed feat
+  commit; `1a894d2` (continuity) and `3b99a0c` (stray .gitignore) are documented docs/chore-only
+  descendants — deployed code identical, NO redeploy. Posture verified live: accessMode=public,
+  broadcastEnabled=false, killSwitchActive=true. MAG8 trading path live-verified with a read-only
+  POST /api/lab/quote (ETH→MAG8 100000000000000 wei): one-step Rialto leg, 1 wallet action — no
+  signature, no transaction. Market snapshot loads (price $0.00002067, pool reserve $0.018835,
+  1 swap); indexer trackedMarkets=1, knownPools=1, MAG8 state=current (lag 3). Diagnostic finding
+  (minor, not a defect): a request body failing zod validation on /api/lab/quote returns 500 INTERNAL
+  instead of 400 — surfaced by a probe with a bad EIP-55 checksum; real clients send valid addresses.
+  Ready for the human MAG8 canary buy+sell.
+
 ## 2026-07-28 — LAUNCH LAB LANE: P0.1 live market accuracy shipped (web 60c344e deployed fail-closed, indexer redeployed)
 
 - Founder P0.1 items 1–6 complete and live-verified on the MAG8 production canary: awaited BPS-Direct-leg
