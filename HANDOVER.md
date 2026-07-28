@@ -28,8 +28,8 @@
 > wallet-chain gate fix (`47032dd`), live market recovery (`7a7ea73`).
 >
 > **POSTURE (2026-07-28, current):** Production **FAIL-CLOSED** — public / broadcast FALSE / kill
-> switch TRUE, health-verified at commit `d5051611cf18`. Market CREATION is closed. **SELLS ARE
-> PAUSED** (`BPS_LAUNCH_LAB_SELL_PAUSED=true` incident brake — new market-token sells 503
+> switch TRUE, health-verified at commit `d5051611cf18`. Market CREATION is closed. **SELLS ARE ENABLED
+> (one authorised MAG8 sell canary; brake lifted 2026-07-28, read-only checks all passed)**; previously (`BPS_LAUNCH_LAB_SELL_PAUSED=true` incident brake — new market-token sells 503
 > SELL_PAUSED; buys + partial-sale recovery legs unaffected). The sell failure is fully
 > root-caused AND fixed: (a) the 4-prompt sign→approve→sign→send UX (now SIGNATURE-FREE
 > preparation, exact-amount approvals, planned prompts upfront, attemptId logs); (b) a Rialto

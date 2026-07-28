@@ -7,6 +7,21 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: ONE MAG8 SELL CANARY AUTHORISED — brake lifted, read-only checks passed
+
+- Founder authorised one MAG8 sell canary. Production env: BPS_LAUNCH_LAB_SELL_PAUSED=false (set
+  explicitly); access public / broadcast false / kill true UNCHANGED. Redeployed; health commit
+  fa644371f88d (same code as d5051611 + docs). Live read-only verification, ALL PASS: creation
+  remains closed (broadcast false + kill true); MAG8 BUYS available (rialto, 1 action); MAG8
+  SELLS ENABLED — fresh 100 MAG8→ETH quote for 0x78B2…6024: venue rialto ("Rialto (one
+  transaction)"), walletActionCount 1, allowanceTarget null, approvalsRequired [], expected out
+  1090083625573 wei ETH (min 1079182789317, ~30s expiry); prepare-leg: erc20ApprovalNeeded false,
+  permit2ApprovalNeeded false, simulation "ok", tx target 0xC941…59bD (the already-approved Rialto
+  router), value 0, gas 1,265,030. plannedSteps deterministically ["Sell MAG8 for ETH"] (leg
+  allowanceTarget null → no approve step; unit-tested). NO wallet connected, NOTHING executed —
+  stopped after the read-only check per directive. The user's sell should be ONE wallet
+  confirmation.
+
 ## 2026-07-28 — LAUNCH LAB LANE: final sell-path patch (web d5051611 deployed; SELLS STILL PAUSED)
 
 - **Ingestion trigger generalized (d90f7537):** use-trade awaited ingestion now fires for ANY
