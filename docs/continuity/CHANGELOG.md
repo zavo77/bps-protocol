@@ -7,6 +7,16 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: pre-session manifest cleanup (live posture unchanged)
+
+- At founder direction, the active prepared manifest bound to the founder inspection wallet
+  0x78b2…6024 (predicted token 0xa08e…63d1) was retired via the normal audit-safe mechanism
+  (consumed_at set; row RETAINED; nothing deleted or rewritten).
+- Confirmed clean pre-session state: **0 active/unconsumed prepared manifests, 0 provenance-verified
+  BPS launches, indexer knownPools = 0** (5 audit rows retained).
+- Production posture untouched and re-verified live: public / broadcast TRUE / kill FALSE at commit
+  5d8dc7daa1d0. No redeploy, no wallet, no wizard input, no new manifest, no signature.
+
 ## 2026-07-28 — ⚠ LAUNCH LAB LANE: LIVE ADVISOR SESSION POSTURE ENABLED (fresh founder authorization)
 
 - Founder visually approved the polished three-screen journey and re-authorized the acceptance session
