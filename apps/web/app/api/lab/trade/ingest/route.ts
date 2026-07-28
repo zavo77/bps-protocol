@@ -22,6 +22,11 @@ const SWAP_EVENT = parseAbiItem(
 const ingestSchema = z.object({
   txHash: z.string().refine((v) => isHex(v) && v.length === 66, "Invalid transaction hash"),
   marketToken: z.string().refine(isAddress, "Invalid market token"),
+  /** Non-secret client-generated trade attempt id for structured server logs. */
+  attemptId: z
+    .string()
+    .regex(/^[a-zA-Z0-9-]{6,64}$/)
+    .optional(),
 });
 
 export async function POST(req: Request): Promise<Response> {
@@ -31,7 +36,7 @@ export async function POST(req: Request): Promise<Response> {
     if (rateLimited(`ingest:${clientKey(req)}`, 20)) {
       return err("RATE_LIMITED", "Too many requests.", 429);
     }
-    const { txHash, marketToken } = ingestSchema.parse(await req.json());
+    const { txHash, marketToken, attemptId } = ingestSchema.parse(await req.json());
 
     // The market must be a provenance-verified BPS launch with a known poolId.
     const pg = await getPg();
@@ -45,6 +50,16 @@ export async function POST(req: Request): Promise<Response> {
 
     const client = getLabClient();
     const receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` });
+    // Structured trade log (non-secret): receipt outcome for this attempt.
+    console.log(
+      JSON.stringify({
+        tag: "lab-trade",
+        attemptId: attemptId ?? null,
+        event: "receipt",
+        txHash,
+        receiptStatus: receipt.status,
+      }),
+    );
     if (receipt.status !== "success") {
       return err("TX_NOT_SUCCESSFUL", "The transaction did not succeed on-chain.", 409);
     }

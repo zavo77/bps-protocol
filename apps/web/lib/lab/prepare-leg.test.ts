@@ -2,20 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getAddress } from "viem";
 
 // Route-handler tests for POST /api/lab/trade/prepare-leg: the final
-// pre-signature gate. Proves the founder's rejection matrix — wrong taker,
-// wrong chain, wrong leg tokens, unknown venue — and that a valid Rialto leg
-// returns the simulated transaction. Server/store/adapters are mocked; the
-// zod schemas, same-origin check, and handler logic under test are real.
+// pre-signature gate. Proves the founder's rejection matrix — wrong leg
+// tokens, unknown venue, bad venue value — that NO offchain signature is
+// required (the wallet transaction itself authenticates the sender), and
+// that the incident sell-pause brake blocks exactly the market-token sells.
+// Server/adapters are mocked; the zod schemas, same-origin check, and
+// handler logic under test are real.
 
 const TOKEN = getAddress("0x1F212fccea9995931f4f2F9CA0C8b641188Ca196");
 const GOOGL = getAddress("0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3");
 const WETH = getAddress("0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73");
 const WALLET = getAddress("0x1000000000000000000000000000000000000001");
-const OTHER = getAddress("0x2000000000000000000000000000000000000002");
 const RIALTO_ROUTER = getAddress("0x3000000000000000000000000000000000000003");
 
 const m = vi.hoisted(() => ({
-  verifySignedRequest: vi.fn(async () => WALLET),
+  sellPaused: false,
   quoteRialto: vi.fn(),
   quoteOneInch: vi.fn(async () => null),
   quoteZeroExRoute: vi.fn(async () => null),
@@ -27,17 +28,15 @@ const m = vi.hoisted(() => ({
       return 0n;
     }),
     call: vi.fn(async () => ({})),
+    estimateGas: vi.fn(async () => 400_000n),
     getBlockNumber: vi.fn(async () => 1n),
   },
 }));
 
 vi.mock("./server", () => ({
-  getFlags: () => ({ requestTtlSeconds: 300 }),
   getLabClient: () => m.client,
-  payloadHashOf: () => `0x${"a".repeat(64)}`,
-  verifySignedRequest: m.verifySignedRequest,
+  isSellPaused: () => m.sellPaused,
 }));
-vi.mock("./store", () => ({ assertSignatureUnused: vi.fn(async () => undefined) }));
 vi.mock("./rialto", () => ({ quoteRialto: m.quoteRialto }));
 vi.mock("./oneinch", () => ({ quoteOneInch: m.quoteOneInch }));
 vi.mock("./zeroex", () => ({ quoteZeroExRoute: m.quoteZeroExRoute }));
@@ -99,21 +98,8 @@ const rialtoQuoteOk = {
 };
 
 let reqNo = 0;
-function makeRequest(payload: Record<string, unknown>, envelopePatch: Record<string, unknown> = {}) {
+function makeRequest(payload: Record<string, unknown>, extra: Record<string, unknown> = {}) {
   reqNo += 1;
-  const envelope = {
-    message: {
-      action: "prepare-trade",
-      wallet: WALLET,
-      chainId: 4663,
-      payloadHash: `0x${"a".repeat(64)}`,
-      issuedAt: Math.floor(Date.now() / 1000),
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      host: "lab.test",
-      ...envelopePatch,
-    },
-    signature: `0x${"ab".repeat(65)}`,
-  };
   return new Request("https://lab.test/api/lab/trade/prepare-leg", {
     method: "POST",
     headers: {
@@ -123,7 +109,8 @@ function makeRequest(payload: Record<string, unknown>, envelopePatch: Record<str
       // distinct client key per request so the fixed-window limiter never trips
       "x-forwarded-for": `10.0.0.${reqNo}`,
     },
-    body: JSON.stringify({ envelope, payload }),
+    // NO envelope, NO signature — preparation is signature-free by design.
+    body: JSON.stringify({ payload, ...extra }),
   });
 }
 
@@ -139,11 +126,12 @@ const validRialtoPayload = {
 
 beforeEach(() => {
   vi.clearAllMocks(); // call counts must not leak between tests
-  m.verifySignedRequest.mockResolvedValue(WALLET);
+  m.sellPaused = false;
   m.quoteRialto.mockResolvedValue(rialtoQuoteOk);
   m.quoteOneInch.mockResolvedValue(null);
   m.quoteZeroExRoute.mockResolvedValue(null);
   m.client.call.mockResolvedValue({});
+  m.client.estimateGas.mockResolvedValue(400_000n);
 });
 
 describe("POST /api/lab/trade/prepare-leg — rejection matrix + Rialto leg", () => {
@@ -168,19 +156,57 @@ describe("POST /api/lab/trade/prepare-leg — rejection matrix + Rialto leg", ()
     expect(body.data.approvals.erc20ApprovalTarget).toBe(RIALTO_ROUTER);
   });
 
-  it("rejects a taker that is not the envelope signer (403 TAKER_MISMATCH)", async () => {
-    const res = await POST(makeRequest({ ...validRialtoPayload, taker: OTHER }));
-    const body = (await res.json()) as { ok: boolean; code: string };
-    expect(res.status).toBe(403);
-    expect(body.code).toBe("TAKER_MISMATCH");
-    // Never reaches an adapter or simulation.
+  it("requires NO offchain signature and logs a structured lab-trade line with the attemptId", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      const res = await POST(
+        makeRequest(validRialtoPayload, { attemptId: "attempt-abc123", action: 1 }),
+      );
+      expect(res.status).toBe(200);
+      const line = logSpy.mock.calls
+        .map((c) => String(c[0]))
+        .find((s) => s.includes('"tag":"lab-trade"'));
+      expect(line).toBeDefined();
+      const parsed = JSON.parse(line!) as Record<string, unknown>;
+      expect(parsed.attemptId).toBe("attempt-abc123");
+      expect(parsed.action).toBe(1);
+      expect(parsed.venue).toBe("rialto");
+      expect(parsed.simulation).toBe("ok");
+      // Never any signature/calldata material in the log line.
+      expect(line).not.toContain("0xabcd");
+      expect(line).not.toContain("signature");
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it("SELL_PAUSED brake: blocks a leg that SELLS the market token (503)", async () => {
+    m.sellPaused = true;
+    const res = await POST(
+      makeRequest({ ...validRialtoPayload, inputToken: TOKEN, outputToken: WETH }),
+    );
+    const body = (await res.json()) as { code: string };
+    expect(res.status).toBe(503);
+    expect(body.code).toBe("SELL_PAUSED");
     expect(m.quoteRialto).not.toHaveBeenCalled();
   });
 
-  it("rejects an envelope on the wrong chain (schema binds chainId 4663)", async () => {
-    const res = await POST(makeRequest(validRialtoPayload, { chainId: 1 }));
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(m.quoteRialto).not.toHaveBeenCalled();
+  it("SELL_PAUSED brake: the anchor→payment RECOVERY leg still prepares", async () => {
+    m.sellPaused = true;
+    m.quoteRialto.mockResolvedValue({ ...rialtoQuoteOk, sellToken: GOOGL, buyToken: WETH });
+    const res = await POST(
+      makeRequest({ ...validRialtoPayload, inputToken: GOOGL, outputToken: WETH }),
+    );
+    const body = (await res.json()) as { ok: boolean };
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+  });
+
+  it("gas limit is the simulation estimate with a 25% buffer", async () => {
+    const res = await POST(makeRequest(validRialtoPayload));
+    const body = (await res.json()) as { data: { transaction: { gas: string } } };
+    expect(res.status).toBe(200);
+    expect(body.data.transaction.gas).toBe("500000"); // 400000 × 1.25
   });
 
   it("rejects an aggregator leg whose tokens involve no supported payment asset (BAD_LEG)", async () => {

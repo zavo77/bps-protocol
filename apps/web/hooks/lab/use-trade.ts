@@ -11,28 +11,23 @@
 //
 // Per leg (see prepareAndTrade):
 //   (a) wrong chain          → switch to Robinhood Chain (4663)
-//   (b) sign prepare-trade   → EIP-191 envelope via useSignedRequest
-//   (c) POST /api/lab/trade/prepare-leg (server re-quotes; client calldata is never trusted)
-//   (d) approvals            → ERC20 approve(spender, maxUint256); Permit2.approve(token, router, uint160 max, uint48 exp)
-//                              then re-sign + re-prepare for a clean simulation
-//   (e) send transaction     → wallet signs {to,data,value,gas,chainId:4663}
-//   (f) waitForTransactionReceipt → success/failure
+//   (b) POST /api/lab/trade/prepare-leg — NO wallet signature: the eventual
+//       transaction authenticates the sender and the server never signs or
+//       broadcasts (it re-quotes server-side; client calldata is never trusted)
+//   (c) approvals            → EXACT-amount ERC20 approve(spender, amountIn);
+//       Permit2.approve(token, router, uint160 amountIn, uint48 exp) when the
+//       leg settles through Permit2 — then re-prepare (again signature-free)
+//       for a clean simulation with a fresh quote window
+//   (d) send transaction     → the ONLY wallet prompts are approvals + the swap
+//   (e) waitForTransactionReceipt → success/failure
 //
 // For a COMPOSED route (2 wallet actions via the anchor) the quote's leg 2 is an
 // ESTIMATE: after leg 1 confirms we read the actual anchor received (balanceOf
-// delta) and re-prepare leg 2 with that exact amount. Every prepare-leg call
-// needs a FRESH signed envelope (server enforces single-use replay protection).
+// delta) and re-prepare leg 2 with that exact amount. A non-secret attemptId
+// keys the structured server logs for the whole attempt.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  erc20Abi,
-  formatUnits,
-  isAddress,
-  maxUint256,
-  parseUnits,
-  type Address,
-  type Hex,
-} from "viem";
+import { erc20Abi, formatUnits, isAddress, parseUnits, type Address, type Hex } from "viem";
 import {
   useAccount,
   usePublicClient,
@@ -57,7 +52,6 @@ import {
   savePendingTrade,
   type PendingComposedTrade,
 } from "./trade-recovery";
-import { useSignedRequest } from "./use-signed-request";
 
 export type TradeSide = "buy" | "sell";
 
@@ -155,6 +149,9 @@ export interface UseTrade {
   slippageBps: number;
   status: TradeStatus;
   quote: UserRouteQuote | null;
+  /** Exact ordered wallet prompts for the current quote (signature-free
+   *  allowance preflight), or null while unknown / no quote. */
+  plannedSteps: string[] | null;
   txHash: Hex | null;
   legHashes: Hex[];
   legIndex: number;
@@ -188,8 +185,8 @@ export interface UseTrade {
   reset: () => void;
   /** A partially-completed composed trade for this market/wallet awaiting its final leg. */
   pendingRecovery: PendingComposedTrade | null;
-  /** Resume banner copy ({heading, action}) when a pending trade exists, else null. */
-  pendingPrompt: { heading: string; action: string } | null;
+  /** Resume banner copy ({heading, detail, action}) when a pending trade exists, else null. */
+  pendingPrompt: { heading: string; detail: string; action: string } | null;
   /** True when the persisted quote window elapsed — resume re-prepares fresh regardless. */
   pendingExpired: boolean;
   /** Execute ONLY the outstanding second leg from the ACTUAL persisted anchor amount. */
@@ -218,8 +215,9 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
-  const signRequest = useSignedRequest();
   const queryClient = useQueryClient();
+  // Non-secret id tying one execution attempt together in the server logs.
+  const attemptIdRef = useRef<string | null>(null);
 
   const payTokens = useMemo<TradeToken[]>(
     () => PAYMENT_TOKENS.map((t) => ({ ...t, advanced: false })),
@@ -250,6 +248,9 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
   const [txHash, setTxHash] = useState<Hex | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [inputBalanceWei, setInputBalanceWei] = useState<bigint | null>(null);
+  // Signature-free allowance preflight: the exact wallet prompts (approvals +
+  // transactions, in order) the quoted trade will request. Null while unknown.
+  const [plannedSteps, setPlannedSteps] = useState<string[] | null>(null);
   const [pendingRecovery, setPendingRecovery] = useState<PendingComposedTrade | null>(null);
   // Re-entrancy guard: exactly ONE trade execution (full flow or resume) may be
   // in flight at a time — React state (`busy`) lags async work and cannot gate this.
@@ -278,6 +279,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
   // Changing inputs invalidates a stale quote so the UI can't trade on it.
   const invalidateQuote = useCallback(() => {
     setQuote(null);
+    setPlannedSteps(null);
     setTxHash(null);
     setLegHashes([]);
     setLegIndex(0);
@@ -426,6 +428,74 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     setError(errorMessage(e));
   }, []);
 
+  /** Human label for a token address in this trade's context. */
+  const symbolFor = useCallback(
+    (addr: string, q: UserRouteQuote): string => {
+      const a = addr.toLowerCase();
+      if (a === q.marketToken.toLowerCase()) return marketSymbol ?? "the token";
+      if (a === q.anchorAddress.toLowerCase()) return q.anchorSymbol;
+      if (a === NATIVE_ETH.toLowerCase()) return "ETH";
+      const pay = PAYMENT_TOKENS.find((t) => t.address.toLowerCase() === a);
+      return pay?.symbol ?? "token";
+    },
+    [marketSymbol],
+  );
+
+  // Signature-free preflight: read the CURRENT allowances the quoted legs need
+  // and produce the exact ordered wallet prompts (approvals + transactions).
+  // Pure reads — never a wallet interaction. Falls back to "(if needed)"
+  // wording when an allowance read fails.
+  const computePlannedSteps = useCallback(
+    async (q: UserRouteQuote): Promise<string[]> => {
+      const steps: string[] = [];
+      for (const leg of q.legs) {
+        const inSym = symbolFor(leg.inputToken, q);
+        const outSym = symbolFor(leg.outputToken, q);
+        const nativeIn = leg.inputToken.toLowerCase() === NATIVE_ETH.toLowerCase();
+        if (!nativeIn && leg.allowanceTarget && publicClient && address) {
+          try {
+            const allowance = (await publicClient.readContract({
+              address: leg.inputToken,
+              abi: erc20Abi,
+              functionName: "allowance",
+              args: [address, leg.allowanceTarget],
+            })) as bigint;
+            if (allowance < BigInt(leg.inputAmountWei)) steps.push(`Approve ${inSym}`);
+            else if (leg.kind === "bpsDirect" && leg.transactionTarget) {
+              // ERC-20 → Permit2 is satisfied; the Permit2 → router allowance
+              // may still be missing or expired.
+              const [p2Amount, p2Expiration] = (await publicClient.readContract({
+                address: leg.allowanceTarget,
+                abi: PERMIT2_ABI,
+                functionName: "allowance",
+                args: [address, leg.inputToken, leg.transactionTarget],
+              })) as readonly [bigint, number, number];
+              if (
+                p2Amount < BigInt(leg.inputAmountWei) ||
+                p2Expiration <= Math.floor(Date.now() / 1000)
+              ) {
+                steps.push(`Approve ${inSym} for the router`);
+              }
+            }
+          } catch {
+            steps.push(`Approve ${inSym} (if needed)`);
+          }
+        } else if (!nativeIn && leg.allowanceTarget) {
+          steps.push(`Approve ${inSym} (if needed)`);
+        }
+        steps.push(
+          leg.inputToken.toLowerCase() === q.marketToken.toLowerCase()
+            ? `Sell ${inSym} for ${outSym}`
+            : leg.outputToken.toLowerCase() === q.marketToken.toLowerCase()
+              ? `Buy ${outSym} with ${inSym}`
+              : `Convert ${inSym} to ${outSym}`,
+        );
+      }
+      return steps;
+    },
+    [publicClient, address, symbolFor],
+  );
+
   const getQuote = useCallback(async () => {
     setError(null);
     setTxHash(null);
@@ -460,23 +530,45 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
       });
       setQuote(data);
       setStatus(data.legs.length === 0 ? "no-route" : "quoted");
+      // Preflight the exact wallet prompts (signature-free reads) so the UI
+      // can show the full step list + count before execution begins.
+      if (data.legs.length > 0) {
+        void computePlannedSteps(data)
+          .then((steps) => setPlannedSteps(steps))
+          .catch(() => setPlannedSteps(null));
+      }
     } catch (e) {
       mapTradeError(e);
     }
-  }, [address, amount, inputDecimals, side, payToken, marketToken, slippageBps, mapTradeError]);
+  }, [
+    address,
+    amount,
+    inputDecimals,
+    side,
+    payToken,
+    marketToken,
+    slippageBps,
+    mapTradeError,
+    computePlannedSteps,
+  ]);
 
-  const signAndPrepareLeg = useCallback(
-    async (payload: LegPayload): Promise<PrepareLegResponse> => {
-      setStatus("awaiting-signature");
-      const envelope = await signRequest("prepare-trade", payload);
+  // Prepare a leg WITHOUT any wallet interaction: the server re-quotes,
+  // validates, and simulates; the only wallet prompts in a trade are
+  // approvals and the transaction itself.
+  const prepareLeg = useCallback(
+    async (payload: LegPayload, actionNo: number): Promise<PrepareLegResponse> => {
       setStatus("simulating");
       return labFetch<PrepareLegResponse>("/api/lab/trade/prepare-leg", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ envelope, payload }),
+        body: JSON.stringify({
+          payload,
+          attemptId: attemptIdRef.current,
+          action: actionNo,
+        }),
       });
     },
-    [signRequest],
+    [],
   );
 
   const ensureChain = useCallback(async () => {
@@ -500,10 +592,14 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
       setLegCount(legTotal);
       setLegIndex(legNo);
 
-      // (b)+(c) sign + prepare (server re-quotes; client calldata is never trusted).
-      let prep = await signAndPrepareLeg(payload);
+      // (b) prepare — NO wallet signature (server re-quotes; client calldata is
+      // never trusted).
+      let prep = await prepareLeg(payload, legNo);
 
-      // (d) approvals in the wallet, then re-prepare for a clean simulation.
+      // (c) approvals in the wallet — EXACT amount by default, never unlimited —
+      // then re-prepare WITHOUT any signature: the fresh preparation refreshes
+      // the quote + expiry window automatically after the approval delay.
+      const amountInWei = BigInt(payload.exactInputAmount);
       const nativeLegInput = payload.inputToken.toLowerCase() === NATIVE_ETH.toLowerCase();
       let approved = false;
       if (
@@ -516,7 +612,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
           address: payload.inputToken,
           abi: erc20Abi,
           functionName: "approve",
-          args: [prep.approvals.erc20ApprovalTarget, maxUint256],
+          args: [prep.approvals.erc20ApprovalTarget, amountInWei],
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
         approved = true;
@@ -529,20 +625,24 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
       ) {
         setStatus("approving");
         // Permit2 expiration is a uint48 → typed as `number` by abitype.
+        // Amount is the EXACT leg input (uint160), never the unlimited max.
         const expiration = Math.floor(Date.now() / 1000) + PERMIT2_EXPIRATION_SECONDS;
+        const permitAmount = amountInWei > MAX_UINT160 ? MAX_UINT160 : amountInWei;
         const permitHash = await writeContractAsync({
           // erc20ApprovalTarget is the Permit2 contract (leg.allowanceTarget).
           address: prep.approvals.erc20ApprovalTarget,
           abi: PERMIT2_ABI,
           functionName: "approve",
-          args: [payload.inputToken, prep.approvals.permit2SpenderTarget, MAX_UINT160, expiration],
+          args: [payload.inputToken, prep.approvals.permit2SpenderTarget, permitAmount, expiration],
         });
         await publicClient.waitForTransactionReceipt({ hash: permitHash });
         approved = true;
       }
-      if (approved) prep = await signAndPrepareLeg(payload);
+      if (approved) prep = await prepareLeg(payload, legNo);
 
       // Stale leg quote → stop; the user re-quotes and reviews fresh numbers.
+      // (Post-approval re-preparation above always yields a fresh window, so
+      // this only trips when the wallet sat unconfirmed for a long time.)
       if (Date.now() > prep.staleAfter) {
         setStatus("failure");
         setError("Leg quote expired before signing — re-quote and retry.");
@@ -592,7 +692,11 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
             await labFetch("/api/lab/trade/ingest", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ txHash: hash, marketToken }),
+              body: JSON.stringify({
+                txHash: hash,
+                marketToken,
+                ...(attemptIdRef.current ? { attemptId: attemptIdRef.current } : {}),
+              }),
             });
             // T2: insertion confirmed. Invalidate + refetch both surfaces (T3).
             await Promise.allSettled([
@@ -616,7 +720,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     },
     [
       publicClient,
-      signAndPrepareLeg,
+      prepareLeg,
       writeContractAsync,
       sendTransactionAsync,
       marketToken,
@@ -658,6 +762,8 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     let overrideInput: bigint | null = null;
 
     executionInFlight.current = true;
+    attemptIdRef.current =
+      globalThis.crypto?.randomUUID?.() ?? `attempt-${Date.now().toString(36)}`;
     try {
       await ensureChain();
       for (let i = 0; i < legs.length; i++) {
@@ -813,6 +919,8 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
           };
 
     executionInFlight.current = true;
+    attemptIdRef.current =
+      globalThis.crypto?.randomUUID?.() ?? `attempt-${Date.now().toString(36)}`;
     try {
       await ensureChain();
       const hash = await executeLeg(payload, 2, 2);
@@ -851,6 +959,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
   const reset = useCallback(() => {
     setAmountState("");
     setQuote(null);
+    setPlannedSteps(null);
     setTxHash(null);
     setLegHashes([]);
     setLegIndex(0);
@@ -865,6 +974,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     slippageBps,
     status,
     quote,
+    plannedSteps,
     txHash,
     legHashes,
     legIndex,

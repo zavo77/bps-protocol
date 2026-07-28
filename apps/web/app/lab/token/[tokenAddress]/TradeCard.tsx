@@ -115,6 +115,7 @@ export function TradeCard({
     slippageBps,
     status,
     quote,
+    plannedSteps,
     txHash,
     legHashes,
     legIndex,
@@ -170,9 +171,13 @@ export function TradeCard({
           <p className="lab-label" data-testid="recovery-heading" style={{ color: "var(--warn)" }}>
             {pendingPrompt.heading}
           </p>
-          <p className="lab-muted" style={{ fontSize: 13, margin: "8px 0", lineHeight: 1.5 }}>
-            Your first step confirmed on-chain. This trade takes a second wallet action to finish —
-            it will not run on its own.{" "}
+          <p
+            className="lab-muted"
+            data-testid="recovery-detail"
+            style={{ fontSize: 13, margin: "8px 0", lineHeight: 1.5 }}
+          >
+            {pendingPrompt.detail} Finishing takes one more wallet action — it will not run on its
+            own.{" "}
             {pendingExpired
               ? "The earlier quote expired, so the second step is re-priced fresh before you sign."
               : ""}
@@ -345,6 +350,31 @@ export function TradeCard({
           <span className="lab-data" data-testid="expected-output">
             {fmt(quote.expectedFinalOutputWei, outputDecimals)} {outputSymbol}
           </span>
+        </div>
+      )}
+
+      {/* Exact wallet prompts BEFORE execution: every approval + transaction,
+          in order, from a signature-free allowance preflight. No surprises. */}
+      {quote && quote.legs.length > 0 && (
+        <div style={{ marginTop: 8 }} data-testid="planned-steps">
+          <p className="lab-muted" style={{ fontSize: 13, margin: "0 0 4px" }}>
+            {plannedSteps
+              ? `This trade takes ${plannedSteps.length} wallet confirmation${plannedSteps.length === 1 ? "" : "s"}:`
+              : `Checking the wallet confirmations this trade needs…`}
+          </p>
+          {plannedSteps && (
+            <ol style={{ margin: 0, paddingLeft: "1.2rem" }}>
+              {plannedSteps.map((step, i) => (
+                <li
+                  key={`${step}-${i}`}
+                  data-testid={`planned-step-${i + 1}`}
+                  style={{ fontSize: 13, marginBottom: 2 }}
+                >
+                  {step}
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
       )}
 

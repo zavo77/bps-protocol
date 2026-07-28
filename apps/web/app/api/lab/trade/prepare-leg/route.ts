@@ -1,35 +1,20 @@
 // POST /api/lab/trade/prepare-leg — final pre-signature validation for ONE leg
-// of a user trade (one-step 0x, composed leg, or advanced direct-anchor).
-// Same protections as /trade/prepare: signed envelope, replay protection,
-// server-side re-quote (client calldata never trusted), balance + allowance
-// checks, exact-calldata simulation against the taker. No server signer.
+// of a user trade (one-step aggregator, composed leg, or advanced direct-anchor).
+// NO offchain signature is required: the eventual wallet transaction already
+// authenticates the sender and this server never signs or broadcasts anything —
+// it only re-quotes server-side (client calldata never trusted), checks balance
+// + allowances, and simulates the exact calldata. Rate-limited + same-origin.
 
-import {
-  erc20Abi,
-  getAddress,
-  isAddress,
-  keccak256,
-  stringToHex,
-  type Address,
-  type Hex,
-} from "viem";
+import { erc20Abi, getAddress, isAddress, type Address, type Hex } from "viem";
 import { z } from "zod";
 import {
   PERMIT2_ABI,
   quoteDirectRoute,
-  signedRequestSchema,
   getPaymentToken,
   getLabPoolContext,
   NATIVE_ETH,
 } from "@bps/launch-lab";
-import {
-  getFlags,
-  getLabClient,
-  isSellPaused,
-  payloadHashOf,
-  verifySignedRequest,
-} from "../../../../../lib/lab/server";
-import { assertSignatureUnused } from "../../../../../lib/lab/store";
+import { getLabClient, isSellPaused } from "../../../../../lib/lab/server";
 import { quoteAggregatorDirect } from "../../../../../lib/lab/trade-router";
 import {
   assertSameOrigin,
@@ -38,7 +23,6 @@ import {
   mapError,
   ok,
   rateLimited,
-  requestHost,
 } from "../../../../../lib/lab/http";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +37,9 @@ const prepareLegSchema = z.object({
   taker: z.string().refine(isAddress),
 });
 
+/** Non-secret client-generated trade attempt id for structured server logs. */
+const attemptIdSchema = z.string().regex(/^[a-zA-Z0-9-]{6,64}$/);
+
 export async function POST(req: Request): Promise<Response> {
   try {
     const originProblem = assertSameOrigin(req);
@@ -60,22 +47,24 @@ export async function POST(req: Request): Promise<Response> {
     if (rateLimited(`tradeleg:${clientKey(req)}`, 20))
       return err("RATE_LIMITED", "Too many requests.", 429);
 
-    const body = (await req.json()) as { envelope?: unknown; payload?: unknown };
-    const envelope = signedRequestSchema.parse(body.envelope);
+    const body = (await req.json()) as {
+      payload?: unknown;
+      attemptId?: unknown;
+      action?: unknown;
+    };
     const payload = prepareLegSchema.parse(body.payload);
-    const wallet = await verifySignedRequest(envelope, {
-      action: "prepare-trade",
-      payloadHash: payloadHashOf(payload),
-      host: requestHost(req),
-    });
-    if (wallet.toLowerCase() !== payload.taker.toLowerCase()) {
-      return err("TAKER_MISMATCH", "Signer must be the taker wallet.", 403);
-    }
-    const flags = getFlags();
-    await assertSignatureUnused(
-      keccak256(stringToHex(envelope.signature)),
-      flags.requestTtlSeconds * 1000,
-    );
+    const attemptId = attemptIdSchema.safeParse(body.attemptId).success
+      ? (body.attemptId as string)
+      : null;
+    const actionNo =
+      typeof body.action === "number" && Number.isInteger(body.action) && body.action >= 1 && body.action <= 9
+        ? body.action
+        : null;
+    // Structured trade log — one JSON line per event, keyed by the non-secret
+    // attempt id. Never contains calldata, signatures, or key material.
+    const logTrade = (fields: Record<string, unknown>): void => {
+      console.log(JSON.stringify({ tag: "lab-trade", attemptId, action: actionNo, ...fields }));
+    };
 
     const client = getLabClient();
     const taker = getAddress(payload.taker);
@@ -226,20 +215,44 @@ export async function POST(req: Request): Promise<Response> {
       }
     }
 
-    // Simulate the exact calldata when the allowance chain is satisfied.
+    // Simulate the exact calldata when the allowance chain is satisfied, then
+    // size the gas limit from a real estimate with a 25% buffer (falling back
+    // to the venue/default limit when estimation is unavailable).
+    const quotedAt = Date.now();
     let simulation: "ok" | "reverted" | "skipped-pending-approval" = "skipped-pending-approval";
     if (!erc20ApprovalNeeded && !permit2ApprovalNeeded) {
       try {
         await client.call({ account: taker, to, data, value });
         simulation = "ok";
       } catch {
+        logTrade({
+          event: "prepare-leg",
+          venue: actualKind,
+          simulation: "reverted",
+          allowance: { erc20ApprovalNeeded, permit2ApprovalNeeded },
+          quotedAt,
+        });
         return err(
           "SIMULATION_FAILED",
           "The exact leg transaction reverts; not returning it for signature.",
           409,
         );
       }
+      try {
+        const estimated = await client.estimateGas({ account: taker, to, data, value });
+        gas = ((estimated * 125n) / 100n).toString();
+      } catch {
+        /* keep the venue/default gas limit */
+      }
     }
+
+    logTrade({
+      event: "prepare-leg",
+      venue: actualKind,
+      simulation,
+      allowance: { erc20ApprovalNeeded, permit2ApprovalNeeded },
+      quotedAt,
+    });
 
     return ok({
       leg: {

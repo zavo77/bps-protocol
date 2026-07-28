@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -861,6 +861,10 @@ describe("TradeCard — final-gate additions (Rialto lane)", () => {
     expect(ingest).not.toBeNull();
     expect(ingest!.txHash).toBe(`0x${"66".repeat(32)}`);
     expect(ingest!.marketToken).toBe(TOKEN);
+    // The failed final (Rialto) leg NEVER re-runs the BPS market sale: exactly
+    // one transaction was ever sent, and no EIP-191 signature was requested.
+    expect(h.fns.sendTransactionAsync).toHaveBeenCalledTimes(1);
+    expect(h.fns.signMessageAsync).not.toHaveBeenCalled();
   });
 
   it("SELL resume posts an aggregator leg (server runs the Rialto-first chain) with the ACTUAL amount", async () => {
@@ -1004,5 +1008,274 @@ describe("PriceChart", () => {
     expect(screen.getByTestId("price-chart-svg")).toHaveAttribute("data-point-count", "3");
     expect(screen.getAllByTestId("price-point").length).toBe(3);
     expect(screen.queryByTestId("price-chart-empty")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P0 SELL-FAILURE REGRESSIONS — the 3–4 prompt UX is gone. A sell is at most
+// approval (EXACT amount) + swap; preparation never asks the wallet for an
+// EIP-191 signature, and the post-approval re-preparation is automatic and
+// refreshes the quote window.
+// ---------------------------------------------------------------------------
+describe("TradeCard — P0 sell prompt-count + reliability regressions", () => {
+  const GOOGL = "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3";
+  const SPENDER = "0x3333333333333333333333333333333333333333";
+
+  const ONE_STEP_SELL = {
+    marketToken: TOKEN,
+    side: "sell",
+    anchorSymbol: "GOOGL",
+    anchorAddress: GOOGL,
+    userInputToken: TOKEN,
+    userOutputToken: NATIVE_ETH,
+    routeKind: "one-step",
+    legs: [
+      {
+        kind: "rialto",
+        label: "Rialto: PRINT → ETH",
+        inputToken: TOKEN,
+        outputToken: NATIVE_ETH,
+        inputAmountWei: WEI(100),
+        expectedOutputWei: WEI(1),
+        minimumOutputWei: "990000000000000000",
+        transactionTarget: ROUTER,
+        transactionData: "0x",
+        transactionValue: "0",
+        allowanceTarget: SPENDER,
+        estimated: false,
+      },
+    ],
+    expectedFinalOutputWei: WEI(1),
+    minimumFinalOutputWei: "990000000000000000",
+    totalPriceImpactBps: 50,
+    poolFeeUnits: 10_000,
+    zeroExFeeNote: null,
+    walletActionCount: 1,
+    approvalsRequired: [{ token: TOKEN, spender: SPENDER }],
+    quoteExpiry: Date.now() + 60_000,
+    warnings: [],
+  };
+
+  function prepResponse(opts: { approvalNeeded: boolean; staleAfter?: number }) {
+    return {
+      leg: {
+        kind: "rialto",
+        inputToken: TOKEN,
+        outputToken: NATIVE_ETH,
+        exactInputAmount: WEI(100),
+        expectedOutputWei: WEI(1),
+        minimumOutputWei: "990000000000000000",
+      },
+      simulation: opts.approvalNeeded ? "skipped-pending-approval" : "ok",
+      approvals: {
+        erc20ApprovalNeeded: opts.approvalNeeded,
+        erc20ApprovalTarget: SPENDER,
+        permit2ApprovalNeeded: false,
+        permit2SpenderTarget: null,
+      },
+      transaction: {
+        chainId: 4663,
+        from: TAKER,
+        to: ROUTER,
+        data: "0x",
+        value: "0",
+        gas: "500000",
+      },
+      staleAfter: opts.staleAfter ?? Date.now() + 60_000,
+    };
+  }
+
+  function mockSellReads(allowanceWei: bigint) {
+    h.fns.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
+      if (functionName === "decimals") return 18;
+      if (functionName === "balanceOf") return 1000n * 10n ** 18n;
+      if (functionName === "allowance") return allowanceWei;
+      return 0n;
+    });
+  }
+
+  async function runSellFlow() {
+    const user = userEvent.setup();
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" anchorAddress={GOOGL} />,
+    );
+    await user.click(screen.getByTestId("tab-sell"));
+    await user.type(screen.getByTestId("trade-amount"), "100");
+    await user.click(screen.getByTestId("quote-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-button")).toBeInTheDocument());
+    await user.click(screen.getByTestId("trade-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-success")).toBeInTheDocument());
+  }
+
+  it("first ERC-20 sell: approval (EXACT amount) + swap ONLY — never sign→approve→sign", async () => {
+    mockSellReads(0n);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"55".repeat(32)}`);
+    let approved = false;
+    h.fns.writeContractAsync.mockImplementation(async () => {
+      approved = true;
+      return `0x${"44".repeat(32)}`;
+    });
+    const calls = stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+      if (url.includes("/api/lab/trade/prepare-leg"))
+        return jsonResponse(200, { ok: true, data: prepResponse({ approvalNeeded: !approved }) });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    await runSellFlow();
+
+    // NEVER an offchain signature — preparation is signature-free.
+    expect(h.fns.signMessageAsync).not.toHaveBeenCalled();
+    // Exactly ONE approval, for the EXACT amount (never unlimited).
+    expect(h.fns.writeContractAsync).toHaveBeenCalledTimes(1);
+    const approveArgs = h.fns.writeContractAsync.mock.calls[0]![0] as {
+      functionName: string;
+      args: [string, bigint];
+    };
+    expect(approveArgs.functionName).toBe("approve");
+    expect(approveArgs.args[0]).toBe(SPENDER);
+    expect(approveArgs.args[1]).toBe(100n * 10n ** 18n);
+    // Exactly ONE swap confirmation; the re-preparation was automatic (2 posts).
+    expect(h.fns.sendTransactionAsync).toHaveBeenCalledTimes(1);
+    expect(calls.filter((c) => c.url.includes("/api/lab/trade/prepare-leg")).length).toBe(2);
+  });
+
+  it("existing allowance: exactly ONE wallet confirmation (the swap)", async () => {
+    mockSellReads(1000n * 10n ** 18n);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"56".repeat(32)}`);
+    stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+      if (url.includes("/api/lab/trade/prepare-leg"))
+        return jsonResponse(200, { ok: true, data: prepResponse({ approvalNeeded: false }) });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    await runSellFlow();
+
+    expect(h.fns.signMessageAsync).not.toHaveBeenCalled();
+    expect(h.fns.writeContractAsync).not.toHaveBeenCalled();
+    expect(h.fns.sendTransactionAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("a quote window that went stale during the approval is refreshed automatically", async () => {
+    mockSellReads(0n);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"57".repeat(32)}`);
+    let approved = false;
+    h.fns.writeContractAsync.mockImplementation(async () => {
+      approved = true;
+      return `0x${"45".repeat(32)}`;
+    });
+    stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+      if (url.includes("/api/lab/trade/prepare-leg")) {
+        // The FIRST preparation's window is already expired; the automatic
+        // post-approval re-preparation returns a fresh window.
+        return jsonResponse(200, {
+          ok: true,
+          data: approved
+            ? prepResponse({ approvalNeeded: false })
+            : prepResponse({ approvalNeeded: true, staleAfter: Date.now() - 1 }),
+        });
+      }
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    await runSellFlow(); // succeeds — the stale pre-approval window never blocks
+
+    expect(h.fns.sendTransactionAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("a reverted swap shows a concise error and leaves the wallet's tokens (no pending record)", async () => {
+    mockSellReads(1000n * 10n ** 18n);
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"58".repeat(32)}`);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "reverted" });
+    stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+      if (url.includes("/api/lab/trade/prepare-leg"))
+        return jsonResponse(200, { ok: true, data: prepResponse({ approvalNeeded: false }) });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    const user = userEvent.setup();
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" anchorAddress={GOOGL} />,
+    );
+    await user.click(screen.getByTestId("tab-sell"));
+    await user.type(screen.getByTestId("trade-amount"), "100");
+    await user.click(screen.getByTestId("quote-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-button")).toBeInTheDocument());
+    await user.click(screen.getByTestId("trade-button"));
+
+    await waitFor(() => expect(screen.getByTestId("trade-error")).toBeInTheDocument());
+    const text = screen.getByTestId("trade-error").textContent ?? "";
+    expect(text).toContain("reverted");
+    expect(text.length).toBeLessThan(120); // concise — no provider dumps
+    expect(text).not.toMatch(/0x[0-9a-fA-F]{40,}/); // no raw calldata/addresses
+    // ONLY the failed market-leg send happened; nothing was persisted to resume.
+    expect(h.fns.sendTransactionAsync).toHaveBeenCalledTimes(1);
+    expect(loadPendingTrade(TAKER, TOKEN)).toBeNull();
+  });
+
+  it("rapid double-click cannot start a duplicate execution", async () => {
+    mockSellReads(1000n * 10n ** 18n);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"59".repeat(32)}`);
+    stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+      if (url.includes("/api/lab/trade/prepare-leg"))
+        return jsonResponse(200, { ok: true, data: prepResponse({ approvalNeeded: false }) });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    const user = userEvent.setup();
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" anchorAddress={GOOGL} />,
+    );
+    await user.click(screen.getByTestId("tab-sell"));
+    await user.type(screen.getByTestId("trade-amount"), "100");
+    await user.click(screen.getByTestId("quote-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-button")).toBeInTheDocument());
+    const btn = screen.getByTestId("trade-button");
+    // Two synchronous clicks — the re-entrancy guard admits exactly one.
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    await waitFor(() => expect(screen.getByTestId("trade-success")).toBeInTheDocument());
+
+    expect(h.fns.sendTransactionAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("the planned steps show approval + swap BEFORE execution begins", async () => {
+    mockSellReads(0n); // no allowance yet → approval is planned
+    stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+    const user = userEvent.setup();
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" anchorAddress={GOOGL} />,
+    );
+    await user.click(screen.getByTestId("tab-sell"));
+    await user.type(screen.getByTestId("trade-amount"), "100");
+    await user.click(screen.getByTestId("quote-button"));
+
+    await waitFor(() => expect(screen.getByTestId("planned-steps")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("planned-step-1")).toHaveTextContent("Approve PRINT"),
+    );
+    expect(screen.getByTestId("planned-step-2")).toHaveTextContent("Sell PRINT for ETH");
+    expect(screen.getByTestId("planned-steps").textContent).toContain("2 wallet confirmations");
+    // Nothing was executed and no wallet interaction happened during preflight.
+    expect(h.fns.signMessageAsync).not.toHaveBeenCalled();
+    expect(h.fns.writeContractAsync).not.toHaveBeenCalled();
+    expect(h.fns.sendTransactionAsync).not.toHaveBeenCalled();
   });
 });

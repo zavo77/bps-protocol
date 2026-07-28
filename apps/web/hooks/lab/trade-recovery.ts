@@ -123,15 +123,21 @@ export function isQuoteExpired(trade: PendingComposedTrade, now = Date.now()): b
 }
 
 /** Human resume prompt honoring the required copy. */
-export function resumePrompt(trade: PendingComposedTrade): { heading: string; action: string } {
+export function resumePrompt(trade: PendingComposedTrade): {
+  heading: string;
+  detail: string;
+  action: string;
+} {
   if (trade.side === "buy") {
     return {
       heading: "Trade partially completed",
+      detail: `Your ${trade.paymentSymbol} was converted to ${trade.anchorSymbol}. The ${trade.anchorSymbol} remains in your wallet until you continue.`,
       action: `Continue buying ${trade.marketSymbol ?? "the token"}`,
     };
   }
   return {
     heading: "Sale partially completed",
+    detail: `${trade.marketSymbol ?? "The token"} was sold. Your ${trade.anchorSymbol} remains in your wallet.`,
     action: `Continue converting ${trade.anchorSymbol} to ${trade.paymentSymbol}`,
   };
 }
