@@ -77,6 +77,16 @@ export function getFlags(): LabServerFlags {
   return readServerFlags();
 }
 
+/**
+ * Incident brake: when BPS_LAUNCH_LAB_SELL_PAUSED=true, NEW submissions that
+ * SELL a lab market token (bpsDirect sell leg or one-step aggregator sell) are
+ * rejected. Buys and anchor→payment conversion legs (partial-sale RECOVERY —
+ * the market leg already succeeded) are deliberately unaffected.
+ */
+export function isSellPaused(): boolean {
+  return process.env.BPS_LAUNCH_LAB_SELL_PAUSED === "true";
+}
+
 export function publicConfig(launchesToday: number | null = null): LabPublicConfig {
   const flags = getFlags();
   return {
