@@ -71,14 +71,23 @@ const ANCHOR = {
   fetchedAt: 1_753_600_000_000,
 };
 
-function stubLabFetch() {
+function stubLabFetch(opts?: { withMetadata?: boolean }) {
   const calls: string[] = [];
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       calls.push(url);
+      // The wagmi mock connector routes signing through the HTTP transport as a
+      // JSON-RPC call — answer it with a deterministic test signature.
+      if (typeof init?.body === "string" && init.body.includes('"eth_sign"')) {
+        const rpc = JSON.parse(init.body) as { id: number };
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: rpc.id, result: `0x${"ab".repeat(65)}` }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
       if (url.includes("/api/lab/config")) {
         return {
           status: 200,
@@ -89,6 +98,20 @@ function stubLabFetch() {
         return {
           status: 200,
           json: async () => ({ ok: true, data: ANCHOR }),
+        } as unknown as Response;
+      }
+      if (opts?.withMetadata && url.includes("/api/lab/metadata")) {
+        return {
+          status: 200,
+          json: async () => ({
+            ok: true,
+            data: {
+              imageCid: "QmImage",
+              metadataCid: "QmMeta",
+              tokenUri: "ipfs://QmMeta",
+              provider: "pinata",
+            },
+          }),
         } as unknown as Response;
       }
       return {
@@ -105,7 +128,7 @@ afterEach(() => {
 });
 
 describe("Launch Lab create page (disconnected wallet)", () => {
-  it("blocks signing when disconnected, even with a complete valid form", async () => {
+  it("lets a disconnected visitor fill the form; Continue opens the wallet flow instead of uploading", async () => {
     const calls = stubLabFetch();
     const user = userEvent.setup();
     render(
@@ -115,11 +138,8 @@ describe("Launch Lab create page (disconnected wallet)", () => {
     );
 
     expect(screen.getByTestId("wallet-state")).toHaveTextContent("disconnected");
-    expect(screen.getByTestId("wallet-hint")).toHaveTextContent(
-      /Connect your wallet to launch a market/i,
-    );
 
-    // Complete the form with valid values (real PNG magic bytes).
+    // A disconnected visitor can complete the form (real PNG magic bytes).
     await user.type(screen.getByTestId("name-input"), "Print Token");
     await user.type(screen.getByTestId("symbol-input"), "print"); // auto-uppercased
     await user.type(screen.getByTestId("description-input"), "A community market token.");
@@ -134,10 +154,12 @@ describe("Launch Lab create page (disconnected wallet)", () => {
       expect((screen.getByTestId("symbol-input") as HTMLInputElement).value).toBe("PRINT"),
     );
 
-    // The signing/upload action stays blocked while disconnected, and the
-    // welcoming connect prompt is the only wallet chrome shown.
-    expect(screen.getByTestId("upload-continue")).toBeDisabled();
-    expect(screen.getByTestId("connect-wallet")).toHaveTextContent(/Connect wallet/i);
+    // Continue is clickable but opens the normal wallet connection flow
+    // instead of doing anything wallet-bound.
+    await waitFor(() => expect(screen.getByTestId("upload-continue")).toBeEnabled());
+    await user.click(screen.getByTestId("upload-continue"));
+    await waitFor(() => expect(screen.getByTestId("connect-wallet")).toBeInTheDocument());
+    expect(screen.getByTestId("wallet-options")).toBeInTheDocument(); // options opened
 
     // Nothing was sent to a mutation endpoint (no metadata upload, prepare, or simulate).
     expect(calls.some((u) => u.includes("/api/lab/metadata"))).toBe(false);
@@ -156,13 +178,12 @@ describe("Launch Lab create page (disconnected wallet)", () => {
     expect((screen.getByTestId("symbol-input") as HTMLInputElement).value).toBe("");
     expect((screen.getByTestId("description-input") as HTMLTextAreaElement).value).toBe("");
     expect((screen.getByTestId("image-input") as HTMLInputElement).files?.length ?? 0).toBe(0);
-    expect((screen.getByTestId("terms-checkbox") as HTMLInputElement).checked).toBe(false);
   });
 });
 
 describe("Launch Lab create page (terms acknowledgement)", () => {
-  it("requires the acknowledgement checkbox before progression past step 1", async () => {
-    stubLabFetch();
+  it("requires the acknowledgement checkbox on the market step before Continue", async () => {
+    stubLabFetch({ withMetadata: true });
     const user = userEvent.setup();
     render(
       <Providers config={makeConnectableConfig()}>
@@ -170,17 +191,7 @@ describe("Launch Lab create page (terms acknowledgement)", () => {
       </Providers>,
     );
 
-    // Connect the mock wallet through the public "Connect wallet" control.
-    await user.click(screen.getByTestId("connect-wallet"));
-    await user.click(screen.getByRole("button", { name: /Mock Connector/i }));
-    await waitFor(() =>
-      expect(screen.getByTestId("wallet-state")).toHaveTextContent(/^connected$/),
-    );
-
-    // The exact acknowledgement label is rendered with the checkbox.
-    expect(screen.getByText(TERMS_LABEL)).toBeInTheDocument();
-
-    // Complete a valid form (real PNG magic bytes).
+    // A visitor fills the form FIRST; Continue then opens the wallet flow.
     await user.type(screen.getByTestId("name-input"), "Example Token");
     await user.type(screen.getByTestId("symbol-input"), "ext");
     await user.type(screen.getByTestId("description-input"), "A community market token.");
@@ -190,14 +201,30 @@ describe("Launch Lab create page (terms acknowledgement)", () => {
       { type: "image/png" },
     );
     await user.upload(screen.getByTestId("image-input") as HTMLInputElement, png);
+    await waitFor(() => expect(screen.getByTestId("upload-continue")).toBeEnabled());
+    await user.click(screen.getByTestId("upload-continue"));
 
-    // Terms unchecked → progression stays blocked with the hint visible.
-    expect(screen.getByTestId("upload-continue")).toBeDisabled();
+    // The normal wallet connection flow opens; connect the mock wallet.
+    await waitFor(() => expect(screen.getByTestId("connect-wallet")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /Mock Connector/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId("wallet-state")).toHaveTextContent(/^connected$/),
+    );
+
+    // Continue again — now connected, step 1 proceeds (no acknowledgement needed here).
+    await user.click(screen.getByTestId("upload-continue"));
+    await waitFor(() => expect(screen.getByTestId("pair-step")).toBeInTheDocument());
+
+    // The exact acknowledgement label renders with the checkbox on the market step.
+    expect(screen.getByText(TERMS_LABEL)).toBeInTheDocument();
+
+    // Terms unchecked → Continue stays blocked with the hint visible.
+    expect(screen.getByTestId("prepare-launch")).toBeDisabled();
     expect(screen.getByTestId("terms-hint")).toBeInTheDocument();
 
-    // Checking the acknowledgement unblocks progression.
+    // Checking the acknowledgement unblocks Continue.
     await user.click(screen.getByTestId("terms-checkbox"));
-    await waitFor(() => expect(screen.getByTestId("upload-continue")).toBeEnabled());
+    await waitFor(() => expect(screen.getByTestId("prepare-launch")).toBeEnabled());
   });
 
   it("prepare() is not callable without the acknowledgement — no prepare/simulate request is sent", async () => {

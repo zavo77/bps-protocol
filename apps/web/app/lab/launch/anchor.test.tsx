@@ -142,10 +142,11 @@ async function gotoPairStep(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByTestId("symbol-input"), "print");
   await user.type(screen.getByTestId("description-input"), "A community market token.");
   await user.upload(screen.getByTestId("image-input") as HTMLInputElement, PNG());
-  await user.click(screen.getByTestId("terms-checkbox"));
   await waitFor(() => expect(screen.getByTestId("upload-continue")).toBeEnabled());
   await user.click(screen.getByTestId("upload-continue"));
   await waitFor(() => expect(screen.getByTestId("pair-step")).toBeInTheDocument());
+  // The acknowledgement now lives on the market step, before Continue.
+  await user.click(screen.getByTestId("terms-checkbox"));
 }
 
 beforeEach(() => {

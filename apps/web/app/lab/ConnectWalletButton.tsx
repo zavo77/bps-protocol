@@ -17,11 +17,18 @@ function walletLabel(name: string): string {
   return name;
 }
 
-export function ConnectWalletButton({ variant = "header" }: { variant?: "header" | "inline" }) {
+export function ConnectWalletButton({
+  variant = "header",
+  autoOpen = false,
+}: {
+  variant?: "header" | "inline";
+  /** Open the wallet options immediately (used when an action needs a wallet). */
+  autoOpen?: boolean;
+}) {
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Close the options on outside click / escape.

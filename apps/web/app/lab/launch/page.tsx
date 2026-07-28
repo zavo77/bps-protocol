@@ -1,13 +1,12 @@
 "use client";
-// Launch Lab creation flow — Token → Pair → Launch, driven entirely by
-// useCreateFlow. Every CreateFlowState enum value is renderable via
-// FLOW_STATE_INFO, and walletState maps 1:1 onto the hook's WalletUiState. All
-// validation / metadata upload / simulation / manifest / gating / signing logic
-// is preserved unchanged; only presentation is restyled to the Claude Design V4
-// system (app/lab/lab.css, scoped by .lab-root in the layout). No sample token
-// identity, gas, block, or hash is prefilled — every value shown comes from real
-// hook / manifest data. The print-token image appears only as an optional upload
-// placeholder, never as a prefilled token.
+// Launch wizard — three short screens: Launch a token → Choose the market →
+// Review your market. One centred ~680px column, compact stepper, short copy,
+// one primary action per screen. All validation / metadata upload / simulation /
+// manifest / gating / signing logic lives unchanged in useCreateFlow; this file
+// is presentation only. The form is fillable while disconnected — Continue
+// opens the normal wallet connection flow when a wallet is needed. No internal
+// terminology (IPFS/metadata/anchor/flow-state/server flags) appears anywhere;
+// everything technical sits inside the collapsed "Advanced details" on review.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePublicClient, useSwitchChain } from "wagmi";
 import { formatEther } from "viem";
@@ -16,108 +15,47 @@ import {
   EXPLORER_BASE_URL,
   SPLIT,
   type CreateFlowState,
-  type FeePresetId,
 } from "@bps/launch-lab";
 import { useCreateFlow } from "../../../hooks/lab";
 import { ConnectWalletButton } from "../ConnectWalletButton";
 
+/** Short, product-facing status copy per flow state (runtime feedback only). */
 const FLOW_STATE_INFO: Record<CreateFlowState, { label: string; detail: string }> = {
-  "form-incomplete": {
-    label: "Form incomplete",
-    detail: "Fill in the token name, ticker, description, and image, then upload metadata.",
-  },
-  "form-invalid": {
-    label: "Form invalid",
-    detail: "Fix the validation errors shown next to the form fields.",
-  },
-  "image-uploading": {
-    label: "Uploading metadata",
-    detail: "Pinning the image and metadata JSON to IPFS via the production provider.",
-  },
-  "metadata-confirmed": {
-    label: "Metadata confirmed",
-    detail: "The token metadata is pinned on IPFS. Choose the pair and prepare the launch.",
-  },
-  "anchor-verifying": {
-    label: "Verifying anchor",
-    detail: "Fail-closed verification against the official Stock Token API is in progress.",
-  },
-  "anchor-verified": {
-    label: "Anchor verified",
-    detail: "The canonical anchor is verified. Ready to simulate the launch.",
-  },
+  "form-incomplete": { label: "Draft", detail: "" },
+  "form-invalid": { label: "Draft", detail: "" },
+  "image-uploading": { label: "Saving", detail: "Saving your token details…" },
+  "metadata-confirmed": { label: "Saved", detail: "" },
+  "anchor-verifying": { label: "Checking", detail: "Checking the paired asset…" },
+  "anchor-verified": { label: "Ready", detail: "" },
   "anchor-mismatch": {
-    label: "Anchor mismatch",
-    detail: "The anchor failed verification. Launching is blocked until it verifies.",
+    label: "Unavailable",
+    detail: "That asset can't be verified right now. Try again shortly.",
   },
-  simulating: {
-    label: "Simulating",
-    detail: "The server is simulating the exact creation transaction and building the manifest.",
-  },
-  "simulation-success": {
-    label: "Simulation succeeded",
-    detail: "A prepared transaction exists. Complete the remaining launch gates to proceed.",
-  },
+  simulating: { label: "Preparing", detail: "Preparing your market…" },
+  "simulation-success": { label: "Prepared", detail: "" },
   "simulation-failure": {
-    label: "Simulation failed",
-    detail: "The launch simulation failed. Review the error and prepare again.",
+    label: "Failed",
+    detail: "Preparation failed. Go back and try again.",
   },
-  "broadcast-disabled": {
-    label: "Launches unavailable",
-    detail: "Market launches are temporarily unavailable.",
-  },
-  "kill-switch-active": {
-    label: "Launches unavailable",
-    detail: "Market launches are temporarily unavailable.",
-  },
-  "ready-to-launch": {
-    label: "Ready to launch",
-    detail: "Every gate passes. Launch sends the exact prepared transaction from your wallet.",
-  },
-  "awaiting-signature": {
-    label: "Awaiting signature",
-    detail: "Confirm the launch transaction in your wallet.",
-  },
-  "transaction-pending": {
-    label: "Transaction pending",
-    detail: "The launch transaction was broadcast and is awaiting inclusion in a block.",
-  },
-  "confirmation-pending": {
-    label: "Confirmation pending",
-    detail: "The transaction is included; collecting the confirmed receipt.",
-  },
-  "receipt-decoding": {
-    label: "Decoding receipt",
-    detail: "Decoding the launch receipt and verifying every fact against the manifest.",
-  },
-  "launch-success": {
-    label: "Launch verified",
-    detail: "The receipt matches the manifest. Redirecting to the market page.",
-  },
+  "broadcast-disabled": { label: "Unavailable", detail: "Market launches are temporarily unavailable." },
+  "kill-switch-active": { label: "Unavailable", detail: "Market launches are temporarily unavailable." },
+  "ready-to-launch": { label: "Ready", detail: "" },
+  "awaiting-signature": { label: "Confirm", detail: "Confirm the launch in your wallet." },
+  "transaction-pending": { label: "Launching", detail: "Launching your market…" },
+  "confirmation-pending": { label: "Confirming", detail: "Waiting for confirmation…" },
+  "receipt-decoding": { label: "Verifying", detail: "Verifying your market on-chain…" },
+  "launch-success": { label: "Launched", detail: "Your market is live. Redirecting…" },
   "launch-mismatch": {
-    label: "LAUNCH MISMATCH — stopped",
-    detail:
-      "The on-chain result does not match the reviewed manifest. This flow is hard-stopped; do not retry without investigating.",
+    label: "Stopped",
+    detail: "The on-chain result did not match the review. This launch is stopped.",
   },
-};
-
-/** Exact disabled-preset copy required by the design handoff. */
-const DYNAMIC_PROTECTION_LABEL =
-  "requires the decay initializer, not yet deployed on Robinhood Chain";
-
-/** UI-only descriptions per preset (not fabricated data). */
-const PRESET_DETAIL: Record<FeePresetId, string> = {
-  BALANCED_1: "steady two-sided markets",
-  CREATOR_2: "more of every swap streams to beneficiaries",
-  DEGEN_3: "for high-velocity markets that expect heavy speculation",
-  DYNAMIC_PROTECTION: DYNAMIC_PROTECTION_LABEL,
 };
 
 function short(v: string): string {
   return v.length > 14 ? `${v.slice(0, 8)}…${v.slice(-6)}` : v;
 }
 
-/** A key/value row. Hashes/addresses/numeric data use the mono .lab-data style. */
+/** A key/value row. Technical values use the mono .lab-data style. */
 function Row({ k, v, mono = true }: { k: string; v: ReactNode; mono?: boolean }) {
   return (
     <div className="lab-kv">
@@ -129,12 +67,11 @@ function Row({ k, v, mono = true }: { k: string; v: ReactNode; mono?: boolean })
   );
 }
 
-function SubHead({ children }: { children: ReactNode }) {
-  return (
-    <div className="lab-label" style={{ margin: "22px 0 6px" }}>
-      {children}
-    </div>
-  );
+/** "1 billion" for the fixed 1e9 supply; locale string for anything else. */
+function humanSupply(weiString: string, ticker: string): string {
+  const units = Number(weiString) / 1e18;
+  if (units === 1_000_000_000) return `1 billion ${ticker}`;
+  return `${units.toLocaleString()} ${ticker}`;
 }
 
 const activePillStyle = {
@@ -149,36 +86,43 @@ export default function LabCreatePage() {
   const publicClient = usePublicClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [feeMode, setFeeMode] = useState<"connected" | "custom">("connected");
-  const [estFeeEth, setEstFeeEth] = useState<string | null>(null);
+  const [showConnect, setShowConnect] = useState(false);
+  // Network fee: "calculating" → an ETH figure, or "wallet" when the estimate
+  // is unavailable. Never a bare dash.
+  const [estFee, setEstFee] = useState<"calculating" | "wallet" | string>("calculating");
 
-  // Wallet change / disconnect / Start over → the wizard returns to Step 1.
+  // Wallet change / disconnect / Start over → back to a clean Step 1.
   useEffect(() => {
     if (flow.resetEpoch > 0) {
       setStep(1);
       setFeeMode("connected");
+      setShowConnect(false);
     }
   }, [flow.resetEpoch]);
 
-  // Human-readable network-fee estimate for the review screen.
   const gasEstimate = flow.simulation?.gasEstimate ?? null;
   useEffect(() => {
     let alive = true;
-    setEstFeeEth(null);
-    if (!gasEstimate || !publicClient) return;
+    setEstFee("calculating");
+    if (!gasEstimate) return;
+    if (!publicClient) {
+      setEstFee("wallet");
+      return;
+    }
     publicClient
       .getGasPrice()
       .then((price) => {
         if (!alive) return;
-        const wei = price * BigInt(gasEstimate);
-        setEstFeeEth(Number(formatEther(wei)).toPrecision(2));
+        setEstFee(`~${Number(formatEther(price * BigInt(gasEstimate))).toPrecision(2)} ETH`);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (alive) setEstFee("wallet");
+      });
     return () => {
       alive = false;
     };
   }, [gasEstimate, publicClient]);
 
-  // Artwork preview for the review screen (object URL from the uploaded file).
   const artworkUrl = useMemo(
     () => (flow.form.imageFile ? URL.createObjectURL(flow.form.imageFile) : null),
     [flow.form.imageFile],
@@ -191,12 +135,7 @@ export default function LabCreatePage() {
 
   const explorer = flow.config?.explorerBaseUrl ?? EXPLORER_BASE_URL;
   const anchors = flow.config?.anchors ?? [];
-  const selectedAnchor = anchors.find((a) => a.symbol === flow.form.anchorSymbol);
   const info = FLOW_STATE_INFO[flow.flowState];
-  // Launches closed by the server → one plain public message, no diagnostics.
-  const launchesClosed =
-    flow.config !== undefined &&
-    !(flow.gates.broadcastEnabled && flow.gates.killSwitchInactive && flow.gates.creationEnabled);
   const busy =
     flow.flowState === "image-uploading" ||
     flow.flowState === "simulating" ||
@@ -207,266 +146,211 @@ export default function LabCreatePage() {
 
   const disconnected = flow.walletState === "disconnected";
   const wrongChain = flow.walletState === "wrong-chain";
+  const launchesClosed =
+    flow.config !== undefined &&
+    !(flow.gates.broadcastEnabled && flow.gates.killSwitchInactive && flow.gates.creationEnabled);
+
+  const ticker = flow.form.tokenSymbol || "your token";
 
   const selectFeeConnected = () => {
     setFeeMode("connected");
     flow.updateForm({ creatorFeeAddress: "" });
   };
 
-  return (
-    <main>
-      <header style={{ marginBottom: 24 }}>
-        <div className="lab-label">launch a market</div>
-        <h1 className="lab-h1" style={{ marginTop: 12 }}>
-          launch something <span className="lab-serif">permanent</span>
-        </h1>
-      </header>
+  const heading =
+    step === 1 ? "Launch a token" : step === 2 ? "Choose the market" : "Review your market";
 
-      {/* Hidden state marker for tests/tooling only — never visible chrome. */}
+  return (
+    <main style={{ maxWidth: 680, margin: "0 auto" }}>
+      {/* Hidden state marker for tests/tooling only. */}
       <span data-testid="wallet-state" style={{ display: "none" }}>
         {flow.walletState}
       </span>
 
-      {/* ---- connect prompt (only while disconnected) ---- */}
-      {disconnected ? (
-        <section
-          className="lab-card"
+      {/* Compact header: title + step counter + steps + start over. */}
+      <header style={{ margin: "8px 0 20px" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", margin: 0 }}>
+            {heading}
+          </h1>
+          <span className="lab-muted" style={{ fontSize: 14 }}>
+            {step} of 3
+          </span>
+        </div>
+        <nav
+          aria-label="Steps"
           style={{
-            marginBottom: 20,
             display: "flex",
+            gap: 6,
             alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
             flexWrap: "wrap",
+            marginTop: 12,
+            fontSize: 13,
           }}
-          data-testid="wallet-hint"
         >
-          <p className="lab-lead" style={{ fontSize: 15, margin: 0 }}>
-            Connect your wallet to launch a market.
-          </p>
-          <ConnectWalletButton variant="inline" />
-        </section>
-      ) : null}
-      {wrongChain ? (
-        <section className="lab-card" style={{ marginBottom: 20 }}>
+          {([1, 2, 3] as const).map((n, i) => {
+            const labels = { 1: "Token", 2: "Market", 3: "Review" } as const;
+            const enabled =
+              n === 1 || (n === 2 && flow.metadata !== null) || (n === 3 && flow.bundle !== null);
+            const active = step === n;
+            const done = n < step;
+            return (
+              <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {i > 0 ? (
+                  <span aria-hidden style={{ color: "var(--peach-grey)" }}>
+                    —
+                  </span>
+                ) : null}
+                <button
+                  className="lab-pill"
+                  onClick={() => enabled && setStep(n)}
+                  disabled={!enabled || busy}
+                  aria-current={active ? "step" : undefined}
+                  style={{
+                    cursor: enabled ? "pointer" : "default",
+                    ...(active
+                      ? activePillStyle
+                      : done
+                        ? { background: "#fff", borderColor: "var(--good-border)", color: "var(--good)" }
+                        : {
+                            background: "#fff",
+                            borderColor: "var(--peach-grey)",
+                            color: "var(--charcoal)",
+                            opacity: 0.8,
+                          }),
+                  }}
+                >
+                  {done ? "✓ " : ""}
+                  {labels[n]}
+                </button>
+              </span>
+            );
+          })}
           <button
-            className="lab-btn lab-btn--primary"
-            onClick={() => switchChain({ chainId: CHAIN_ID })}
-            data-testid="switch-chain"
+            type="button"
+            className="lab-btn lab-btn--ghost"
+            data-testid="start-over"
+            onClick={() => flow.startOver()}
+            disabled={busy}
+            style={{ marginLeft: "auto", fontSize: 12, padding: "4px 12px", minHeight: 32 }}
           >
-            Switch to Robinhood Chain ({CHAIN_ID})
+            Start over
           </button>
-        </section>
+        </nav>
+      </header>
+
+      {wrongChain ? (
+        <button
+          className="lab-btn lab-btn--primary"
+          style={{ marginBottom: 16 }}
+          onClick={() => switchChain({ chainId: CHAIN_ID })}
+          data-testid="switch-chain"
+        >
+          Switch to Robinhood Chain
+        </button>
       ) : null}
       {flow.unauthorised ? (
-        <p className="lab-pill lab-pill--bad" style={{ marginBottom: 20 }} data-testid="unauthorised">
+        <p className="lab-pill lab-pill--bad" style={{ marginBottom: 16 }} data-testid="unauthorised">
           This wallet is not eligible to create markets right now.
         </p>
       ) : null}
-
-      {/* ---- compact stepper ---- */}
-      <nav
-        aria-label="Steps"
-        style={{
-          display: "flex",
-          gap: 6,
-          alignItems: "center",
-          flexWrap: "wrap",
-          marginBottom: 20,
-          fontSize: 14,
-        }}
-      >
-        {([1, 2, 3] as const).map((n, i) => {
-          const labels = { 1: "Token", 2: "Pair", 3: "Review & launch" } as const;
-          const enabled =
-            n === 1 || (n === 2 && flow.metadata !== null) || (n === 3 && flow.bundle !== null);
-          const active = step === n;
-          const done = n < step;
-          return (
-            <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {i > 0 ? (
-                <span aria-hidden style={{ color: "var(--peach-grey)", padding: "0 2px" }}>
-                  —
-                </span>
-              ) : null}
-              <button
-                className="lab-pill"
-                onClick={() => enabled && setStep(n)}
-                disabled={!enabled || busy}
-                aria-current={active ? "step" : undefined}
-                style={{
-                  cursor: enabled ? "pointer" : "default",
-                  ...(active
-                    ? activePillStyle
-                    : done
-                      ? {
-                          background: "#fff",
-                          borderColor: "var(--good-border)",
-                          color: "var(--good)",
-                        }
-                      : {
-                          background: "#fff",
-                          borderColor: "var(--peach-grey)",
-                          color: "var(--charcoal)",
-                          opacity: 0.8,
-                        }),
-                }}
-              >
-                {done ? "✓ " : `${n} · `}
-                {labels[n]}
-              </button>
-            </span>
-          );
-        })}
-        <button
-          type="button"
-          className="lab-btn lab-btn--ghost"
-          data-testid="start-over"
-          onClick={() => flow.startOver()}
-          disabled={busy}
-          style={{ marginLeft: "auto", fontSize: 13 }}
-        >
-          Start over
-        </button>
-      </nav>
-
-      {/* Errors surface inline, next to the work — no internal state chrome. */}
       {flow.error ? (
-        <p
-          className="lab-pill lab-pill--bad"
-          style={{ marginBottom: 16 }}
-          data-testid="flow-error"
-        >
+        <p className="lab-pill lab-pill--bad" style={{ marginBottom: 16 }} data-testid="flow-error">
           {flow.error}
         </p>
       ) : null}
 
-      {/* ---- step 1: token ---- */}
+      {/* ---------------- Step 1 · Launch a token ---------------- */}
       {step === 1 ? (
         <section className="lab-card">
-          <div className="lab-label">step 1 of 3</div>
-          <h2 className="lab-h2" style={{ marginTop: 8 }}>
-            the token
-          </h2>
-
-          {flow.metadata ? (
-            <p
-              className="lab-pill lab-pill--good"
-              data-testid="metadata-confirmed"
-              style={{ marginTop: 16 }}
-            >
-              metadata pinned: {flow.metadata.tokenUri} (provider: {flow.metadata.provider})
-            </p>
-          ) : null}
-
-          <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginTop: 20 }}>
-            <div style={{ flex: "0 0 200px" }}>
-              <div className="lab-label" style={{ marginBottom: 10 }}>
-                image
-              </div>
-              <div
+          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+            <div style={{ flex: "0 0 148px" }}>
+              <label
+                htmlFor="lab-image"
                 className="lab-card lab-card--nested"
                 style={{
                   borderStyle: "dashed",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  gap: 10,
-                  textAlign: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  width: 148,
+                  height: 148,
+                  cursor: "pointer",
+                  overflow: "hidden",
+                  padding: 8,
                 }}
               >
-                {flow.form.imageFile ? (
-                  <span className="lab-data" style={{ fontSize: 12, wordBreak: "break-all" }}>
-                    {flow.form.imageFile.name}
-                  </span>
-                ) : (
+                {artworkUrl ? (
                   <img
-                    src="/lab/print-token.png"
-                    alt=""
-                    width={84}
-                    height={84}
-                    style={{ opacity: 0.3, borderRadius: 16 }}
+                    src={artworkUrl}
+                    alt="Token artwork"
+                    width={124}
+                    height={124}
+                    style={{ borderRadius: 14, objectFit: "cover" }}
                   />
+                ) : (
+                  <>
+                    <span style={{ fontSize: 26, lineHeight: 1 }} aria-hidden>
+                      +
+                    </span>
+                    <span className="lab-muted" style={{ fontSize: 12, textAlign: "center" }}>
+                      Add artwork
+                    </span>
+                  </>
                 )}
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  data-testid="image-input"
-                  onChange={(e) => flow.updateForm({ imageFile: e.target.files?.[0] ?? null })}
-                  style={{ fontSize: 12, maxWidth: "100%" }}
-                />
-              </div>
-              <p className="lab-muted" style={{ fontSize: 12, marginTop: 8 }}>
-                PNG, JPEG, or WebP · max 4 MB. The image above is a placeholder only.
-              </p>
+              </label>
+              <input
+                id="lab-image"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                data-testid="image-input"
+                onChange={(e) => flow.updateForm({ imageFile: e.target.files?.[0] ?? null })}
+                style={{ display: "block", width: 148, fontSize: 11, marginTop: 6 }}
+              />
             </div>
 
-            <div style={{ flex: "1 1 300px", minWidth: 260, display: "grid", gap: 18 }}>
-              <div>
-                <label className="lab-label" htmlFor="lab-name">
-                  name
-                </label>
-                <input
-                  id="lab-name"
-                  className="lab-field"
-                  type="text"
-                  value={flow.form.tokenName}
-                  maxLength={48}
-                  placeholder="what is this market called?"
-                  data-testid="name-input"
-                  onChange={(e) => flow.updateForm({ tokenName: e.target.value })}
-                  style={{ marginTop: 8 }}
-                />
-              </div>
-              <div>
-                <label className="lab-label" htmlFor="lab-symbol">
-                  ticker
-                </label>
-                <input
-                  id="lab-symbol"
-                  className="lab-field"
-                  type="text"
-                  value={flow.form.tokenSymbol}
-                  maxLength={12}
-                  placeholder="1–12 characters"
-                  data-testid="symbol-input"
-                  onChange={(e) => flow.updateForm({ tokenSymbol: e.target.value.toUpperCase() })}
-                  style={{
-                    marginTop: 8,
-                    fontFamily: "var(--font-space-grotesk), sans-serif",
-                    letterSpacing: "0.06em",
-                  }}
-                />
-              </div>
-              <div>
-                <label className="lab-label" htmlFor="lab-desc">
-                  description
-                </label>
-                <textarea
-                  id="lab-desc"
-                  className="lab-field"
-                  value={flow.form.tokenDescription}
-                  maxLength={600}
-                  rows={4}
-                  placeholder="one honest paragraph. what is this, who is it for?"
-                  data-testid="description-input"
-                  onChange={(e) => flow.updateForm({ tokenDescription: e.target.value })}
-                  style={{ marginTop: 8, minHeight: "auto", resize: "vertical" }}
-                />
-              </div>
+            <div style={{ flex: "1 1 300px", minWidth: 260, display: "grid", gap: 14 }}>
+              <input
+                className="lab-field"
+                type="text"
+                value={flow.form.tokenName}
+                maxLength={48}
+                placeholder="Token name"
+                aria-label="Token name"
+                data-testid="name-input"
+                onChange={(e) => flow.updateForm({ tokenName: e.target.value })}
+              />
+              <input
+                className="lab-field"
+                type="text"
+                value={flow.form.tokenSymbol}
+                maxLength={12}
+                placeholder="Ticker"
+                aria-label="Ticker"
+                data-testid="symbol-input"
+                onChange={(e) => flow.updateForm({ tokenSymbol: e.target.value.toUpperCase() })}
+                style={{ fontFamily: "var(--font-space-grotesk), sans-serif", letterSpacing: "0.06em" }}
+              />
+              <textarea
+                className="lab-field"
+                value={flow.form.tokenDescription}
+                maxLength={600}
+                rows={3}
+                placeholder="Short description"
+                aria-label="Short description"
+                data-testid="description-input"
+                onChange={(e) => flow.updateForm({ tokenDescription: e.target.value })}
+                style={{ minHeight: "auto", resize: "vertical" }}
+              />
             </div>
           </div>
 
           {flow.formErrors.length > 0 ? (
             <ul
               data-testid="form-errors"
-              style={{
-                margin: "16px 0 0",
-                paddingLeft: 0,
-                listStyle: "none",
-                display: "grid",
-                gap: 6,
-              }}
+              style={{ margin: "14px 0 0", paddingLeft: 0, listStyle: "none", display: "grid", gap: 6 }}
             >
               {flow.formErrors.map((err) => (
                 <li key={err} className="lab-pill lab-pill--bad">
@@ -476,63 +360,16 @@ export default function LabCreatePage() {
             </ul>
           ) : null}
 
-          <label
-            style={{
-              display: "flex",
-              gap: 12,
-              alignItems: "flex-start",
-              margin: "20px 0 0",
-              fontSize: 15,
-              lineHeight: 1.5,
-              color: "var(--charcoal)",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={flow.form.termsAccepted}
-              data-testid="terms-checkbox"
-              onChange={(e) => flow.updateForm({ termsAccepted: e.target.checked })}
-              style={{ width: 20, height: 20, marginTop: 1, accentColor: "var(--signal-orange)" }}
-            />
-            <span>
-              I acknowledge this is an experimental, unaffiliated market platform and that launch
-              configuration is irreversible.
-            </span>
-          </label>
-          {!flow.form.termsAccepted ? (
-            <p
-              className="lab-muted"
-              style={{ fontSize: 13, marginTop: 10 }}
-              data-testid="terms-hint"
-            >
-              Check the acknowledgement above to continue.
-            </p>
-          ) : null}
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              alignItems: "center",
-              gap: 14,
-              borderTop: "1px solid var(--peach-grey)",
-              marginTop: 22,
-              paddingTop: 22,
-              flexWrap: "wrap",
-            }}
-          >
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
             <button
               className="lab-btn lab-btn--primary"
               data-testid="upload-continue"
-              disabled={
-                disconnected ||
-                busy ||
-                !flow.formComplete ||
-                flow.formErrors.length > 0 ||
-                !flow.form.termsAccepted
-              }
+              disabled={busy || !flow.formComplete || flow.formErrors.length > 0}
               onClick={async () => {
+                if (disconnected) {
+                  setShowConnect(true);
+                  return;
+                }
                 if (flow.metadata) {
                   setStep(2);
                   return;
@@ -541,31 +378,32 @@ export default function LabCreatePage() {
                 if (ok) setStep(2);
               }}
             >
-              {flow.metadata ? "continue to market →" : "upload metadata & continue →"}
+              {busy ? "Saving…" : "Continue"}
             </button>
           </div>
+          {showConnect && disconnected ? (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+              <ConnectWalletButton variant="inline" autoOpen />
+            </div>
+          ) : null}
         </section>
       ) : null}
 
-      {/* ---- step 2: pair ---- */}
+      {/* ---------------- Step 2 · Choose the market ---------------- */}
       {step === 2 ? (
         <section className="lab-card" data-testid="pair-step">
-          <div className="lab-label">step 2 of 3</div>
-          <h2 className="lab-h2" style={{ marginTop: 8 }}>
-            the market
-          </h2>
-
-          <SubHead>quote asset (anchor)</SubHead>
-          <p className="lab-muted" style={{ fontSize: 14 }}>
-            Choose the approved Stock Token your market is quoted in. This pairing is fixed
-            permanently at launch.
+          <p style={{ fontSize: 15, margin: "0 0 14px", color: "var(--charcoal)" }}>
+            What should {ticker} be paired with?
           </p>
           <div
-            className="lab-grid"
             data-testid="anchor-picker"
             role="radiogroup"
-            aria-label="Anchor"
-            style={{ marginTop: 12 }}
+            aria-label="Paired asset"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(112px, 1fr))",
+              gap: 10,
+            }}
           >
             {anchors.map((a) => {
               const selected = flow.form.anchorSymbol === a.symbol;
@@ -576,9 +414,12 @@ export default function LabCreatePage() {
                   data-testid={`anchor-choice-${a.symbol}`}
                   style={{
                     display: "flex",
-                    gap: 12,
+                    flexDirection: "column",
                     alignItems: "center",
+                    gap: 6,
                     cursor: "pointer",
+                    textAlign: "center",
+                    padding: "14px 10px",
                     ...(selected
                       ? {
                           borderColor: "var(--signal-orange)",
@@ -593,58 +434,29 @@ export default function LabCreatePage() {
                     value={a.symbol}
                     checked={selected}
                     onChange={() => flow.updateForm({ anchorSymbol: a.symbol })}
-                    style={{ accentColor: "var(--signal-orange)" }}
+                    style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
                   />
                   {a.logo ? (
-                    <img
-                      src={a.logo}
-                      alt=""
-                      width={28}
-                      height={28}
-                      style={{ borderRadius: "50%" }}
-                    />
+                    <img src={a.logo} alt="" width={34} height={34} style={{ borderRadius: "50%" }} />
                   ) : null}
-                  <span style={{ minWidth: 0 }}>
-                    <span style={{ fontWeight: 700, color: "var(--deep-ink)", display: "block" }}>
-                      {a.symbol}
-                    </span>
-                    <span className="lab-muted" style={{ fontSize: 12 }}>
-                      {a.name}
-                    </span>
+                  <span style={{ fontWeight: 800, color: "var(--deep-ink)", fontSize: 15 }}>
+                    {a.symbol}
+                  </span>
+                  <span className="lab-muted" style={{ fontSize: 11, lineHeight: 1.3 }}>
+                    {a.name}
                   </span>
                 </label>
               );
             })}
-            {anchors.length === 0 ? <p className="lab-await">loading approved anchors…</p> : null}
+            {anchors.length === 0 ? <p className="lab-await">loading…</p> : null}
           </div>
-          {selectedAnchor ? (
-            <Row
-              k="anchor address"
-              v={
-                <a
-                  href={`${explorer}/address/${selectedAnchor.address}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {short(selectedAnchor.address)}
-                </a>
-              }
-            />
-          ) : null}
 
-          <SubHead>fee destination</SubHead>
-          <p className="lab-muted" style={{ fontSize: 14 }}>
-            Where your creator share of LP fees is collected.
+          <p style={{ fontSize: 15, margin: "22px 0 8px", color: "var(--charcoal)" }}>
+            Creator fees go to:
           </p>
           <label
             data-testid="fee-dest-connected"
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "center",
-              margin: "8px 0",
-              cursor: "pointer",
-            }}
+            style={{ display: "flex", gap: 10, alignItems: "center", margin: "6px 0", cursor: "pointer" }}
           >
             <input
               type="radio"
@@ -653,17 +465,11 @@ export default function LabCreatePage() {
               onChange={selectFeeConnected}
               style={{ accentColor: "var(--signal-orange)" }}
             />
-            Connected wallet (default)
+            Connected wallet
           </label>
           <label
             data-testid="fee-dest-custom"
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "center",
-              margin: "8px 0",
-              cursor: "pointer",
-            }}
+            style={{ display: "flex", gap: 10, alignItems: "center", margin: "6px 0", cursor: "pointer" }}
           >
             <input
               type="radio"
@@ -672,123 +478,24 @@ export default function LabCreatePage() {
               onChange={() => setFeeMode("custom")}
               style={{ accentColor: "var(--signal-orange)" }}
             />
-            Custom wallet
+            Custom address
           </label>
           {feeMode === "custom" ? (
             <input
               type="text"
               className="lab-field"
               value={flow.form.creatorFeeAddress}
-              placeholder="0x… fee-collecting address"
+              placeholder="0x…"
               data-testid="creator-fee-input"
               onChange={(e) => flow.updateForm({ creatorFeeAddress: e.target.value })}
               style={{ marginTop: 6 }}
             />
           ) : null}
 
-          <SubHead>fee split (immutable)</SubHead>
-          <div data-testid="fee-split-readonly">
-            <Row k="creator beneficiary" v={`${SPLIT.creatorFeePct.toString()}%`} />
-            <Row k="BPS Launch Lab" v={`${SPLIT.bpsFeePct.toString()}%`} />
-            <Row k="Doppler protocol" v={`${SPLIT.protocolPct.toString()}%`} />
-          </div>
-
-          <details data-testid="advanced-disclosure" style={{ marginTop: 20 }}>
-            <summary className="lab-label" style={{ cursor: "pointer" }}>
-              advanced (defaults are fine for most launches)
-            </summary>
-            <div style={{ marginTop: 16, display: "grid", gap: 18 }}>
-              <Row k="total supply" v="1,000,000,000 (fixed)" />
-              <div>
-                <label className="lab-label" htmlFor="lab-fdv">
-                  starting FDV (USD, integer)
-                </label>
-                <input
-                  id="lab-fdv"
-                  className="lab-field"
-                  type="number"
-                  min={1_000}
-                  max={10_000_000}
-                  step={1}
-                  value={flow.form.startingFdvUsd || ""}
-                  data-testid="fdv-input"
-                  onChange={(e) => flow.updateForm({ startingFdvUsd: Number(e.target.value) })}
-                  style={{ marginTop: 8 }}
-                />
-              </div>
-              <div>
-                <div className="lab-label">fee preset</div>
-                <div className="lab-grid" style={{ marginTop: 12 }}>
-                  {(flow.config?.feePresets ?? []).map((p) => {
-                    const selected = flow.form.feePreset === p.id;
-                    const detail = p.enabled ? PRESET_DETAIL[p.id] : DYNAMIC_PROTECTION_LABEL;
-                    return (
-                      <label
-                        key={p.id}
-                        className="lab-card lab-card--nested"
-                        data-testid={`preset-choice-${p.id}`}
-                        style={{
-                          cursor: p.enabled ? "pointer" : "not-allowed",
-                          opacity: p.enabled ? 1 : 0.6,
-                          ...(selected ? { borderColor: "var(--signal-orange)" } : {}),
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <input
-                            type="radio"
-                            name="feePreset"
-                            value={p.id}
-                            checked={selected}
-                            disabled={!p.enabled}
-                            onChange={() => p.enabled && flow.updateForm({ feePreset: p.id })}
-                            style={{ accentColor: "var(--signal-orange)" }}
-                          />
-                          <span
-                            style={{
-                              fontWeight: 800,
-                              fontSize: 24,
-                              letterSpacing: "-0.04em",
-                              color: "var(--deep-ink)",
-                            }}
-                          >
-                            {p.displayFee}
-                          </span>
-                          {!p.enabled ? (
-                            <span className="lab-pill" style={{ marginLeft: "auto" }}>
-                              not yet available
-                            </span>
-                          ) : null}
-                        </div>
-                        <div style={{ fontWeight: 700, marginTop: 6, color: "var(--deep-ink)" }}>
-                          {p.label}{" "}
-                          <span className="lab-muted" style={{ fontWeight: 400, fontSize: 12 }}>
-                            ({p.mode})
-                          </span>
-                        </div>
-                        <p
-                          className="lab-muted"
-                          style={{ fontSize: 13, marginTop: 3, lineHeight: 1.4 }}
-                        >
-                          {detail}
-                        </p>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </details>
-
           {flow.formErrors.length > 0 ? (
             <ul
               data-testid="pair-errors"
-              style={{
-                margin: "16px 0 0",
-                paddingLeft: 0,
-                listStyle: "none",
-                display: "grid",
-                gap: 6,
-              }}
+              style={{ margin: "14px 0 0", paddingLeft: 0, listStyle: "none", display: "grid", gap: 6 }}
             >
               {flow.formErrors.map((err) => (
                 <li key={err} className="lab-pill lab-pill--bad">
@@ -798,121 +505,135 @@ export default function LabCreatePage() {
             </ul>
           ) : null}
 
+          <label
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
+              margin: "20px 0 0",
+              fontSize: 13,
+              lineHeight: 1.5,
+              color: "var(--charcoal)",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={flow.form.termsAccepted}
+              data-testid="terms-checkbox"
+              onChange={(e) => flow.updateForm({ termsAccepted: e.target.checked })}
+              style={{ width: 18, height: 18, marginTop: 1, accentColor: "var(--signal-orange)" }}
+            />
+            <span>
+              I acknowledge this is an experimental, unaffiliated market platform and that launch
+              configuration is irreversible.
+            </span>
+          </label>
+          {!flow.form.termsAccepted ? (
+            <p className="lab-muted" style={{ fontSize: 12, marginTop: 8 }} data-testid="terms-hint">
+              Check the acknowledgement above to continue.
+            </p>
+          ) : null}
+
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              gap: 14,
-              borderTop: "1px solid var(--peach-grey)",
-              marginTop: 22,
-              paddingTop: 22,
+              gap: 12,
+              marginTop: 20,
               flexWrap: "wrap",
             }}
           >
             <button className="lab-btn lab-btn--ghost" onClick={() => setStep(1)} disabled={busy}>
-              ← back
+              Back
             </button>
             <button
               className="lab-btn lab-btn--primary"
               data-testid="prepare-launch"
-              disabled={disconnected || busy || !flow.metadata || flow.formErrors.length > 0}
+              disabled={
+                disconnected ||
+                busy ||
+                !flow.metadata ||
+                flow.formErrors.length > 0 ||
+                !flow.form.termsAccepted
+              }
               onClick={async () => {
                 const ok = await flow.prepare();
                 if (ok) setStep(3);
               }}
             >
-              Continue to review →
+              {busy ? "Preparing…" : "Continue"}
             </button>
           </div>
         </section>
       ) : null}
 
-      {/* ---- step 3: launch / review ---- */}
+      {/* ---------------- Step 3 · Review your market ---------------- */}
       {step === 3 && flow.manifest && flow.simulation && flow.prepared ? (
         <section className="lab-card" data-testid="review">
-          <div className="lab-label">step 3 of 3</div>
-          <h2 className="lab-h2" style={{ marginTop: 8 }}>
-            launch — read this like a <span className="lab-serif">contract</span>
-          </h2>
-          <div className="lab-card lab-card--peach" style={{ marginTop: 16 }}>
-            <strong>Irreversible configuration.</strong> Token identity, metadata URI, anchor
-            pairing, supply, fee preset, and beneficiary splits are fixed permanently at launch
-            through a verified no-op migration and locked-market configuration.
-          </div>
-
-          {/* ---- consumer summary: what you're launching, in plain terms ---- */}
           <div
-            style={{ display: "flex", gap: 18, alignItems: "center", marginTop: 20 }}
+            style={{ display: "flex", gap: 16, alignItems: "center" }}
             data-testid="review-identity"
           >
             {artworkUrl ? (
               <img
                 src={artworkUrl}
                 alt={`${flow.manifest.tokenName} artwork`}
-                width={72}
-                height={72}
-                style={{ borderRadius: 18, objectFit: "cover" }}
+                width={64}
+                height={64}
+                style={{ borderRadius: 16, objectFit: "cover" }}
               />
             ) : null}
             <div>
               <div
-                style={{
-                  fontSize: 26,
-                  fontWeight: 800,
-                  letterSpacing: "-0.03em",
-                  color: "var(--deep-ink)",
-                }}
+                style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", color: "var(--deep-ink)" }}
               >
-                {flow.manifest.tokenName}{" "}
-                <span className="lab-muted" style={{ fontWeight: 600, fontSize: 18 }}>
-                  ${flow.manifest.tokenSymbol}
-                </span>
+                {flow.manifest.tokenName}
               </div>
-              <div className="lab-muted" style={{ fontSize: 14, marginTop: 4, maxWidth: 560 }}>
-                {flow.form.tokenDescription}
+              <div className="lab-muted" style={{ fontSize: 14 }}>
+                {flow.manifest.tokenSymbol} / {flow.manifest.anchorSymbol}
               </div>
             </div>
           </div>
 
-          <div style={{ marginTop: 20 }} data-testid="review-summary">
-            <Row
-              k="Paired with"
-              v={`${selectedAnchor?.name ?? flow.manifest.anchorSymbol} (${flow.manifest.anchorSymbol})`}
-              mono={false}
-            />
+          <div style={{ marginTop: 16 }} data-testid="review-summary">
             <Row
               k="Supply"
-              v={`${(Number(flow.manifest.initialSupply) / 1e18).toLocaleString()} ${flow.manifest.tokenSymbol}`}
+              v={humanSupply(flow.manifest.initialSupply, flow.manifest.tokenSymbol)}
               mono={false}
             />
             <Row
-              k="Starting value (FDV)"
+              k="Starting value"
               v={`$${Number(flow.manifest.startingFdvUsdFixed).toLocaleString()}`}
               mono={false}
             />
             <Row
               k="Trading fee"
-              v={`${(flow.manifest.exactPoolFeeUnits / 10_000).toFixed(2)}% per swap`}
+              v={`${(flow.manifest.exactPoolFeeUnits / 10_000).toLocaleString(undefined, { maximumFractionDigits: 2 })}%`}
               mono={false}
             />
+            <Row k="Creator share" v={`${SPLIT.creatorFeePct.toString()}% of trading fees`} mono={false} />
+            <Row k="Fees paid to" v={short(flow.manifest.creatorFeeAddress)} />
             <Row
-              k="Fee split"
-              v={`${SPLIT.creatorFeePct.toString()}% you · ${SPLIT.bpsFeePct.toString()}% BPS Launch Lab · ${SPLIT.protocolPct.toString()}% Doppler`}
+              k="Network fee"
+              v={
+                estFee === "calculating"
+                  ? "Calculating…"
+                  : estFee === "wallet"
+                    ? "Final network fee shown in wallet"
+                    : estFee
+              }
               mono={false}
             />
-            <Row k="Your fee destination" v={short(flow.manifest.creatorFeeAddress)} />
-            <Row
-              k="Estimated network fee"
-              v={estFeeEth ? `~${estFeeEth} ETH` : "—"}
-              mono={false}
-            />
-
           </div>
 
-          {/* Everything technical lives here, collapsed. Human-facing values stay above. */}
-          <details style={{ marginTop: 18 }} data-testid="advanced-details">
+          <p className="lab-muted" style={{ fontSize: 13, marginTop: 14 }}>
+            This market&apos;s setup is permanent and can&apos;t be changed after launch.
+          </p>
+
+          <details style={{ marginTop: 14 }} data-testid="advanced-details">
             <summary className="lab-label" style={{ cursor: "pointer" }}>
-              Advanced contract details
+              Advanced details
             </summary>
             <div style={{ marginTop: 12 }}>
               <Row k="Predicted token address" v={flow.simulation.predictedTokenAddress} />
@@ -921,7 +642,7 @@ export default function LabCreatePage() {
               <Row k="Calldata hash" v={flow.manifest.calldataHash} />
               <Row k="Metadata URI" v={flow.manifest.tokenUri} />
               <Row
-                k="Anchor contract"
+                k="Paired asset contract"
                 v={
                   <a
                     href={`${explorer}/address/${flow.manifest.anchorAddress}`}
@@ -934,7 +655,11 @@ export default function LabCreatePage() {
               />
               <Row k="Creator wallet" v={flow.manifest.creatorAddress} />
               <Row k="Creator fee wallet" v={flow.manifest.creatorFeeAddress} />
-              <Row k="Migration / governance" v={`${flow.manifest.migrationMode} / ${flow.manifest.governanceMode}`} mono={false} />
+              <Row
+                k="Migration / governance"
+                v={`${flow.manifest.migrationMode} / ${flow.manifest.governanceMode}`}
+                mono={false}
+              />
               <Row k="Chain id" v={String(flow.manifest.chainId)} />
               <Row k="Simulation block" v={flow.simulation.simulationBlock} />
               <Row k="Gas estimate" v={flow.simulation.gasEstimate} />
@@ -959,32 +684,45 @@ export default function LabCreatePage() {
             </div>
           </details>
 
-          {launchesClosed ? (
-            <p
-              className="lab-card lab-card--peach"
-              style={{ marginTop: 18, fontSize: 15 }}
-              data-testid="launches-closed"
-            >
-              Market launches are temporarily unavailable.
-            </p>
-          ) : (
-            <button
-              className="lab-btn lab-btn--primary"
-              style={{ marginTop: 18, width: "100%" }}
-              data-testid="launch-button"
-              disabled={!flow.canLaunch || busy}
-              onClick={() => void flow.launch()}
-            >
-              Launch market
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              marginTop: 20,
+              flexWrap: "wrap",
+            }}
+          >
+            <button className="lab-btn lab-btn--ghost" onClick={() => setStep(2)} disabled={busy}>
+              Back
             </button>
-          )}
-
-          {/* Runtime progress only — shown while the launch is actually moving. */}
-          {busy || flow.txHash || flow.flowState === "launch-mismatch" ? (
-            <div style={{ marginTop: 14 }}>
-              <p className="lab-muted" style={{ fontSize: 14, margin: 0 }} data-testid="launch-status">
-                {info.detail}
+            {launchesClosed ? (
+              <p
+                style={{ margin: 0, fontSize: 14, color: "var(--charcoal)" }}
+                data-testid="launches-closed"
+              >
+                Market launches are temporarily unavailable.
               </p>
+            ) : (
+              <button
+                className="lab-btn lab-btn--primary"
+                data-testid="launch-button"
+                disabled={!flow.canLaunch || busy}
+                onClick={() => void flow.launch()}
+              >
+                Launch {flow.manifest.tokenSymbol}
+              </button>
+            )}
+          </div>
+
+          {busy || flow.txHash || flow.flowState === "launch-mismatch" ? (
+            <div style={{ marginTop: 12 }}>
+              {info.detail ? (
+                <p className="lab-muted" style={{ fontSize: 13, margin: 0 }} data-testid="launch-status">
+                  {info.detail}
+                </p>
+              ) : null}
               {flow.txHash ? (
                 <Row
                   k="Transaction"
@@ -1001,12 +739,10 @@ export default function LabCreatePage() {
           {flow.flowState === "launch-success" && flow.receiptResult ? (
             <div
               className="lab-card lab-card--peach"
-              style={{ marginTop: 18 }}
+              style={{ marginTop: 16 }}
               data-testid="launch-success-panel"
             >
-              <h3 className="lab-h2" style={{ fontSize: 22 }}>
-                launch verified against the manifest
-              </h3>
+              <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Your market is live.</h3>
               <Row
                 k="Token"
                 v={
@@ -1015,30 +751,16 @@ export default function LabCreatePage() {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    {flow.receiptResult.tokenAddress}
+                    {short(flow.receiptResult.tokenAddress)}
                   </a>
                 }
               />
-              <Row k="Pool id" v={flow.receiptResult.poolId} />
-              <Row k="Confirmation block" v={flow.receiptResult.confirmationBlock} />
-              <Row
-                k="Transaction"
-                v={
-                  <a
-                    href={`${explorer}/tx/${flow.receiptResult.launchTransactionHash}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {short(flow.receiptResult.launchTransactionHash)}
-                  </a>
-                }
-              />
-              <p style={{ marginTop: 14 }}>
+              <p style={{ margin: "12px 0 0" }}>
                 <a
-                  className="lab-btn lab-btn--ghost"
+                  className="lab-btn lab-btn--primary"
                   href={`/lab/token/${flow.receiptResult.tokenAddress}`}
                 >
-                  open the market page →
+                  Open your market →
                 </a>
               </p>
             </div>
@@ -1047,31 +769,18 @@ export default function LabCreatePage() {
           {flow.flowState === "launch-mismatch" ? (
             <div
               className="lab-card"
-              style={{ marginTop: 18, border: "1px solid var(--bad)", background: "var(--bad-bg)" }}
+              style={{ marginTop: 16, border: "1px solid var(--bad)", background: "var(--bad-bg)" }}
               data-testid="launch-mismatch-panel"
             >
-              <h3 className="lab-h2" style={{ fontSize: 22, color: "var(--bad)" }}>
-                hard stop: receipt does not match the manifest
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--bad)", margin: 0 }}>
+                Launch stopped — the on-chain result did not match the review.
               </h3>
-              <p style={{ fontSize: 14 }}>
-                The flow is stopped. Investigate before doing anything else. Mismatches:
-              </p>
-              <ul
-                style={{
-                  margin: "8px 0 0",
-                  paddingLeft: 0,
-                  listStyle: "none",
-                  display: "grid",
-                  gap: 6,
-                }}
-              >
-                {(flow.receiptResult?.mismatches ?? [flow.error ?? "Verification failed."]).map(
-                  (m) => (
-                    <li key={m} className="lab-pill lab-pill--bad">
-                      {m}
-                    </li>
-                  ),
-                )}
+              <ul style={{ margin: "10px 0 0", paddingLeft: 0, listStyle: "none", display: "grid", gap: 6 }}>
+                {(flow.receiptResult?.mismatches ?? [flow.error ?? "Verification failed."]).map((m) => (
+                  <li key={m} className="lab-pill lab-pill--bad">
+                    {m}
+                  </li>
+                ))}
               </ul>
             </div>
           ) : null}
@@ -1079,9 +788,7 @@ export default function LabCreatePage() {
       ) : null}
       {step === 3 && !flow.manifest ? (
         <section className="lab-card">
-          <p className="lab-await">
-            No prepared launch yet — go back and prepare the launch first.
-          </p>
+          <p className="lab-await">Nothing to review yet — go back and continue from the market step.</p>
         </section>
       ) : null}
     </main>
