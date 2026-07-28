@@ -7,6 +7,20 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: final review polish deployed; session-enable directive superseded (commit a580db7)
+
+- Founder polish pass applied to the review screen (identity block, spacing, no step counter, Start over
+  demoted, 'Creator fees — Connected/Custom wallet · 0x…', 'Contract details', dominant Launch button,
+  plain footer disclaimer). Gate: 319+56+9 tests, lint/typecheck/build/secret scans clean.
+- **Posture:** the earlier same-day directive to enable the advisor session (broadcast true / kill false)
+  was SUPERSEDED mid-execution by the founder's 'Keep Production fail-closed'. The Production env values
+  were flipped and then reverted BEFORE any redeploy — live Production NEVER left fail-closed
+  (health-verified: broadcast false / kill true at commits 034e1fb and a580db7, now live at a580db7).
+- Both review states captured on the identical commit via a local rendering with ALL mutation routes
+  intercepted (no manifest created anywhere, no signature — personal_sign returned inert bytes, no
+  Pinata/DB writes): fail-closed shows the single unavailable line; the enabled VISUAL state (config
+  intercepted client-side only) shows the dominant 'Launch MAG8' action.
+
 ## 2026-07-28 — LAUNCH LAB LANE: simplified three-screen journey + QA-residue cleanup (commit 034e1fb)
 
 - **Founder UX P0:** the whole launch journey rebuilt as three short screens in one centred 680px

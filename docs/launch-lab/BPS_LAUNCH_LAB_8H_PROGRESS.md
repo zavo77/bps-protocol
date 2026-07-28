@@ -186,3 +186,7 @@ Newest entries at the top. No secrets ever recorded here.
   deployed build; normal sequence recorded, stopped before preparing. Correction of record: an
   EIP-191 prepare-envelope signature was produced automatically during QA; no transaction signature
   or broadcast occurred. QA manifests retired audit-safely: 0 active, 0 verified, 0 markets.
+
+## 2026-07-28 — Review polish (a580db7); session-enable superseded, prod never left fail-closed
+
+- Polish pass live; both review states captured with zero server-side preparation or signatures.
