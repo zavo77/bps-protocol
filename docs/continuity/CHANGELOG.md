@@ -7,6 +7,29 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: simplified three-screen journey + QA-residue cleanup (commit 034e1fb)
+
+- **Founder UX P0:** the whole launch journey rebuilt as three short screens in one centred 680px
+  column — "Launch a token" (artwork/name/ticker/description/Continue; fillable while disconnected;
+  Continue opens the normal wallet flow), "Choose the market" (five clean asset tiles, creator-fee
+  destination, compact acknowledgement), "Review your market" (artwork, PRINT, PRINT/GOOGL, 1 billion
+  supply, $20,500 starting value, 1% trading fee, 85% creator share, fee destination, network fee with
+  Calculating…/real-estimate/wallet-fallback states — never a dash, one permanence sentence, Launch
+  PRINT). Advanced details stay in one collapsed section; closed state is one plain line. Editorial
+  slogan, wallet-status cards, helper panels, and ALL internal terminology removed from the wizard.
+- **Production UX proof (deployed commit 034e1fb, fail-closed):** desktop 1440×900 (empty Step 1,
+  completed Step 1, connect flow, Step 2 with GOOGL, Step 3 review) + mobile 390×844 (Step 1/2/3);
+  normal interaction sequence recorded and stopped before preparing; the Step-3 captures additionally
+  required prepare. **Wording per founder correction: an EIP-191 prepare-envelope signature was
+  produced automatically during QA. No transaction signature or broadcast occurred.** Live network-fee
+  estimate rendered (~0.00011 ETH); no horizontal overflow; review body free of technical terminology.
+- **QA residue cleaned (audit-safe):** all QA/inspection prepared manifests retired by setting
+  consumed_at (rows RETAINED — nothing deleted). Confirmed: **0 active prepared manifests,
+  0 provenance-verified BPS launches, 0 BPS markets**, 4 audit rows retained, no state prepared for
+  the advisor.
+- **Gate:** 319 web + 56 launch-lab + 9 indexer tests; lint/typecheck/build/secret scans clean.
+  Production health: commit 034e1fb44efa, public / broadcast FALSE / kill TRUE.
+
 ## 2026-07-28 — LAUNCH LAB LANE: P0 wallet-scoped wizard + consumer review, live-verified (commit 27b71c1)
 
 - **Root cause of the founder's "stale MAG7 in Step 3":** wizard state was plain React state with NO

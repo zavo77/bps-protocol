@@ -178,3 +178,11 @@ Newest entries at the top. No secrets ever recorded here.
   Advanced contract details; server flags/gates/commit removed from UI; closed state = one plain line.
 - REAL two-wallet production acceptance passed on deployed 27b71c1 (fail-closed): empty fresh Step 1,
   wallet A full flow to review, wallet B same-browser fully clean incl. reload. 6 screenshots.
+
+## 2026-07-28 — Simplified three-screen journey + QA residue cleanup (034e1fb)
+
+- Wizard rebuilt per founder UX P0: 680px column, Token/Market/Review, no chrome or terminology,
+  network fee never a dash, Launch PRINT. Production screenshots desktop+mobile captured on the
+  deployed build; normal sequence recorded, stopped before preparing. Correction of record: an
+  EIP-191 prepare-envelope signature was produced automatically during QA; no transaction signature
+  or broadcast occurred. QA manifests retired audit-safely: 0 active, 0 verified, 0 markets.
