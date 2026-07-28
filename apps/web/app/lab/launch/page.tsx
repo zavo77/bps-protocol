@@ -167,16 +167,11 @@ export default function LabCreatePage() {
         {flow.walletState}
       </span>
 
-      {/* Compact header: title + step counter + steps + start over. */}
-      <header style={{ margin: "8px 0 20px" }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-          <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", margin: 0 }}>
-            {heading}
-          </h1>
-          <span className="lab-muted" style={{ fontSize: 14 }}>
-            {step} of 3
-          </span>
-        </div>
+      {/* Compact header: title + stepper only. */}
+      <header style={{ margin: "0 0 14px" }}>
+        <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", margin: 0 }}>
+          {heading}
+        </h1>
         <nav
           aria-label="Steps"
           style={{
@@ -184,7 +179,7 @@ export default function LabCreatePage() {
             gap: 6,
             alignItems: "center",
             flexWrap: "wrap",
-            marginTop: 12,
+            marginTop: 8,
             fontSize: 13,
           }}
         >
@@ -226,16 +221,6 @@ export default function LabCreatePage() {
               </span>
             );
           })}
-          <button
-            type="button"
-            className="lab-btn lab-btn--ghost"
-            data-testid="start-over"
-            onClick={() => flow.startOver()}
-            disabled={busy}
-            style={{ marginLeft: "auto", fontSize: 12, padding: "4px 12px", minHeight: 32 }}
-          >
-            Start over
-          </button>
         </nav>
       </header>
 
@@ -572,25 +557,25 @@ export default function LabCreatePage() {
       {step === 3 && flow.manifest && flow.simulation && flow.prepared ? (
         <section className="lab-card" data-testid="review">
           <div
-            style={{ display: "flex", gap: 16, alignItems: "center" }}
+            style={{ display: "flex", gap: 18, alignItems: "center" }}
             data-testid="review-identity"
           >
             {artworkUrl ? (
               <img
                 src={artworkUrl}
                 alt={`${flow.manifest.tokenName} artwork`}
-                width={64}
-                height={64}
-                style={{ borderRadius: 16, objectFit: "cover" }}
+                width={84}
+                height={84}
+                style={{ borderRadius: 20, objectFit: "cover" }}
               />
             ) : null}
             <div>
               <div
-                style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", color: "var(--deep-ink)" }}
+                style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", color: "var(--deep-ink)" }}
               >
                 {flow.manifest.tokenName}
               </div>
-              <div className="lab-muted" style={{ fontSize: 14 }}>
+              <div className="lab-muted" style={{ fontSize: 15, marginTop: 2 }}>
                 {flow.manifest.tokenSymbol} / {flow.manifest.anchorSymbol}
               </div>
             </div>
@@ -613,7 +598,16 @@ export default function LabCreatePage() {
               mono={false}
             />
             <Row k="Creator share" v={`${SPLIT.creatorFeePct.toString()}% of trading fees`} mono={false} />
-            <Row k="Fees paid to" v={short(flow.manifest.creatorFeeAddress)} />
+            <Row
+              k="Creator fees"
+              v={`${
+                flow.manifest.creatorFeeAddress.toLowerCase() ===
+                flow.manifest.creatorAddress.toLowerCase()
+                  ? "Connected wallet"
+                  : "Custom wallet"
+              } · ${short(flow.manifest.creatorFeeAddress)}`}
+              mono={false}
+            />
             <Row
               k="Network fee"
               v={
@@ -631,9 +625,9 @@ export default function LabCreatePage() {
             This market&apos;s setup is permanent and can&apos;t be changed after launch.
           </p>
 
-          <details style={{ marginTop: 14 }} data-testid="advanced-details">
+          <details style={{ marginTop: 14, opacity: 0.85 }} data-testid="advanced-details">
             <summary className="lab-label" style={{ cursor: "pointer" }}>
-              Advanced details
+              Contract details
             </summary>
             <div style={{ marginTop: 12 }}>
               <Row k="Predicted token address" v={flow.simulation.predictedTokenAddress} />
@@ -710,6 +704,7 @@ export default function LabCreatePage() {
                 data-testid="launch-button"
                 disabled={!flow.canLaunch || busy}
                 onClick={() => void flow.launch()}
+                style={{ flex: "1 1 auto", fontSize: 16, minHeight: 50 }}
               >
                 Launch {flow.manifest.tokenSymbol}
               </button>
@@ -791,6 +786,27 @@ export default function LabCreatePage() {
           <p className="lab-await">Nothing to review yet — go back and continue from the market step.</p>
         </section>
       ) : null}
+
+      {/* Small secondary action beneath the card. */}
+      <div style={{ textAlign: "right", marginTop: 8 }}>
+        <button
+          type="button"
+          data-testid="start-over"
+          onClick={() => flow.startOver()}
+          disabled={busy}
+          className="lab-muted"
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontSize: 12,
+            textDecoration: "underline",
+            padding: 4,
+          }}
+        >
+          Start over
+        </button>
+      </div>
     </main>
   );
 }

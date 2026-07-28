@@ -22,9 +22,8 @@ export const metadata: Metadata = {
 };
 
 const DISCLOSURE =
-  "Experimental independent market. BPS is not affiliated with or endorsed by Alphabet, Google, " +
-  "Robinhood, Doppler or Uniswap. GOOGL refers to the canonical Alphabet Class A Robinhood Stock " +
-  "Token used as the market's quote asset.";
+  "Experimental independent market. Not affiliated with or endorsed by Alphabet, Google, " +
+  "Robinhood, Doppler or Uniswap.";
 
 export default function LabLayout({ children }: { children: ReactNode }) {
   return (
