@@ -94,9 +94,23 @@ describe("quoteRialto", () => {
     expect(await quoteRialto(base)).toBeNull();
   });
 
-  it("fails closed on an ERC-20 sell with no allowance spender", async () => {
+  it("accepts issues.allowance:null as ALLOWANCE ALREADY SATISFIED (approval-free ERC-20 sell)", async () => {
+    // Live-verified shape (2026-07-28): a taker who already approved Rialto's
+    // router gets `issues: { allowance: null }`. Rejecting it demoted every
+    // post-approval sell to another venue needing a DIFFERENT approval — the
+    // live sell-failure chain. It must quote with NO allowance target.
     process.env.RIALTO_API_KEY = "test-key";
-    stub({ ...okBody, issues: { allowance: null } }); // ERC-20 but no spender
+    stub({ ...okBody, issues: { allowance: null } });
+    const q = await quoteRialto(base);
+    expect(q).not.toBeNull();
+    expect(q!.allowanceTarget).toBeNull();
+    expect(q!.venue).toBe("rialto");
+  });
+
+  it("still fails closed on an ERC-20 sell with NO issues field at all (shape drift)", async () => {
+    process.env.RIALTO_API_KEY = "test-key";
+    const { issues: _omitted, ...noIssues } = okBody;
+    stub(noIssues);
     expect(await quoteRialto(base)).toBeNull();
   });
 

@@ -92,8 +92,16 @@ export async function quoteRialto(params: {
     const spenderRaw = j.issues?.allowance?.spender ?? null;
     // Use the returned spender EXACTLY. Native ETH sells return no allowance.
     const allowanceTarget = spenderRaw ? getAddress(spenderRaw) : null;
-    if (!sellIsNative && !allowanceTarget) {
-      // ERC-20 sell with no spender is unexpected — fail closed.
+    // `issues.allowance: null` (field PRESENT, explicitly null) means the
+    // taker's existing allowance to Rialto's router already covers this trade
+    // — a VALID, approval-free quote (live-verified 2026-07-28: an approved
+    // taker gets allowance:null; a fresh taker gets {actual, spender}).
+    // Rejecting it silently demoted post-approval sells to other venues,
+    // which then demanded a DIFFERENT approval — the live sell-failure chain.
+    const allowanceSatisfied =
+      j.issues !== undefined && j.issues !== null && j.issues.allowance === null;
+    if (!sellIsNative && !allowanceTarget && !allowanceSatisfied) {
+      // ERC-20 sell with no spender AND no explicit satisfied marker — fail closed.
       return null;
     }
     return {
