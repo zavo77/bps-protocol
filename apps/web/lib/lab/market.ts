@@ -124,7 +124,9 @@ export async function readMarketSnapshot(tokenAddressRaw: string): Promise<Enric
       tokenDecimals: 18,
       anchorMidUsd: anchorMid,
       totalSupplyWei: supplyWei,
-      startingFdvUsd: null,
+      // Launches use the server-configured starting FDV (custom FDV was
+      // removed from the public wizard) — the honest available baseline.
+      startingFdvUsd: String(getFlags().startingFdvUsd),
       poolId,
     });
     trades = toTradeRecords({
