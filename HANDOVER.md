@@ -16,21 +16,23 @@
 > It does NOT modify the Capital Engine, frozen contracts, canary artifacts, or the Stage-A lane below.
 > Everything in the SNAPSHOT below continues to describe the Capital Engine lane on `master`.
 >
-> **Lane state (2026-07-27, commit `01c8cfd`, deployed):** frozen V1 payment routing live — Rialto is the
-> primary payment↔Stock-Token venue (priority Rialto → 1inch → 0x; composed Rialto payment↔anchor +
-> BPS Direct anchor↔token; anchor-direct advanced only), frozen primary trade UI, adversarial-review
-> hardening (13 confirmed findings fixed). Preview + Production fail-closed (public / broadcast false /
-> kill true). **LL-4 CLOSED (2026-07-27):** founder added `RIALTO_API_KEY` to Vercel Preview + Production; production
-> Rialto routing LIVE-VERIFIED at commit `48a7c8d` (route-probe: all 8 payment↔anchor pairs fill via
-> Rialto, 5 bps, exact spender, native-ETH pairs simulate; deployed-asset secret scans clean).
+> **Lane state (2026-07-28, commit `60c344e`, deployed):** the first LIVE market exists — **mag8/MAG8
+> paired with GOOGL** at `0x7382C73b2830e6521a5167aa7347CAF0f39Ad0d5` (launched by the ADVISOR during
+> the authorized 2026-07-28 session; it is the production canary and does NOT satisfy the PRINT
+> acceptance). P0.1 market accuracy is shipped and live-verified: awaited BPS-leg trade ingestion,
+> hash-gated immutable launch facts (`lab_launches.launch_manifest`; MAG8 backfilled proven-only),
+> separate "Pool reserve"/"Curve inventory value" stats, anchor-denominated "GOOGL per MAG8" chart (no
+> retroactive USD history), trader identity (`event_sender`/`transaction_from` + UI Wallet column),
+> server-side token-metadata resolver, pool-bound DexScreener adapter. Earlier: frozen V1 Rialto-primary
+> routing (`01c8cfd`), live-verified Rialto activation (`48a7c8d`), public shell + simplified wizard,
+> wallet-chain gate fix (`47032dd`), live market recovery (`7a7ea73`).
 >
-> **POSTURE (2026-07-28, current):** Production restored **FAIL-CLOSED** (public / broadcast FALSE /
-> kill switch TRUE, health-verified at commit `af014cf`) during the P0 restricted-beta-shell fix — the
-> earlier live acceptance posture is SUPERSEDED; broadcast needs fresh founder authorization. The
-> restricted-beta shell is REMOVED from all public routes (/ → /lab/tokens; legacy dashboard intact at
-> /protocol); public header Markets/Launch/Profile/Connect wallet; visual gate passed with actual
-> Production screenshots. Genesis card remains REHEARSAL-ONLY (execution_authorized=false); zero
-> pre-created state for the advisor wallet.
+> **POSTURE (2026-07-28, current):** Production **FAIL-CLOSED** — public / broadcast FALSE / kill
+> switch TRUE, health-verified at commit `60c344e51d4f`. Market CREATION is closed; TRADING on the
+> verified MAG8 market stays available by design. Broadcast needs fresh founder authorization.
+> **Deploy from the REPO ROOT** (`npx vercel deploy --prod`) — `apps/web/.vercel` is a stale link.
+> Pending: founder/advisor MAG8 canary buy+sell (Claude cannot trade); Claude then verifies ≤5s
+> ingestion, chart direction, labels, reserves, volume, wallet identity, no duplicates, reload survival.
 
 ## SNAPSHOT (verified)
 

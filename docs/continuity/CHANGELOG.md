@@ -7,6 +7,25 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: P0.1 live market accuracy shipped (web 60c344e deployed fail-closed, indexer redeployed)
+
+- Founder P0.1 items 1–6 complete and live-verified on the MAG8 production canary: awaited BPS-Direct-leg
+  trade ingestion with market/history refetch (T1→T3 logged); immutable per-launch facts —
+  `lab_launches.launch_manifest` JSONB, MAG8 backfilled proven-only (unproven values honestly absent),
+  future registrations persist the manifest hash-gated against the prepare-time issued hash; separate
+  "Pool reserve" / "Curve inventory value" stats (summed liquidity metric removed everywhere); the
+  authoritative chart is now anchor-per-token "GOOGL per MAG8" (retroactive-USD history conversion
+  removed; current USD is a separate stat); trader identity columns `event_sender` + `transaction_from`
+  end-to-end (ingest + indexer + MAG8 backfill; UI "Wallet" column with router detail); new server-side
+  token-metadata resolver + endpoint (MAG8 artwork resolves live; cross-token artwork fallback banned);
+  DexScreener adapter bound to token-pairs/v1/robinhood with exact token+anchor+poolId matching
+  (verified: DexScreener pairAddress IS the v4 poolId). Gate: 394 web + 56 pkg + 13 indexer tests,
+  tsc/lint/build/secret-scan clean. Production health-verified at 60c344e51d4f, broadcast false, kill
+  true; creation stays closed. Item 7 (MAG8 canary buy+sell) awaits founder/advisor trades — Claude
+  cannot execute trades; verification harness ready. PRINT acceptance remains NOT complete.
+- Ops note: deploy the web app from the REPO ROOT (`npx vercel deploy --prod`); `apps/web/.vercel`
+  points at a stale "web" project whose partial upload fails npm install on `@bps/launch-lab`.
+
 ## 2026-07-28 — LAUNCH LAB LANE: P0 live market page + indexer recovery shipped (web 7a7ea73, indexer redeployed)
 
 - First LIVE market mag8/MAG8-GOOGL launched by the public flow; creation immediately re-closed (broadcast false / kill true, health-verified). Forensics proved the test buy was indexed and poolIds match. Cursor-race fix (per-market catch-up + lab_pool_sync + regression test), instant trade ingestion endpoint, dynamic provenance-based snapshot, precision-safe orientation-tested price math, honest metric definitions, rebuilt market page with baseline chart + Recent trades + holders + DexScreener. Live acceptance green (see CURRENT_STATE.launchLab.liveMarketRecovery). Audit history untouched.
