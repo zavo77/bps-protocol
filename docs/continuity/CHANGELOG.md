@@ -7,6 +7,22 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — ⚠ LAUNCH LAB LANE: LIVE ADVISOR SESSION POSTURE ENABLED (fresh founder authorization)
+
+- Founder visually approved the polished three-screen journey and re-authorized the acceptance session
+  with explicit values. Production env set to public / broadcast TRUE / kill FALSE; redeployed;
+  **health-verified live at commit 5d8dc7daa1d0** (accessMode public, broadcastEnabled true,
+  killSwitchActive false, rpc+db ok). Preview remains fail-closed. Entry points /lab/launch and
+  /lab/tokens 200; Railway indexer healthy (lag 3, knownPools 0 pre-launch).
+- Engineering STOPPED at the live public site as directed: Claude connected no wallet, entered nothing,
+  uploaded nothing, prepared nothing, signed nothing. The advisor runs the whole public flow personally
+  (launch PRINT/GOOGL → buy with native ETH → partial sell back to ETH; no GOOGL needed beforehand).
+- Pre-session state: 0 provenance-verified launches; one active wallet-bound prepared manifest exists
+  for 0x78b2…6024 (founder-side inspection wallet, created 09:09Z via the public wizard before the
+  posture change — not Claude-created; cannot affect the advisor's unknown wallet).
+- Post-session plan (standing): full acceptance verification, then immediate restore to
+  broadcast=false / kill=true, redeploy, fail-closed health verification.
+
 ## 2026-07-28 — LAUNCH LAB LANE: final review polish deployed; session-enable directive superseded (commit a580db7)
 
 - Founder polish pass applied to the review screen (identity block, spacing, no step counter, Start over

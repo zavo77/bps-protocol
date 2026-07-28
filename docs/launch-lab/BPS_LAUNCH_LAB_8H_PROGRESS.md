@@ -190,3 +190,8 @@ Newest entries at the top. No secrets ever recorded here.
 ## 2026-07-28 — Review polish (a580db7); session-enable superseded, prod never left fail-closed
 
 - Polish pass live; both review states captured with zero server-side preparation or signatures.
+
+## 2026-07-28 — ⚠ LIVE advisor session posture enabled (fresh authorization; commit 5d8dc7d live)
+
+- public / broadcast TRUE / kill FALSE health-verified; Preview fail-closed; engineering stopped at
+  the live site. Post-session: acceptance sweep then immediate fail-closed restore.
