@@ -7,6 +7,27 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: P0 live wallet-chain failure fixed; production restored fail-closed (commit 47032dd)
+
+- **Live failure (advisor session):** a connected wallet on Ethereum Mainnet (chainId 1) reached launch
+  and got a raw viem ChainMismatchError. Root cause: wagmi useChainId() mirrors the app CONFIG chain
+  (always 4663) and never the wallet's actual chain, so wrong-chain was undetectable. The attempt came
+  from the founder-side inspection wallet 0x78b2…6024 with mag8/MAG8 calldata — its newly prepared
+  manifest was retired audit-safely (consumed_at set, row retained; 0 active manifests afterwards).
+- **Fix (deployed 47032dd):** wallet-chain gating via useAccount().chainId everywhere (wallet-ui-state,
+  create-flow, trade hook); hard stops before metadata, envelope signing, simulation and launch; clean
+  "Switch to Robinhood Chain / This market launches on Robinhood Chain / [Switch network]" state replaces
+  the wizard on the wrong chain; wallet_addEthereumChain fallback with the founder-specified params
+  (0x1237, Robinhood Chain, ETH/18, official RPC, Blockscout) and a retried switch; concise retry copy on
+  rejection; account/chain change invalidates all prepared state (chain-only switch keeps the same
+  account's typed form); errorMessage() sanitized — raw provider errors, request arguments and calldata
+  can never reach the UI.
+- **Verified:** 7 new founder-spec chain-gate tests; 326 web + 56 launch-lab + 9 indexer green; lint/
+  typecheck/build/secret scans clean. LIVE replay on deployed production with a chain-1 wallet: clean
+  switch card, wizard hidden, zero raw error text, switch restores the wizard, 0 console errors.
+- **Posture:** production restored FAIL-CLOSED while deploying the fix (broadcast false / kill true,
+  health-verified at 47032dd) per the founder's instruction; the advisor session needs a fresh go-signal.
+
 ## 2026-07-28 — LAUNCH LAB LANE: pre-session manifest cleanup (live posture unchanged)
 
 - At founder direction, the active prepared manifest bound to the founder inspection wallet

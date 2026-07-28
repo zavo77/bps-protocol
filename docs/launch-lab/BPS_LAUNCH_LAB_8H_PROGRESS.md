@@ -195,3 +195,8 @@ Newest entries at the top. No secrets ever recorded here.
 
 - public / broadcast TRUE / kill FALSE health-verified; Preview fail-closed; engineering stopped at
   the live site. Post-session: acceptance sweep then immediate fail-closed restore.
+
+## 2026-07-28 — P0 wallet-chain gating fixed (47032dd); prod fail-closed pending fresh go-signal
+
+- useAccount().chainId gating, clean Switch-network UX + add-chain fallback, sanitized errors,
+  prepared-state invalidation on account/chain change; 7 chain-gate tests; live replay verified.
