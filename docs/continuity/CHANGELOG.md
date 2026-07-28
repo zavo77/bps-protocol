@@ -7,6 +7,10 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: P0 live market page + indexer recovery shipped (web 7a7ea73, indexer redeployed)
+
+- First LIVE market mag8/MAG8-GOOGL launched by the public flow; creation immediately re-closed (broadcast false / kill true, health-verified). Forensics proved the test buy was indexed and poolIds match. Cursor-race fix (per-market catch-up + lab_pool_sync + regression test), instant trade ingestion endpoint, dynamic provenance-based snapshot, precision-safe orientation-tested price math, honest metric definitions, rebuilt market page with baseline chart + Recent trades + holders + DexScreener. Live acceptance green (see CURRENT_STATE.launchLab.liveMarketRecovery). Audit history untouched.
+
 ## 2026-07-28 — ⚠ LAUNCH LAB LANE: advisor session REOPENED with the chain-gate fix live
 
 - Founder accepted the wallet-network P0 fix and re-authorized the session. Production env set to

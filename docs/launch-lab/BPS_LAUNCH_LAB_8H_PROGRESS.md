@@ -200,3 +200,5 @@ Newest entries at the top. No secrets ever recorded here.
 
 - useAccount().chainId gating, clean Switch-network UX + add-chain fallback, sanitized errors,
   prepared-state invalidation on account/chain change; 7 chain-gate tests; live replay verified.
+
+## 2026-07-28 — Live market recovery shipped (7a7ea73); creation closed; acceptance green
