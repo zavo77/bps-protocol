@@ -116,7 +116,7 @@ describe("Launch Lab create page (disconnected wallet)", () => {
 
     expect(screen.getByTestId("wallet-state")).toHaveTextContent("disconnected");
     expect(screen.getByTestId("wallet-hint")).toHaveTextContent(
-      /Connect a wallet to create a market/i,
+      /Connect your wallet to launch a market/i,
     );
 
     // Complete the form with valid values (real PNG magic bytes).
@@ -134,9 +134,10 @@ describe("Launch Lab create page (disconnected wallet)", () => {
       expect((screen.getByTestId("symbol-input") as HTMLInputElement).value).toBe("PRINT"),
     );
 
-    // The signing/upload action stays blocked while disconnected.
+    // The signing/upload action stays blocked while disconnected, and the
+    // welcoming connect prompt is the only wallet chrome shown.
     expect(screen.getByTestId("upload-continue")).toBeDisabled();
-    expect(screen.getByText(/Signing is blocked until a wallet is connected/i)).toBeInTheDocument();
+    expect(screen.getByTestId("connect-wallet")).toHaveTextContent(/Connect wallet/i);
 
     // Nothing was sent to a mutation endpoint (no metadata upload, prepare, or simulate).
     expect(calls.some((u) => u.includes("/api/lab/metadata"))).toBe(false);
@@ -169,8 +170,9 @@ describe("Launch Lab create page (terms acknowledgement)", () => {
       </Providers>,
     );
 
-    // Connect the mock wallet.
-    await user.click(screen.getByRole("button", { name: /Connect Mock Connector/i }));
+    // Connect the mock wallet through the public "Connect wallet" control.
+    await user.click(screen.getByTestId("connect-wallet"));
+    await user.click(screen.getByRole("button", { name: /Mock Connector/i }));
     await waitFor(() =>
       expect(screen.getByTestId("wallet-state")).toHaveTextContent(/^connected$/),
     );

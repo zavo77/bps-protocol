@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { LabProviders } from "../../providers/lab-providers";
 import { ConnectedProfileLink } from "./ConnectedProfileLink";
+import { ConnectWalletButton } from "./ConnectWalletButton";
 import "./lab.css";
 
 // Fonts load at RUNTIME via a stylesheet link (display=swap) — deliberately NOT
@@ -40,9 +41,9 @@ export default function LabLayout({ children }: { children: ReactNode }) {
             </a>
             <nav aria-label="Launch Lab" className="lab-nav">
               <a href="/lab/tokens">Markets</a>
-              <a href="/lab/launch">Create</a>
-              <a href="/lab/proof">Proof</a>
+              <a href="/lab/launch">Launch</a>
               <ConnectedProfileLink />
+              <ConnectWalletButton />
             </nav>
           </header>
           {children}

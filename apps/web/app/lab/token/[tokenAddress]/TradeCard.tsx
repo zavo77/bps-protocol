@@ -526,7 +526,7 @@ export function TradeCard({
       <div style={{ marginTop: 16 }}>
         {!isConnected ? (
           <p className="lab-muted" data-testid="trade-connect" style={{ fontSize: 13 }}>
-            Connect a wallet to trade. Nothing is signed while disconnected.
+            Connect your wallet to trade.
           </p>
         ) : wrongChain ? (
           <button

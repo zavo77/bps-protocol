@@ -8,7 +8,7 @@ export function ConnectedProfileLink() {
   if (!address) return null;
   return (
     <a href={`/lab/profile/${address}`} data-testid="nav-profile-link">
-      My profile
+      Profile
     </a>
   );
 }

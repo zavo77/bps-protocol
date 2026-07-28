@@ -9,7 +9,7 @@
 // hook / manifest data. The print-token image appears only as an optional upload
 // placeholder, never as a prefilled token.
 import { useState, type ReactNode } from "react";
-import { useConnect, useSwitchChain } from "wagmi";
+import { useSwitchChain } from "wagmi";
 import {
   CHAIN_ID,
   EXPLORER_BASE_URL,
@@ -19,6 +19,7 @@ import {
   type LaunchManifest,
 } from "@bps/launch-lab";
 import { useCreateFlow } from "../../../hooks/lab";
+import { ConnectWalletButton } from "../ConnectWalletButton";
 
 const FLOW_STATE_INFO: Record<CreateFlowState, { label: string; detail: string }> = {
   "form-incomplete": {
@@ -156,7 +157,6 @@ const activePillStyle = {
 
 export default function LabCreatePage() {
   const flow = useCreateFlow();
-  const { connect, connectors, isPending: connecting } = useConnect();
   const { switchChain } = useSwitchChain();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [feeMode, setFeeMode] = useState<"connected" | "custom">("connected");
@@ -190,112 +190,120 @@ export default function LabCreatePage() {
   return (
     <main>
       <header style={{ marginBottom: 24 }}>
-        <div className="lab-label">create a market</div>
+        <div className="lab-label">launch a market</div>
         <h1 className="lab-h1" style={{ marginTop: 12 }}>
           launch something <span className="lab-serif">permanent</span>
         </h1>
       </header>
 
-      {/* ---- wallet ---- */}
-      <section className="lab-card" style={{ marginBottom: 20 }}>
-        <div className="lab-kv">
-          <span>wallet</span>
-          <span className="lab-data" data-testid="wallet-state">
-            {flow.walletState}
-          </span>
-        </div>
-        {disconnected ? (
-          <div data-testid="wallet-hint" style={{ marginTop: 12 }}>
-            <p className="lab-lead" style={{ fontSize: 15 }}>
-              Connect a wallet to create a market. Nothing can be signed while disconnected.
-            </p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-              {connectors.map((c) => (
-                <button
-                  key={c.uid}
-                  className="lab-btn lab-btn--ghost"
-                  onClick={() => connect({ connector: c })}
-                  disabled={connecting}
-                >
-                  Connect {c.name}
-                </button>
-              ))}
-            </div>
-            {connectors.length === 0 ? (
-              <p className="lab-muted" style={{ fontSize: 13, marginTop: 10 }}>
-                No wallet connector is available in this environment.
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-        {wrongChain ? (
+      {/* Hidden state marker for tests/tooling only — never visible chrome. */}
+      <span data-testid="wallet-state" style={{ display: "none" }}>
+        {flow.walletState}
+      </span>
+
+      {/* ---- connect prompt (only while disconnected) ---- */}
+      {disconnected ? (
+        <section
+          className="lab-card"
+          style={{
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+          data-testid="wallet-hint"
+        >
+          <p className="lab-lead" style={{ fontSize: 15, margin: 0 }}>
+            Connect your wallet to launch a market.
+          </p>
+          <ConnectWalletButton variant="inline" />
+        </section>
+      ) : null}
+      {wrongChain ? (
+        <section className="lab-card" style={{ marginBottom: 20 }}>
           <button
-            className="lab-btn lab-btn--ghost"
-            style={{ marginTop: 12 }}
+            className="lab-btn lab-btn--primary"
             onClick={() => switchChain({ chainId: CHAIN_ID })}
             data-testid="switch-chain"
           >
             Switch to Robinhood Chain ({CHAIN_ID})
           </button>
-        ) : null}
-        {flow.unauthorised ? (
-          <p
-            className="lab-pill lab-pill--bad"
-            style={{ marginTop: 12 }}
-            data-testid="unauthorised"
-          >
-            This wallet is not on the creator allowlist (AUTH_NOT_ALLOWLISTED).
-          </p>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
+      {flow.unauthorised ? (
+        <p className="lab-pill lab-pill--bad" style={{ marginBottom: 20 }} data-testid="unauthorised">
+          This wallet is not eligible to create markets right now.
+        </p>
+      ) : null}
 
-      {/* ---- stepper ---- */}
+      {/* ---- compact stepper ---- */}
       <nav
         aria-label="Steps"
-        style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}
+        style={{
+          display: "flex",
+          gap: 6,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginBottom: 20,
+          fontSize: 14,
+        }}
       >
-        {([1, 2, 3] as const).map((n) => {
-          const labels = { 1: "token", 2: "pair", 3: "launch" } as const;
+        {([1, 2, 3] as const).map((n, i) => {
+          const labels = { 1: "Token", 2: "Pair", 3: "Review & launch" } as const;
           const enabled =
             n === 1 || (n === 2 && flow.metadata !== null) || (n === 3 && flow.bundle !== null);
           const active = step === n;
           const done = n < step;
           return (
-            <button
-              key={n}
-              className="lab-btn lab-btn--ghost"
-              onClick={() => enabled && setStep(n)}
-              disabled={!enabled || busy}
-              aria-current={active ? "step" : undefined}
-              style={
-                active
-                  ? activePillStyle
-                  : done
-                    ? { borderColor: "var(--good-border)", color: "var(--good)" }
-                    : undefined
-              }
-            >
-              {done ? "✓" : String(n).padStart(2, "0")} · {labels[n]}
-            </button>
+            <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {i > 0 ? (
+                <span aria-hidden style={{ color: "var(--peach-grey)", padding: "0 2px" }}>
+                  —
+                </span>
+              ) : null}
+              <button
+                className="lab-pill"
+                onClick={() => enabled && setStep(n)}
+                disabled={!enabled || busy}
+                aria-current={active ? "step" : undefined}
+                style={{
+                  cursor: enabled ? "pointer" : "default",
+                  ...(active
+                    ? activePillStyle
+                    : done
+                      ? {
+                          background: "#fff",
+                          borderColor: "var(--good-border)",
+                          color: "var(--good)",
+                        }
+                      : {
+                          background: "#fff",
+                          borderColor: "var(--peach-grey)",
+                          color: "var(--charcoal)",
+                          opacity: 0.8,
+                        }),
+                }}
+              >
+                {done ? "✓ " : `${n} · `}
+                {labels[n]}
+              </button>
+            </span>
           );
         })}
       </nav>
 
-      {/* ---- flow state ---- */}
-      <section className="lab-card" style={{ marginBottom: 20 }} data-testid="flow-state">
-        <div className="lab-kv">
-          <span>flow state</span>
-          <span className="lab-data">{info.label}</span>
-        </div>
-        <p className="lab-muted" style={{ fontSize: 14, marginTop: 8 }}>
-          {info.detail}
+      {/* Errors surface inline, next to the work — no internal state chrome. */}
+      {flow.error ? (
+        <p
+          className="lab-pill lab-pill--bad"
+          style={{ marginBottom: 16 }}
+          data-testid="flow-error"
+        >
+          {flow.error}
         </p>
-        {flow.error ? (
-          <p className="lab-pill lab-pill--bad" style={{ marginTop: 10 }} data-testid="flow-error">
-            {flow.error}
-          </p>
-        ) : null}
-      </section>
+      ) : null}
 
       {/* ---- step 1: token ---- */}
       {step === 1 ? (
@@ -462,7 +470,7 @@ export default function LabCreatePage() {
               style={{ fontSize: 13, marginTop: 10 }}
               data-testid="terms-hint"
             >
-              Check the acknowledgement above to continue. Nothing is signed or sent until you do.
+              Check the acknowledgement above to continue.
             </p>
           ) : null}
 
@@ -478,11 +486,6 @@ export default function LabCreatePage() {
               flexWrap: "wrap",
             }}
           >
-            {disconnected ? (
-              <span className="lab-muted" style={{ fontSize: 13, marginRight: "auto" }}>
-                Signing is blocked until a wallet is connected.
-              </span>
-            ) : null}
             <button
               className="lab-btn lab-btn--primary"
               data-testid="upload-continue"
@@ -782,7 +785,7 @@ export default function LabCreatePage() {
                 if (ok) setStep(3);
               }}
             >
-              prepare launch (simulate + manifest) →
+              Continue to review →
             </button>
           </div>
         </section>
@@ -959,7 +962,7 @@ export default function LabCreatePage() {
             disabled={!flow.canLaunch || busy}
             onClick={() => void flow.launch()}
           >
-            sign &amp; launch
+            Launch market
           </button>
 
           <div style={{ marginTop: 18 }}>

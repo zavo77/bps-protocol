@@ -36,6 +36,7 @@ vi.mock("wagmi", () => ({
     readContract: h.fns.readContract,
   }),
   useConnect: () => ({ connect: h.fns.connect, connectors: [], isPending: false }),
+  useDisconnect: () => ({ disconnect: vi.fn() }),
   useSwitchChain: () => ({
     switchChain: h.fns.switchChain,
     switchChainAsync: h.fns.switchChainAsync,

@@ -198,7 +198,7 @@ export default function LabTokensPage() {
           }}
         >
           <a href="/lab/launch" className="lab-btn lab-btn--primary" data-testid="hero-create">
-            create a market
+            Launch a market
           </a>
           {genesisAddress ? (
             <a

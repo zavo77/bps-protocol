@@ -11,7 +11,7 @@ import { test, expect } from "@playwright/test";
 // → the transparency view updating from the new decoded Claimed event → duplicate claim disabled. No real
 // wallet, signature, or transaction is used, and no separate local wallet client is constructed.
 test("restricted-beta connector-driven workflow in a real browser", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/protocol");
   await expect(page.getByTestId("not-live-banner")).toContainText(/Protocol not live/i);
   await expect(page.getByTestId("live-trade")).toBeDisabled();
 
