@@ -7,6 +7,30 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: P0 wallet-scoped wizard + consumer review, live-verified (commit 27b71c1)
+
+- **Root cause of the founder's "stale MAG7 in Step 3":** wizard state was plain React state with NO
+  wallet boundary — in a long-lived tab, wallet B connecting after wallet A saw A's form/manifest/review.
+  Fixed: a wallet identity boundary in use-create-flow wipes ALL wizard state (form, metadata, manifest,
+  prepared tx, errors) on address change or disconnect and returns to Step 1. Text-only drafts persist
+  per (chainId, address) — never for disconnected visitors, never image bytes / acknowledgement /
+  prepared state. Visible **Start over** clears the form and the persisted draft.
+- **Consumer review screen:** artwork, name/$ticker, description, paired asset, supply, starting FDV,
+  trading fee, 85/10/5 split, fee destination, estimated network fee, permanence warning, Launch market.
+  All technical values (predicted address, pool id, hashes, modules, modes, chain id, simulation block,
+  WAD shares) live in ONE collapsed "Advanced contract details". Removed from the UI entirely:
+  deployment commit, server flags, pass/blocked gate checklist, capacity counter. Closed state shows
+  only "Market launches are temporarily unavailable."
+- **REAL production acceptance (deployed commit 27b71c1, fail-closed posture):** two throwaway wallets
+  (keys generated in-memory, never persisted; genuine EIP-1193 provider; wallet A signed ONLY the
+  EIP-191 prepare envelope — no transaction, nothing launched). Fresh visitor → empty Step 1; wallet A →
+  PRINT details, artwork, GOOGL pair, connected-wallet fee destination, consumer review reached; wallet
+  B in the SAME browser → zero wallet-A state, including after reload. 6 screenshots delivered.
+  Side effect: one unconsumed, wallet-bound lab_prepared manifest row for throwaway wallet A (harmless,
+  single-use).
+- **Gate:** 319 web (incl. new draft-isolation suite) + 56 launch-lab + 9 indexer; lint/typecheck/build/
+  secret scans clean. Production health: commit 27b71c1125aa, public / broadcast FALSE / kill TRUE.
+
 ## 2026-07-28 — LAUNCH LAB LANE: restricted-beta shell removed — full public product experience (commit af014cf)
 
 - **P0 founder visual inspection failure fixed.** Production first restored FAIL-CLOSED (broadcast false,

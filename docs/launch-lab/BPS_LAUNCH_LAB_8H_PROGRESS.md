@@ -170,3 +170,11 @@ Newest entries at the top. No secrets ever recorded here.
   Production screenshots (1440×900 + 390×844) + identical-commit E2E connected capture; all pages:
   0 console errors, no overflow, no beta/debug wording. 314+56+9 tests, lint/typecheck/build/secret
   scans clean.
+
+## 2026-07-28 — P0 wallet-scoped wizard + consumer review (27b71c1)
+
+- Wallet identity boundary wipes all wizard state on address change/disconnect (root cause of the
+  stale-MAG7 sighting); per-(chain,wallet) text drafts; Start over. Consumer review + collapsed
+  Advanced contract details; server flags/gates/commit removed from UI; closed state = one plain line.
+- REAL two-wallet production acceptance passed on deployed 27b71c1 (fail-closed): empty fresh Step 1,
+  wallet A full flow to review, wallet B same-browser fully clean incl. reload. 6 screenshots.
