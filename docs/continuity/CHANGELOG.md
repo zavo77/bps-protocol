@@ -7,6 +7,40 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: P0 LIVE SELL FAILURE — forensics + signature-free trade UX shipped (web 94f0715; SELLS PAUSED)
+
+- **Forensics (hash 0xf90fca7a…b77673):** SUCCESS, not a swap — it is the wallet 0x78b2…6024's
+  UNLIMITED MAG8 `approve` to the Rialto spender 0xC941…59bD (nonce 10, block 21670300,
+  14:39:21Z, gas 48,941; single Approval log; no PoolManager Swap, no transfers). Classification:
+  **MAG8 ERC-20 approval** for a one-step Rialto MAG8→ETH sell. Full Rabby sequence reconstructed
+  from chain + production logs: quote 200 (14:39:00) → prompt 1 EIP-191 prepare (offchain) →
+  prepare-leg 200 (14:39:12, approval required) → prompt 2 approval tx (the supplied hash) →
+  prompt 3 EIP-191 prepare again (offchain) → prepare-leg 200 (14:39:30) → prompt 4 (the swap)
+  **never broadcast** — no nonce-11 transaction exists. Root cause: prompt-fatigue abandonment of
+  the intentional sign→approve→sign→send flow. **No funds lost:** MAG8 891.428109766302671946
+  (exactly what the buy delivered — the 901.79 Swap-event figure is pool-side; the router delivered
+  891.43), GOOGL 0, ETH 0.000148. Allowances now: MAG8→Rialto spender UNLIMITED (this approval,
+  retained per directive), MAG8→Permit2 UNLIMITED (token-constructor default), GOOGL→* 0.
+- **Safety:** creation stays closed (broadcast false / kill true). NEW incident brake
+  `BPS_LAUNCH_LAB_SELL_PAUSED=true` (Production env + code, commits bb7476a/c5e96cf) blocks NEW
+  market-token sells in /api/lab/quote + prepare-leg with honest SELL_PAUSED copy; buys and the
+  anchor→payment RECOVERY leg are unaffected (live-verified). Lift by removing/false-ing the env var
+  + redeploy.
+- **UX fix (deployed 94f0715, sells still paused):** trade preparation is now SIGNATURE-FREE
+  (option A — the wallet transaction authenticates; server never signs/broadcasts; EIP-191 envelope
+  removed from prepare-leg). EXACT-amount ERC20/Permit2 approvals (never unlimited). Automatic
+  signature-free re-preparation after approvals (fresh quote window). Planned wallet prompts listed
+  BEFORE execution from a signature-free allowance preflight. Recovery banner: "{TOKEN} was sold.
+  Your {ANCHOR} remains in your wallet." Structured lab-trade JSON server logs keyed by a non-secret
+  attemptId (venue, action, allowance state, quote timestamp, simulation, receipt outcome). Gas from
+  estimateGas +25%. Tests: prepare-leg 12 (signature-free, sell-pause matrix, log line, gas buffer),
+  trade +6 P0 regressions (never sign→approve→sign; one-confirmation; exact-amount; stale-window
+  auto-refresh; concise revert + no pending record; double-click guard; planned steps) — web 402,
+  tsc/lint/build/secret-scan clean. Live: health 94f0715b6f02 fail-closed, SELL_PAUSED active,
+  ETH→MAG8 buy quote OK (rialto, 1 action).
+- **User guidance:** the user was NOT asked to retry; local recovery state untouched; approvals not
+  revoked. When the founder lifts SELL_PAUSED, the sell flow will request at most approve + swap.
+
 ## 2026-07-28 — LAUNCH LAB LANE: pre-canary provenance check PASSED (no redeploy)
 
 - Branch `feature/bps-launch-lab-8h-vercel` pushed to origin (zavo77/bps-protocol) through `3b99a0c`

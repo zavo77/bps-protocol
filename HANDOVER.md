@@ -28,11 +28,19 @@
 > wallet-chain gate fix (`47032dd`), live market recovery (`7a7ea73`).
 >
 > **POSTURE (2026-07-28, current):** Production **FAIL-CLOSED** — public / broadcast FALSE / kill
-> switch TRUE, health-verified at commit `60c344e51d4f`. Market CREATION is closed; TRADING on the
-> verified MAG8 market stays available by design. Broadcast needs fresh founder authorization.
+> switch TRUE, health-verified at commit `94f0715b6f02`. Market CREATION is closed. **SELLS ARE
+> PAUSED** (`BPS_LAUNCH_LAB_SELL_PAUSED=true` incident brake after the live sell failure — new
+> market-token sells 503 SELL_PAUSED; buys + partial-sale recovery legs unaffected). The sell
+> failure was forensically root-caused (prompt-fatigue: the swap after the successful unlimited
+> MAG8→Rialto approval was never broadcast; no funds lost) and the trade flow is now
+> SIGNATURE-FREE (no EIP-191 prepare envelopes; exact-amount approvals; planned prompts shown
+> upfront; structured attemptId logs). Founder lifts the brake by setting
+> `BPS_LAUNCH_LAB_SELL_PAUSED=false` in Vercel Production + redeploy. See
+> `docs/continuity/CURRENT_STATE.json` → `launchLab.sellFailureIncident`.
 > **Deploy from the REPO ROOT** (`npx vercel deploy --prod`) — `apps/web/.vercel` is a stale link.
-> Pending: founder/advisor MAG8 canary buy+sell (Claude cannot trade); Claude then verifies ≤5s
-> ingestion, chart direction, labels, reserves, volume, wallet identity, no duplicates, reload survival.
+> Pending after the brake lifts: founder/advisor MAG8 canary buy+sell (Claude cannot trade); Claude
+> then verifies ≤5s ingestion, chart direction, labels, reserves, volume, wallet identity, no
+> duplicates, reload survival.
 
 ## SNAPSHOT (verified)
 
