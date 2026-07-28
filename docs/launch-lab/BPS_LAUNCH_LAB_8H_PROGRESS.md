@@ -160,3 +160,13 @@ Newest entries at the top. No secrets ever recorded here.
   Preview stays fail-closed. Genesis card demoted to rehearsal-only, execution_authorized=false.
   Zero pre-created state (0 manifests, 0 verified rows, no allowlist consulted in public mode).
   Advisor signs in-browser; engineering stopped before any signature.
+
+## 2026-07-28 — P0 shell removal: full public product experience (commit af014cf)
+
+- Production FIRST restored fail-closed (broadcast false / kill true) per founder P0 — live posture
+  above SUPERSEDED pending fresh authorization. Restricted-beta shell removed from all public routes;
+  / → /lab/tokens; legacy dashboard intact at /protocol. Public header Markets/Launch/Profile/Connect
+  wallet; welcoming connect UX; compact stepper; "Launch market" action. Visual gate passed with real
+  Production screenshots (1440×900 + 390×844) + identical-commit E2E connected capture; all pages:
+  0 console errors, no overflow, no beta/debug wording. 314+56+9 tests, lint/typecheck/build/secret
+  scans clean.

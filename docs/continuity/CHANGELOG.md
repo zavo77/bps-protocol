@@ -7,6 +7,30 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: restricted-beta shell removed — full public product experience (commit af014cf)
+
+- **P0 founder visual inspection failure fixed.** Production first restored FAIL-CLOSED (broadcast false,
+  kill switch true — health-verified) before any UI work, per founder instruction; that posture remains
+  after this deploy. The 2026-07-28 live acceptance posture below is therefore SUPERSEDED until the
+  founder re-authorizes broadcast for the session.
+- **Shell removal:** root layout is now minimal (no "BPS Protocol · Restricted Beta" chrome, no dark
+  frame, no restricted-beta badge anywhere on public routes). `/` redirects to `/lab/tokens`. The legacy
+  restricted-beta protocol dashboard moved INTACT to `/protocol` with its own shell (200 verified);
+  its Playwright e2e retargeted.
+- **One public product shell:** lab header = wordmark · Markets · Launch · Profile (when connected) ·
+  **Connect wallet** (new ConnectWalletButton: friendly wallet-options menu, "Browser wallet" naming,
+  connected short-address + disconnect; no connector jargon anywhere).
+- **Wizard:** welcoming connect prompt ("Connect your wallet to launch a market."), compact
+  1·Token — 2·Pair — 3·Review & launch stepper (light inactive pills), inline errors (wallet-state/
+  flow-state chrome removed; hidden test-only marker retained), step-2 action "Continue to review →",
+  final action **"Launch market"**; QA copy removed on launch + trade surfaces; "Launch a market" CTA.
+- **Visual acceptance gate (actual Production screenshots, commit af014cf):** 1440×900 — /(→/lab/tokens),
+  /lab/tokens, /lab/launch; 390×844 — /lab/tokens, /lab/launch; plus the connected wizard captured on the
+  identical commit's E2E mock-wallet build (production cannot be wallet-connected without a human wallet).
+  Automated checks per page: 0 console errors, no horizontal overflow, no restricted-beta/debug wording.
+- **Gate:** 314 web + 56 launch-lab + 9 indexer tests; lint/typecheck clean; production build clean;
+  client-bundle secret scan clean. Production health: commit af014cf, public / broadcast FALSE / kill TRUE.
+
 ## 2026-07-28 — ⚠ LAUNCH LAB LANE: LIVE ACCEPTANCE-TEST POSTURE ENABLED (founder-authorized)
 
 - **Founder directive (final acceptance test):** a previously unknown random public wallet must launch
