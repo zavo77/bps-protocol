@@ -25,6 +25,7 @@ import {
 import {
   getFlags,
   getLabClient,
+  isSellPaused,
   payloadHashOf,
   verifySignedRequest,
 } from "../../../../../lib/lab/server";
@@ -83,6 +84,15 @@ export async function POST(req: Request): Promise<Response> {
     const outputToken = getAddress(payload.outputToken);
     const amountIn = BigInt(payload.exactInputAmount);
     if (amountIn <= 0n) return err("AMOUNT_REQUIRED", "Amount must be positive.");
+    // Incident brake: any leg that SELLS the market token is blocked. The
+    // anchor→payment recovery leg (market leg already succeeded) still works.
+    if (isSellPaused() && inputToken.toLowerCase() === marketToken.toLowerCase()) {
+      return err(
+        "SELL_PAUSED",
+        "Selling this market is temporarily paused while an issue is investigated. Your tokens are safe in your wallet.",
+        503,
+      );
+    }
 
     const ctx = await getLabPoolContext(client, marketToken);
     const anchor = ctx.anchorAddress;

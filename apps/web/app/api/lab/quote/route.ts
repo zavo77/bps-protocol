@@ -6,7 +6,7 @@
 
 import { getAddress, isAddress } from "viem";
 import { z } from "zod";
-import { getLabClient } from "../../../../lib/lab/server";
+import { getLabClient, isSellPaused } from "../../../../lib/lab/server";
 import { quoteUserTrade } from "../../../../lib/lab/trade-router";
 import {
   assertSameOrigin,
@@ -39,6 +39,19 @@ export async function POST(req: Request): Promise<Response> {
     const input = quoteInputSchema.parse(await req.json());
     const amountIn = BigInt(input.exactInputAmount);
     if (amountIn <= 0n) return err("AMOUNT_REQUIRED", "Amount must be positive.");
+    // Incident brake: block NEW market-token sells (input = the market token).
+    // Recovery conversions (anchor → payment) are unaffected by design.
+    if (
+      isSellPaused() &&
+      input.side === "sell" &&
+      input.inputToken.toLowerCase() === input.marketToken.toLowerCase()
+    ) {
+      return err(
+        "SELL_PAUSED",
+        "Selling this market is temporarily paused while an issue is investigated. Your tokens are safe in your wallet.",
+        503,
+      );
+    }
 
     const quote = await quoteUserTrade(getLabClient(), {
       marketToken: getAddress(input.marketToken),
