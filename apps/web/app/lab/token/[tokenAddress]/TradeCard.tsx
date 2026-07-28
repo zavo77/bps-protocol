@@ -116,6 +116,7 @@ export function TradeCard({
     status,
     quote,
     plannedSteps,
+    marketDataSyncing,
     txHash,
     legHashes,
     legIndex,
@@ -615,6 +616,7 @@ export function TradeCard({
         legIndex={legIndex}
         legCount={legCount}
         explorer={explorer}
+        marketDataSyncing={marketDataSyncing}
       />
     </div>
   );
@@ -654,6 +656,7 @@ function StatusLine({
   legIndex,
   legCount,
   explorer,
+  marketDataSyncing,
 }: {
   status: string;
   insufficient: boolean;
@@ -663,6 +666,7 @@ function StatusLine({
   legIndex: number;
   legCount: number;
   explorer: string;
+  marketDataSyncing: boolean;
 }) {
   return (
     <div style={{ marginTop: 10 }}>
@@ -704,6 +708,15 @@ function StatusLine({
       {status === "success" && (
         <div data-testid="trade-success" style={{ color: "var(--good)", fontSize: 13 }}>
           <p style={{ margin: 0 }}>Trade confirmed.</p>
+          {marketDataSyncing && (
+            <p
+              className="lab-muted"
+              data-testid="market-data-syncing"
+              style={{ margin: "4px 0 0", fontSize: 13 }}
+            >
+              Trade confirmed; market data is syncing.
+            </p>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
             {legHashes.map((h, i) => (
               <a

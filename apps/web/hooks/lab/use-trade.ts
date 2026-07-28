@@ -152,6 +152,9 @@ export interface UseTrade {
   /** Exact ordered wallet prompts for the current quote (signature-free
    *  allowance preflight), or null while unknown / no quote. */
   plannedSteps: string[] | null;
+  /** A confirmed market-token leg is awaiting market-data attribution — the
+   *  trade is NOT failed; the background indexer reconciles. */
+  marketDataSyncing: boolean;
   txHash: Hex | null;
   legHashes: Hex[];
   legIndex: number;
@@ -251,6 +254,10 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
   // Signature-free allowance preflight: the exact wallet prompts (approvals +
   // transactions, in order) the quoted trade will request. Null while unknown.
   const [plannedSteps, setPlannedSteps] = useState<string[] | null>(null);
+  // True when a market-token leg CONFIRMED on-chain but immediate ingestion
+  // could not attribute/insert it yet — the trade is NOT failed; the
+  // background indexer reconciles and the UI shows an honest syncing notice.
+  const [marketDataSyncing, setMarketDataSyncing] = useState(false);
   const [pendingRecovery, setPendingRecovery] = useState<PendingComposedTrade | null>(null);
   // Re-entrancy guard: exactly ONE trade execution (full flow or resume) may be
   // in flight at a time — React state (`busy`) lags async work and cannot gate this.
@@ -280,6 +287,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
   const invalidateQuote = useCallback(() => {
     setQuote(null);
     setPlannedSteps(null);
+    setMarketDataSyncing(false);
     setTxHash(null);
     setLegHashes([]);
     setLegIndex(0);
@@ -677,16 +685,22 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
         setError("Leg transaction reverted on-chain.");
         return null;
       }
-      // Immediate ingestion — AWAITED, but ONLY for the BPS Direct market-pool
-      // leg (Rialto payment↔anchor legs never touch this market's pool). The
-      // server reads and verifies the receipt from chain; only the hash is
-      // sent. Brief retry covers server-side RPC receipt propagation. After a
-      // successful idempotent insert, the market + history queries are
-      // invalidated and refetched so the trade is visible within seconds. The
-      // background indexer remains the reconciliation fallback — failure here
-      // never fails the trade.
-      if (payload.kind === "bpsDirect") {
+      // Immediate ingestion — AWAITED for ANY confirmed leg that includes the
+      // market token (BPS Direct AND one-step Rialto/0x/1inch routes, which
+      // cross the verified BPS pool internally). Payment↔anchor legs never
+      // include the market token and are skipped. The server reads and
+      // verifies the receipt + exact poolId Swap log from chain; only the
+      // hash is sent. Brief retry covers server-side RPC receipt propagation.
+      // After a successful idempotent insert, the market + history queries
+      // are invalidated and refetched so the trade is visible within seconds.
+      // NO_MARKET_SWAP never fails the confirmed trade — the background
+      // indexer reconciles and the UI shows an honest "syncing" notice.
+      const touchesMarket =
+        payload.inputToken.toLowerCase() === marketToken.toLowerCase() ||
+        payload.outputToken.toLowerCase() === marketToken.toLowerCase();
+      if (touchesMarket) {
         const t1 = Date.now(); // T1: receipt confirmed client-side
+        let ingested = false;
         for (let attempt = 0; attempt < 4; attempt++) {
           try {
             await labFetch("/api/lab/trade/ingest", {
@@ -710,11 +724,17 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
               }),
             ]);
             console.info(`[lab] trade ingested + refetched in ${Date.now() - t1}ms`);
+            ingested = true;
             break;
-          } catch {
+          } catch (ingestErr) {
+            // The receipt is verified and the trade CONFIRMED — a swap log the
+            // server cannot attribute to this market's pool will not appear on
+            // retry, so stop and let the background indexer reconcile.
+            if (ingestErr instanceof LabApiError && ingestErr.code === "NO_MARKET_SWAP") break;
             if (attempt < 3) await new Promise((r) => setTimeout(r, 1_000));
           }
         }
+        setMarketDataSyncing(!ingested);
       }
       return hash;
     },
@@ -735,6 +755,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     setLegHashes([]);
     setLegIndex(0);
     setLegCount(0);
+    setMarketDataSyncing(false);
     if (!address) {
       setError("Connect a wallet to trade.");
       return null;
@@ -878,6 +899,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     setError(null);
     setTxHash(null);
     setLegHashes([]);
+    setMarketDataSyncing(false);
     const pending = pendingRecovery;
     if (!address) {
       setError("Connect a wallet to resume.");
@@ -960,6 +982,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     setAmountState("");
     setQuote(null);
     setPlannedSteps(null);
+    setMarketDataSyncing(false);
     setTxHash(null);
     setLegHashes([]);
     setLegIndex(0);
@@ -975,6 +998,7 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
     status,
     quote,
     plannedSteps,
+    marketDataSyncing,
     txHash,
     legHashes,
     legIndex,

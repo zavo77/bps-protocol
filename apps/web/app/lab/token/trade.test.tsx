@@ -202,7 +202,7 @@ interface Call {
 }
 type Handler = (url: string, init?: RequestInit) => Response;
 
-function stubFetch(handler: Handler): Call[] {
+function stubFetch(handler: Handler, opts?: { ingest?: Handler }): Call[] {
   const calls: Call[] = [];
   vi.stubGlobal(
     "fetch",
@@ -218,10 +218,14 @@ function stubFetch(handler: Handler): Call[] {
         }
       }
       calls.push({ url, body });
-      // The awaited BPS-leg ingestion endpoint always exists in the real app;
-      // serve it here so per-test handlers stay focused on quote/prepare-leg.
-      if (url.includes("/api/lab/trade/ingest"))
-        return jsonResponse(200, { ok: true, data: { ingested: 1, swaps: [] } });
+      // The awaited market-leg ingestion endpoint always exists in the real
+      // app; serve it here (overridable per test via opts.ingest) so per-test
+      // handlers stay focused on quote/prepare-leg.
+      if (url.includes("/api/lab/trade/ingest")) {
+        return (
+          opts?.ingest ?? (() => jsonResponse(200, { ok: true, data: { ingested: 1, swaps: [] } }))
+        )(url, init);
+      }
       return handler(url, init);
     }),
   );
@@ -1250,6 +1254,191 @@ describe("TradeCard — P0 sell prompt-count + reliability regressions", () => {
     await waitFor(() => expect(screen.getByTestId("trade-success")).toBeInTheDocument());
 
     expect(h.fns.sendTransactionAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("one-step Rialto MAG8→ETH sell triggers awaited ingestion (txHash + marketToken + attemptId)", async () => {
+    mockSellReads(1000n * 10n ** 18n);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"60".repeat(32)}`);
+    const calls = stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+      if (url.includes("/api/lab/trade/prepare-leg"))
+        return jsonResponse(200, { ok: true, data: prepResponse({ approvalNeeded: false }) });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    await runSellFlow();
+
+    const ingest = bodyFor(calls, "/api/lab/trade/ingest");
+    expect(ingest).not.toBeNull();
+    expect(ingest!.txHash).toBe(`0x${"60".repeat(32)}`);
+    expect(ingest!.marketToken).toBe(TOKEN);
+    expect(typeof ingest!.attemptId).toBe("string");
+    expect(screen.queryByTestId("market-data-syncing")).toBeNull(); // ingested — no notice
+  });
+
+  const AGG_BUY_KINDS = ["rialto", "zeroEx", "oneInch"] as const;
+  for (const kind of AGG_BUY_KINDS) {
+    it(`one-step ${kind} ETH→MAG8 buy triggers awaited ingestion (trigger = market token, not venue)`, async () => {
+      mockSellReads(0n);
+      h.fns.getBalance.mockResolvedValue(10n * 10n ** 18n);
+      h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+      h.fns.sendTransactionAsync.mockResolvedValue(`0x${"61".repeat(32)}`);
+      const buyQuote = {
+        ...ONE_STEP_SELL,
+        side: "buy",
+        userInputToken: NATIVE_ETH,
+        userOutputToken: TOKEN,
+        legs: [
+          {
+            ...ONE_STEP_SELL.legs[0]!,
+            kind,
+            inputToken: NATIVE_ETH,
+            outputToken: TOKEN,
+            transactionValue: WEI(1),
+            allowanceTarget: null,
+          },
+        ],
+        approvalsRequired: [],
+      };
+      const calls = stubFetch((url) => {
+        if (url.includes("/api/lab/quote")) return jsonResponse(200, { ok: true, data: buyQuote });
+        if (url.includes("/api/lab/trade/prepare-leg"))
+          return jsonResponse(200, {
+            ok: true,
+            data: {
+              ...prepResponse({ approvalNeeded: false }),
+              leg: {
+                kind,
+                inputToken: NATIVE_ETH,
+                outputToken: TOKEN,
+                exactInputAmount: WEI(1),
+                expectedOutputWei: WEI(100),
+                minimumOutputWei: WEI(99),
+              },
+            },
+          });
+        return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+      });
+
+      const user = userEvent.setup();
+      wrap(
+        <TradeCard
+          address={TOKEN}
+          tokenSymbol="PRINT"
+          anchorSymbol="GOOGL"
+          anchorAddress={GOOGL}
+        />,
+      );
+      await user.type(screen.getByTestId("trade-amount"), "1");
+      await user.click(screen.getByTestId("quote-button"));
+      await waitFor(() => expect(screen.getByTestId("trade-button")).toBeInTheDocument());
+      await user.click(screen.getByTestId("trade-button"));
+      await waitFor(() => expect(screen.getByTestId("trade-success")).toBeInTheDocument());
+
+      const ingest = bodyFor(calls, "/api/lab/trade/ingest");
+      expect(ingest).not.toBeNull();
+      expect(ingest!.txHash).toBe(`0x${"61".repeat(32)}`);
+      expect(ingest!.marketToken).toBe(TOKEN);
+    });
+  }
+
+  it("composed buy: the ETH→anchor payment leg does NOT ingest; the market leg does", async () => {
+    // Leg 1 (zeroEx ETH→NVDA) and leg 2 (bpsDirect NVDA→PRINT) both confirm;
+    // exactly ONE ingestion happens, for the market leg's hash.
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    const hashes = [`0x${"71".repeat(32)}`, `0x${"72".repeat(32)}`];
+    let sendNo = 0;
+    h.fns.sendTransactionAsync.mockImplementation(async () => hashes[sendNo++]);
+    let nvdaReads = 0;
+    h.fns.readContract.mockImplementation(
+      async ({ functionName, address }: { functionName: string; address: string }) => {
+        if (functionName === "decimals") return 18;
+        if (functionName === "balanceOf") {
+          if (address.toLowerCase() === NVDA.toLowerCase()) {
+            nvdaReads += 1;
+            return nvdaReads === 1 ? 0n : 2n * 10n ** 18n; // before / after leg 1
+          }
+          return 1000n * 10n ** 18n;
+        }
+        if (functionName === "allowance") return 10n ** 30n;
+        return 0n;
+      },
+    );
+    h.fns.getBalance.mockResolvedValue(10n * 10n ** 18n);
+    const calls = stubFetch((url, init) => {
+      if (url.includes("/api/lab/quote")) return jsonResponse(200, { ok: true, data: COMPOSED_BUY });
+      if (url.includes("/api/lab/trade/prepare-leg")) {
+        const body = init?.body ? (JSON.parse(init.body as string) as { payload?: { kind?: string; inputToken?: string; outputToken?: string } }) : {};
+        const p = body.payload ?? {};
+        return jsonResponse(200, {
+          ok: true,
+          data: {
+            ...prepResponse({ approvalNeeded: false }),
+            leg: {
+              kind: p.kind ?? "zeroEx",
+              inputToken: p.inputToken ?? NATIVE_ETH,
+              outputToken: p.outputToken ?? TOKEN,
+              exactInputAmount: WEI(1),
+              expectedOutputWei: WEI(2),
+              minimumOutputWei: WEI(1),
+            },
+          },
+        });
+      }
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    const user = userEvent.setup();
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="NVDA" anchorAddress={NVDA} />,
+    );
+    await user.type(screen.getByTestId("trade-amount"), "1");
+    await user.click(screen.getByTestId("quote-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-button")).toBeInTheDocument());
+    await user.click(screen.getByTestId("trade-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-success")).toBeInTheDocument());
+
+    const ingests = calls.filter((c) => c.url.includes("/api/lab/trade/ingest"));
+    expect(ingests.length).toBe(1); // NEVER the payment↔anchor leg
+    expect(ingests[0]!.body!.txHash).toBe(hashes[1]); // the market (bpsDirect) leg only
+  });
+
+  it("NO_MARKET_SWAP never converts a confirmed trade into a failure — shows the syncing notice", async () => {
+    mockSellReads(1000n * 10n ** 18n);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    h.fns.sendTransactionAsync.mockResolvedValue(`0x${"62".repeat(32)}`);
+    const calls = stubFetch(
+      (url) => {
+        if (url.includes("/api/lab/quote"))
+          return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+        if (url.includes("/api/lab/trade/prepare-leg"))
+          return jsonResponse(200, { ok: true, data: prepResponse({ approvalNeeded: false }) });
+        return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+      },
+      {
+        ingest: () =>
+          jsonResponse(404, {
+            ok: false,
+            error: "No swap for this market was found in that transaction.",
+            code: "NO_MARKET_SWAP",
+          }),
+      },
+    );
+
+    await runSellFlow(); // still reaches trade-success — the trade is CONFIRMED
+
+    expect(screen.getByTestId("market-data-syncing")).toHaveTextContent(
+      "Trade confirmed; market data is syncing.",
+    );
+    // The tx hash is retained (receipt link rendered).
+    expect(screen.getByTestId("trade-tx-link-0")).toHaveAttribute(
+      "href",
+      expect.stringContaining(`0x${"62".repeat(32)}`),
+    );
+    // NO_MARKET_SWAP is authoritative — no pointless retry storm.
+    expect(calls.filter((c) => c.url.includes("/api/lab/trade/ingest")).length).toBe(1);
   });
 
   it("the planned steps show approval + swap BEFORE execution begins", async () => {
