@@ -153,3 +153,10 @@ Newest entries at the top. No secrets ever recorded here.
 - PRINT / GOOGL display + numeraire assertion; FINAL description; metadata re-uploaded
   (QmXLeDV8…3DoT); actor mode A (founder). New prediction: token 0x8B400Cab…D8C8,
   pool 0x48055552…3396, block 21012000. Prior hashes invalid. Broadcast off, kill on.
+
+## 2026-07-28 — ⚠ LIVE acceptance-test posture enabled (founder-authorized)
+
+- Production: public / broadcast TRUE / kill switch FALSE (health-verified, commit 418b3c6).
+  Preview stays fail-closed. Genesis card demoted to rehearsal-only, execution_authorized=false.
+  Zero pre-created state (0 manifests, 0 verified rows, no allowlist consulted in public mode).
+  Advisor signs in-browser; engineering stopped before any signature.

@@ -23,6 +23,12 @@
 > kill true). **LL-4 CLOSED (2026-07-27):** founder added `RIALTO_API_KEY` to Vercel Preview + Production; production
 > Rialto routing LIVE-VERIFIED at commit `48a7c8d` (route-probe: all 8 payment↔anchor pairs fill via
 > Rialto, 5 bps, exact spender, native-ETH pairs simulate; deployed-asset secret scans clean).
+>
+> **⚠ LIVE SESSION POSTURE (2026-07-28):** Production runs public / broadcast **TRUE** / kill switch
+> **FALSE** for the founder-authorized random-wallet acceptance test (health-verified, commit `418b3c6`);
+> Preview stays fail-closed; the founder-bound Genesis card is **REHEARSAL-ONLY,
+> execution_authorized=false**; zero pre-created state for the advisor wallet. Founder re-reviews this
+> posture after the session.
 
 ## SNAPSHOT (verified)
 
