@@ -28,13 +28,17 @@
 > wallet-chain gate fix (`47032dd`), live market recovery (`7a7ea73`).
 >
 > **POSTURE (2026-07-28, current):** Production **FAIL-CLOSED** — public / broadcast FALSE / kill
-> switch TRUE, health-verified at commit `94f0715b6f02`. Market CREATION is closed. **SELLS ARE
-> PAUSED** (`BPS_LAUNCH_LAB_SELL_PAUSED=true` incident brake after the live sell failure — new
-> market-token sells 503 SELL_PAUSED; buys + partial-sale recovery legs unaffected). The sell
-> failure was forensically root-caused (prompt-fatigue: the swap after the successful unlimited
-> MAG8→Rialto approval was never broadcast; no funds lost) and the trade flow is now
-> SIGNATURE-FREE (no EIP-191 prepare envelopes; exact-amount approvals; planned prompts shown
-> upfront; structured attemptId logs). Founder lifts the brake by setting
+> switch TRUE, health-verified at commit `d5051611cf18`. Market CREATION is closed. **SELLS ARE
+> PAUSED** (`BPS_LAUNCH_LAB_SELL_PAUSED=true` incident brake — new market-token sells 503
+> SELL_PAUSED; buys + partial-sale recovery legs unaffected). The sell failure is fully
+> root-caused AND fixed: (a) the 4-prompt sign→approve→sign→send UX (now SIGNATURE-FREE
+> preparation, exact-amount approvals, planned prompts upfront, attemptId logs); (b) a Rialto
+> adapter bug — `issues.allowance:null` (allowance already satisfied, the wallet's exact
+> post-approval state) was rejected, demoting post-approval sells to 0x with a different spender,
+> so the swap prompt never appeared. Ingestion now triggers on ANY market-token leg (any venue);
+> NO_MARKET_SWAP keeps a confirmed trade confirmed ("market data is syncing"). Read-only
+> verification passed: venue rialto, 1 wallet action, planned prompt exactly "Sell MAG8 for ETH",
+> no approvals for the incident wallet, exact simulation ok. Founder lifts the brake by setting
 > `BPS_LAUNCH_LAB_SELL_PAUSED=false` in Vercel Production + redeploy. See
 > `docs/continuity/CURRENT_STATE.json` → `launchLab.sellFailureIncident`.
 > **Deploy from the REPO ROOT** (`npx vercel deploy --prod`) — `apps/web/.vercel` is a stale link.

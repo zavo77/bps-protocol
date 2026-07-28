@@ -7,6 +7,34 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-28 — LAUNCH LAB LANE: final sell-path patch (web d5051611 deployed; SELLS STILL PAUSED)
+
+- **Ingestion trigger generalized (d90f7537):** use-trade awaited ingestion now fires for ANY
+  confirmed leg whose input OR output is the market token (`touchesMarket`) — one-step
+  Rialto/0x/1inch MAG8 routes included; ETH↔GOOGL payment↔anchor composed legs excluded. attemptId
+  travels with the ingest POST. NO_MARKET_SWAP on a confirmed tx never fails the trade: hash
+  retained, single attempt (no retry storm), honest "Trade confirmed; market data is syncing."
+  notice, background indexer reconciles. +6 tests (rialto sell, rialto/zeroEx/oneInch buys,
+  composed payment-leg exclusion, NO_MARKET_SWAP soft-handling); txHash:logIndex idempotency
+  already covered by lib/lab/ingest.test.ts.
+- **ROOT-CAUSE COMPLETION — Rialto adapter bug (d5051611):** live probe proved Rialto returns
+  `issues.allowance: null` for a taker whose allowance ALREADY covers the trade (the incident
+  wallet, post-approval); rialto.ts fail-closed on that exact shape, silently demoting every
+  post-approval sell to 0x — which demanded a DIFFERENT approval (AllowanceHolder) and a
+  skipped-pending-approval simulation, so the old flow died before the swap prompt. This is why
+  the live sell's prompt 4 never appeared. Fix: allowance:null (field present) = valid approval-free
+  quote (allowanceTarget null); absent issues field still fails closed. rialto tests 9.
+- **Read-only verification (local prod build, live chain + DB, no signatures/broadcast; production
+  itself correctly refuses sell quotes with SELL_PAUSED):** sell 100 MAG8 → ETH for taker
+  0x78B2…6024: venue **rialto**, walletActionCount **1**, planned wallet prompts exactly
+  **"Sell MAG8 for ETH"** (leg allowanceTarget null → no approve step), approvals
+  erc20/permit2 **false**, exact-calldata simulation **"ok"**, tx target = the already-approved
+  Rialto router 0xC941…59bD, value 0, gas 1,282,066 (estimate+25%); structured log
+  `{"tag":"lab-trade","attemptId":"readonly-verify-1",...,"venue":"rialto","simulation":"ok"}`.
+- Gate: web 409 tests, tsc/lint/build clean. Production health d5051611cf18 — broadcast false,
+  kill true, SELL_PAUSED **active** (live-verified), ETH→MAG8 buys quote via Rialto. **Stopped
+  before lifting the brake, as directed.**
+
 ## 2026-07-28 — LAUNCH LAB LANE: P0 LIVE SELL FAILURE — forensics + signature-free trade UX shipped (web 94f0715; SELLS PAUSED)
 
 - **Forensics (hash 0xf90fca7a…b77673):** SUCCESS, not a swap — it is the wallet 0x78b2…6024's
