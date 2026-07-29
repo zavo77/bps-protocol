@@ -7,6 +7,39 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-29 — LAUNCH LAB LANE: P0 WALLET-PROMPT INCIDENT — browse-only brake + one-confirmation flows shipped (web ae601af6; MUTATIONS PAUSED)
+
+- **Normal-public-operation declaration SUSPENDED by the founder** after a human test: launch took
+  3–4 Rabby prompts, buy 2, sell 2. Production immediately braked BROWSE-ONLY: broadcast false,
+  kill true, SELL_PAUSED true, NEW `BPS_LAUNCH_LAB_TRADING_PAUSED=true` enforced in code in
+  /api/lab/quote + prepare-leg for buys AND sells (503 TRADING_PAUSED; markets/charts/history/
+  listings stay visible — live-verified). Both markets untouched.
+- **Forensics (wallet 0x78B2…6024, nonces 12–16, 2026-07-29 10:42–10:44):** n12 0xdd9579… =
+  the AAPL-anchored launch (ONE Airlock create tx — token 0xAA5c4306…; the extra prompts were the
+  metadata + prepare (+ stale re-simulation) EIP-191 personal_signs); n13 = exact-amount WETH
+  approval 0.001 (user paid WETH, not ETH) + n14 0x93fafd… = ONE atomic 0x swap WETH→AAPL→token
+  (90,941.99 tokens in; no anchor stranded); n15 = exact-amount token approval + n16 0xb863fa… =
+  ONE atomic 0x swap token→AAPL→WETH (0.000239 WETH in). So buy/sell prompts were APPROVAL+SWAP
+  (first-time allowances, atomic swaps — already the fresh-wallet standard), and the launch's
+  extra prompts were the offchain envelopes.
+- **Fixes (deployed ae601af6a7a8, still behind the brakes):** LAUNCH = ONE confirmation — EIP-191
+  envelopes removed from metadata upload / prepare / stale re-simulation (silent re-prepare);
+  metadata protected by origin+MIME/magic-bytes+size+per-IP+per-wallet limits+content-hash dedup;
+  review shows "Wallet confirmations: 1 — 1. Launch TICKER". TRADING: composed 2-transaction
+  fallback REMOVED from public quotes (no one-step venue → NO_ROUTE_FOR_PAYMENT_TOKEN; every quote
+  walletActionCount=1); post-approval re-preparation PINNED to venue+spender (409 VENUE_CHANGED;
+  never a second approval); pre-action summary (confirmations/transactions/approval/venue/max
+  slippage) on the primary surface. Persisted composed-trade recovery unchanged. NOT built (needs
+  separate authorization + audit): the atomic BPS router contract for markets no venue has indexed;
+  EIP-5792 batched approval+sell offer.
+- **Proof:** 449 web tests (52 files) incl. single-confirmation launch suite; tsc/lint/build clean.
+  Fresh-wallet Playwright run against the REAL production build with a counting EIP-1193 provider:
+  full launch wallet log = [wallet_requestPermissions, eth_requestAccounts, eth_chainId×3,
+  eth_sendTransaction] — ONE transaction request, ZERO sign requests (the send was counted then
+  rejected; nothing broadcast; QA manifest retired consumed_at; temp env keys removed).
+- **Mutations stay PAUSED until the founder performs:** one one-prompt launch; one one-prompt ETH
+  buy; one first sell (≤ approval+sell); one subsequent one-prompt sell.
+
 ## 2026-07-29 — LAUNCH LAB LANE: ★★ NORMAL PUBLIC OPERATION — Launch Lab opened as the real public product
 
 - **Founder directive: no more wallet/ticker acceptance windows.** Production env now:

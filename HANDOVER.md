@@ -27,7 +27,16 @@
 > routing (`01c8cfd`), live-verified Rialto activation (`48a7c8d`), public shell + simplified wizard,
 > wallet-chain gate fix (`47032dd`), live market recovery (`7a7ea73`).
 >
-> **POSTURE (2026-07-29, CURRENT): ★ NORMAL PUBLIC OPERATION.** The Launch Lab is the real public
+> **POSTURE (2026-07-29, CURRENT): ⚠ P0 WALLET-PROMPT INCIDENT — BROWSE-ONLY.** Public operation is
+> SUSPENDED: broadcast false, kill true, SELL_PAUSED true, TRADING_PAUSED true (new flag, enforced
+> in quote + prepare-leg). Markets/charts/history stay visible. The one-confirmation launch
+> (envelopes removed), atomic-only public routes, venue pinning, and prompt-count UI are DEPLOYED
+> at ae601af6a7a8 behind the brakes with a Playwright fresh-wallet proof (1 sendTransaction, 0
+> sign requests). Reopen only after the founder performs the 4 acceptance actions (1-prompt
+> launch, 1-prompt ETH buy, first sell ≤ approval+sell, subsequent 1-prompt sell), then flip the
+> four env flags open and redeploy. See CURRENT_STATE.json → walletPromptIncident.
+>
+> **POSTURE (2026-07-29, earlier, SUSPENDED): ★ NORMAL PUBLIC OPERATION.** The Launch Lab is the real public
 > product: ACCESS_MODE=public, BROADCAST_ENABLED=true, KILL_SWITCH=false, SELL_PAUSED=false
 > (health 13d685eb5720). No allowlists, no acceptance windows, no ticker/anchor forcing — identical
 > behavior for every wallet. Emergency env controls stay available but INACTIVE; re-engage only for
