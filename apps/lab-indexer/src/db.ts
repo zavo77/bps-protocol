@@ -34,6 +34,18 @@ export const MIGRATIONS: readonly string[] = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`,
   `ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS consumed_at TIMESTAMPTZ`,
+  // P0.2 exact-provenance columns (shared with the web app's getPg init DDL —
+  // keep identical). provenance_version=2 rows carry the full prepared
+  // transaction facts; legacy rows (NULL/!=2) never verify a launch.
+  `ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS provenance_version INT`,
+  `ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS chain_id INT`,
+  `ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS transaction_target TEXT`,
+  `ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS transaction_data TEXT`,
+  `ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS calldata_hash TEXT`,
+  `ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS transaction_value TEXT`,
+  `ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS launch_manifest JSONB`,
+  `ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS valid_until TIMESTAMPTZ`,
+  `ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS consumed_by_tx TEXT`,
   `CREATE TABLE IF NOT EXISTS lab_used_signatures (
     sig_hash TEXT PRIMARY KEY,
     used_at TIMESTAMPTZ NOT NULL DEFAULT now()

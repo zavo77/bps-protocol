@@ -241,6 +241,8 @@ function stubFetch(opts?: { staleFirstPrepare?: boolean }): Captured {
         });
       }
       if (url.includes("/api/lab/simulate")) {
+        // New stale-refresh contract: { predictedToken, creatorAddress } in,
+        // the STORED (same) manifestHash out with fresh gas + staleAfter.
         if (typeof init?.body === "string") cap.simulateBodies.push(init.body);
         const fresh = makeBundle(Date.now() + 500_000);
         return jsonResponse(200, {
@@ -409,6 +411,11 @@ describe("single wallet confirmation launch (founder P0)", () => {
     expect(cap.simulateBodies.length).toBe(1); // (c) silent re-simulation happened
     const simBody = JSON.parse(cap.simulateBodies[0]!) as Record<string, unknown>;
     expect(simBody.envelope).toBeUndefined(); // no envelope on re-simulation either
+    // The re-simulation contract sends only the prepared-row identity — the
+    // server re-simulates its STORED calldata; no payload, no new manifest.
+    expect(simBody.predictedToken).toBe(h.TOKEN);
+    expect(simBody.creatorAddress).toBe(h.WALLET);
+    expect(simBody.payload).toBeUndefined();
     expect(h.fns.signMessageAsync).not.toHaveBeenCalled(); // (c) zero signatures
     expect(cap.signLikeBodies).toEqual([]);
     expect(h.fns.sendTransactionAsync).toHaveBeenCalledTimes(1); // (d) still exactly one

@@ -8,14 +8,20 @@
 // authoritative registry, so reads return empty rather than misclassify.
 
 import "server-only";
-import { getAddress, type Address } from "viem";
+import { getAddress, keccak256, type Address, type Hex } from "viem";
 import type { LabServerFlags, LaunchRecord } from "@bps/launch-lab";
 
 const CACHE_TTL_MS = 60_000;
 let launchCache: { at: number; records: LaunchRecord[] } | null = null;
 
+export type PgPoolClient = {
+  query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+  release: () => void;
+};
 export type PgPool = {
   query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+  /** Present on real pg pools; required by the atomic registration path. */
+  connect?: () => Promise<PgPoolClient>;
 };
 let pgPool: PgPool | null | undefined;
 
@@ -66,6 +72,19 @@ export async function getPg(): Promise<PgPool | null> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
     await pool.query(`ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS consumed_at TIMESTAMPTZ`);
+    // P0.2 exact-provenance columns (all additive). provenance_version=2 rows
+    // carry the FULL prepared-transaction facts (target, raw calldata + its
+    // server-computed hash, value, canonical manifest, validity window).
+    // Legacy rows (provenance_version NULL or != 2) can NEVER verify a launch.
+    await pool.query(`ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS provenance_version INT`);
+    await pool.query(`ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS chain_id INT`);
+    await pool.query(`ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS transaction_target TEXT`);
+    await pool.query(`ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS transaction_data TEXT`);
+    await pool.query(`ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS calldata_hash TEXT`);
+    await pool.query(`ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS transaction_value TEXT`);
+    await pool.query(`ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS launch_manifest JSONB`);
+    await pool.query(`ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS valid_until TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE lab_prepared ADD COLUMN IF NOT EXISTS consumed_by_tx TEXT`);
     await pool.query(`CREATE TABLE IF NOT EXISTS lab_used_signatures (
       sig_hash TEXT PRIMARY KEY,
       used_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -119,31 +138,98 @@ export async function listLaunches(): Promise<LaunchRecord[]> {
   return records;
 }
 
-/** Record an issued BPS manifest prediction (called by /api/lab/prepare). */
+/**
+ * Record an issued BPS launch preparation (called by /api/lab/prepare) as an
+ * IMMUTABLE provenance_version=2 row: prepared transaction target, raw
+ * calldata, SERVER-computed keccak256 calldata hash, value, the FULL canonical
+ * manifest (JSONB) and a 60-minute validity window. Provenance fields are
+ * never updated on conflict: an identical re-prepare is an idempotent no-op
+ * (only the validity window refreshes); any difference throws
+ * "PREPARED_CONFLICT" (mapped to 409 by the prepare route).
+ */
 export async function recordPreparedLaunch(args: {
   predictedToken: string;
   creator: string;
   manifestHash: string;
   anchorSymbol: string;
   numeraire: string;
+  chainId: number;
+  transactionTarget: string;
+  /** Raw prepared calldata (hex). Its keccak256 becomes calldata_hash. */
+  transactionData: string;
+  /** Decimal string of the prepared transaction value. */
+  transactionValue: string;
+  /** FULL canonical manifest — the only source of launch facts at registration. */
+  launchManifest: Record<string, unknown>;
 }): Promise<void> {
   const pg = await getPg();
   if (!pg) return;
+  const token = args.predictedToken.toLowerCase();
+  const calldataHash = keccak256(args.transactionData as Hex);
   try {
-    await pg.query(
-      `INSERT INTO lab_prepared (predicted_token, creator, manifest_hash, anchor_symbol, numeraire)
-       VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT (predicted_token) DO UPDATE SET creator = EXCLUDED.creator, manifest_hash = EXCLUDED.manifest_hash, created_at = now()`,
+    const inserted = await pg.query(
+      `INSERT INTO lab_prepared
+         (predicted_token, creator, manifest_hash, anchor_symbol, numeraire,
+          provenance_version, chain_id, transaction_target, transaction_data,
+          calldata_hash, transaction_value, launch_manifest, valid_until)
+       VALUES ($1,$2,$3,$4,$5,2,$6,$7,$8,$9,$10,$11::jsonb, now() + interval '60 minutes')
+       ON CONFLICT (predicted_token) DO NOTHING
+       RETURNING predicted_token`,
       [
-        args.predictedToken.toLowerCase(),
+        token,
         args.creator.toLowerCase(),
         args.manifestHash,
         args.anchorSymbol,
         args.numeraire.toLowerCase(),
+        args.chainId,
+        args.transactionTarget.toLowerCase(),
+        args.transactionData,
+        calldataHash,
+        args.transactionValue,
+        JSON.stringify(args.launchManifest),
       ],
     );
-  } catch {
-    // non-fatal: a missing issued row just means the launch can't be verified
+    if (inserted.rows.length > 0) return; // fresh immutable row written
+    // Conflict: idempotent ONLY when every provenance fact matches exactly.
+    const existing = await pg.query(
+      `SELECT creator, manifest_hash, transaction_target, calldata_hash,
+              transaction_value, chain_id, consumed_at
+       FROM lab_prepared WHERE predicted_token = $1`,
+      [token],
+    );
+    const row = existing.rows[0] as
+      | {
+          creator?: string;
+          manifest_hash?: string;
+          transaction_target?: string;
+          calldata_hash?: string;
+          transaction_value?: string;
+          chain_id?: number | string;
+          consumed_at?: unknown;
+        }
+      | undefined;
+    const identical =
+      row !== undefined &&
+      String(row.creator ?? "").toLowerCase() === args.creator.toLowerCase() &&
+      String(row.manifest_hash ?? "") === args.manifestHash &&
+      String(row.transaction_target ?? "").toLowerCase() ===
+        args.transactionTarget.toLowerCase() &&
+      String(row.calldata_hash ?? "").toLowerCase() === calldataHash.toLowerCase() &&
+      String(row.transaction_value ?? "") === args.transactionValue &&
+      Number(row.chain_id ?? Number.NaN) === args.chainId;
+    if (!identical) throw new Error("PREPARED_CONFLICT");
+    // Identical re-prepare: no-op success; only the validity window refreshes.
+    if (row.consumed_at === null || row.consumed_at === undefined) {
+      await pg.query(
+        `UPDATE lab_prepared SET valid_until = now() + interval '60 minutes'
+         WHERE predicted_token = $1 AND consumed_at IS NULL`,
+        [token],
+      );
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message === "PREPARED_CONFLICT") throw e;
+    // Other DB failures stay non-fatal: a missing issued row just means the
+    // launch can never be provenance-verified.
   }
 }
 
@@ -159,20 +245,189 @@ export interface VerifiedLaunchInsert {
   manifestHash: string;
   tokenName?: string;
   tokenSymbol?: string;
-  /** Immutable per-launch facts (hash-validated against the issued manifest). */
+  /** Immutable per-launch facts built from the SERVER-STORED prepared manifest. */
   launchManifest?: Record<string, unknown> | null;
 }
 
-/**
- * Insert a provenance-verified BPS launch (called by /api/lab/launches after
- * the server matched the created token to an issued manifest). Returns true
- * if a row was inserted or already present.
- */
-export async function insertVerifiedLaunch(rec: VerifiedLaunchInsert): Promise<boolean> {
+export interface PreparedLaunchRow {
+  predictedToken: string;
+  creator: string;
+  manifestHash: string;
+  anchorSymbol: string | null;
+  numeraire: string | null;
+  provenanceVersion: number | null;
+  chainId: number | null;
+  transactionTarget: string | null;
+  transactionData: string | null;
+  calldataHash: string | null;
+  transactionValue: string | null;
+  launchManifest: Record<string, unknown> | null;
+  /** Unix seconds; null when unavailable. */
+  createdAtEpoch: number | null;
+  /** Unix seconds; null on legacy rows. */
+  validUntilEpoch: number | null;
+  consumed: boolean;
+}
+
+/** Load the full issued-preparation row for a predicted token (any version). */
+export async function getPreparedLaunch(predictedToken: string): Promise<PreparedLaunchRow | null> {
   const pg = await getPg();
-  if (!pg) return false;
+  if (!pg) return null;
+  try {
+    const res = await pg.query(
+      `SELECT predicted_token, creator, manifest_hash, anchor_symbol, numeraire,
+              provenance_version, chain_id, transaction_target, transaction_data,
+              calldata_hash, transaction_value, launch_manifest,
+              EXTRACT(EPOCH FROM created_at)::bigint AS created_epoch,
+              EXTRACT(EPOCH FROM valid_until)::bigint AS valid_until_epoch,
+              consumed_at
+       FROM lab_prepared WHERE predicted_token = $1`,
+      [predictedToken.toLowerCase()],
+    );
+    const r = res.rows[0];
+    if (!r) return null;
+    const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+    return {
+      predictedToken: String(r.predicted_token),
+      creator: String(r.creator),
+      manifestHash: String(r.manifest_hash),
+      anchorSymbol: r.anchor_symbol ? String(r.anchor_symbol) : null,
+      numeraire: r.numeraire ? String(r.numeraire) : null,
+      provenanceVersion: num(r.provenance_version),
+      chainId: num(r.chain_id),
+      transactionTarget: r.transaction_target ? String(r.transaction_target) : null,
+      transactionData: r.transaction_data ? String(r.transaction_data) : null,
+      calldataHash: r.calldata_hash ? String(r.calldata_hash) : null,
+      transactionValue:
+        r.transaction_value === null || r.transaction_value === undefined
+          ? null
+          : String(r.transaction_value),
+      launchManifest:
+        r.launch_manifest && typeof r.launch_manifest === "object"
+          ? (r.launch_manifest as Record<string, unknown>)
+          : null,
+      createdAtEpoch: num(r.created_epoch),
+      validUntilEpoch: num(r.valid_until_epoch),
+      consumed: r.consumed_at !== null && r.consumed_at !== undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Extend an unconsumed preparation's validity window (stale re-simulation). */
+export async function refreshPreparedValidity(predictedToken: string): Promise<void> {
+  const pg = await getPg();
+  if (!pg) return;
   try {
     await pg.query(
+      `UPDATE lab_prepared SET valid_until = now() + interval '60 minutes'
+       WHERE predicted_token = $1 AND consumed_at IS NULL`,
+      [predictedToken.toLowerCase()],
+    );
+  } catch {
+    // non-fatal: staleness simply is not extended
+  }
+}
+
+export type AtomicRegistrationResult =
+  | { status: "registered" }
+  | { status: "already-registered" }
+  | {
+      status: "failed";
+      code:
+        | "DB_UNAVAILABLE"
+        | "PREPARED_NOT_FOUND"
+        | "PREPARED_CONSUMED"
+        | "UNVERIFIED_PROVENANCE"
+        | "PREPARED_EXPIRED"
+        | "REGISTRATION_FAILED";
+    };
+
+/**
+ * ONE atomic DB operation for registration: lock the prepared row FOR UPDATE,
+ * re-verify it inside the transaction (unconsumed, provenance_version=2, block
+ * timestamp inside the validity window), insert the provenance-verified
+ * lab_launches row, and consume the preparation (consumed_at + consumed_by_tx)
+ * — all in a single BEGIN/COMMIT. ANY failure rolls back BOTH effects: a
+ * failed insert can never consume the preparation. A concurrent second caller
+ * serializes on the row lock, finds consumed_at set, and receives the
+ * idempotent already-registered result when the token is verified.
+ */
+export async function registerVerifiedLaunchAtomic(
+  rec: VerifiedLaunchInsert,
+  launchTx: string,
+): Promise<AtomicRegistrationResult> {
+  const pg = await getPg();
+  if (!pg || typeof pg.connect !== "function") {
+    return { status: "failed", code: "DB_UNAVAILABLE" };
+  }
+  const token = rec.tokenAddress.toLowerCase();
+  let client: PgPoolClient;
+  try {
+    client = await pg.connect();
+  } catch {
+    return { status: "failed", code: "DB_UNAVAILABLE" };
+  }
+  const rollback = async (): Promise<void> => {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // connection-level failure — nothing was committed
+    }
+  };
+  try {
+    await client.query("BEGIN");
+    const res = await client.query(
+      `SELECT provenance_version,
+              EXTRACT(EPOCH FROM created_at)::bigint AS created_epoch,
+              EXTRACT(EPOCH FROM valid_until)::bigint AS valid_until_epoch,
+              consumed_at
+       FROM lab_prepared WHERE predicted_token = $1 FOR UPDATE`,
+      [token],
+    );
+    const row = res.rows[0] as
+      | {
+          provenance_version?: number | string | null;
+          created_epoch?: number | string | null;
+          valid_until_epoch?: number | string | null;
+          consumed_at?: unknown;
+        }
+      | undefined;
+    if (!row) {
+      await rollback();
+      return { status: "failed", code: "PREPARED_NOT_FOUND" };
+    }
+    if (row.consumed_at !== null && row.consumed_at !== undefined) {
+      // Concurrent/second registration: the preparation is already consumed.
+      // Idempotent success ONLY when the token really is provenance-verified.
+      const verified = await client.query(
+        `SELECT 1 FROM lab_launches WHERE token_address = $1 AND provenance_verified = true`,
+        [token],
+      );
+      await rollback(); // nothing to change either way
+      return verified.rows.length > 0
+        ? { status: "already-registered" }
+        : { status: "failed", code: "PREPARED_CONSUMED" };
+    }
+    if (Number(row.provenance_version) !== 2) {
+      await rollback();
+      return { status: "failed", code: "UNVERIFIED_PROVENANCE" };
+    }
+    const ts = rec.timestamp;
+    const validUntil =
+      row.valid_until_epoch === null || row.valid_until_epoch === undefined
+        ? null
+        : Number(row.valid_until_epoch);
+    const createdAt =
+      row.created_epoch === null || row.created_epoch === undefined
+        ? null
+        : Number(row.created_epoch);
+    if (ts === null || validUntil === null || ts > validUntil || (createdAt !== null && ts < createdAt)) {
+      await rollback();
+      return { status: "failed", code: "PREPARED_EXPIRED" };
+    }
+    await client.query(
       `INSERT INTO lab_launches
          (token_address, token_name, token_symbol, creator, numeraire, anchor_symbol, pool_or_hook,
           launch_tx, block_number, launched_at, launch_source, provenance_verified, provenance_verified_at, manifest_hash, launch_manifest)
@@ -183,7 +438,7 @@ export async function insertVerifiedLaunch(rec: VerifiedLaunchInsert): Promise<b
          anchor_symbol = COALESCE(lab_launches.anchor_symbol, EXCLUDED.anchor_symbol),
          launch_manifest = COALESCE(lab_launches.launch_manifest, EXCLUDED.launch_manifest)`,
       [
-        rec.tokenAddress.toLowerCase(),
+        token,
         rec.tokenName ?? "",
         rec.tokenSymbol ?? "",
         rec.creator.toLowerCase(),
@@ -197,10 +452,18 @@ export async function insertVerifiedLaunch(rec: VerifiedLaunchInsert): Promise<b
         rec.launchManifest ? JSON.stringify(rec.launchManifest) : null,
       ],
     );
+    await client.query(
+      `UPDATE lab_prepared SET consumed_at = now(), consumed_by_tx = $2 WHERE predicted_token = $1`,
+      [token, launchTx],
+    );
+    await client.query("COMMIT");
     invalidateLaunchCache();
-    return true;
+    return { status: "registered" };
   } catch {
-    return false;
+    await rollback();
+    return { status: "failed", code: "REGISTRATION_FAILED" };
+  } finally {
+    client.release();
   }
 }
 
@@ -216,46 +479,6 @@ export async function isTokenVerified(tokenAddress: string): Promise<boolean> {
     return res.rows.length > 0;
   } catch {
     return false;
-  }
-}
-
-/** Look up an UNCONSUMED issued manifest prediction by created token + creator. */
-export async function matchIssuedManifest(
-  tokenAddress: string,
-  creator: string,
-): Promise<{ manifestHash: string; anchorSymbol: string | null; numeraire: string | null } | null> {
-  const pg = await getPg();
-  if (!pg) return null;
-  try {
-    const res = await pg.query(
-      `SELECT manifest_hash, anchor_symbol, numeraire FROM lab_prepared
-       WHERE predicted_token = $1 AND creator = $2 AND consumed_at IS NULL`,
-      [tokenAddress.toLowerCase(), creator.toLowerCase()],
-    );
-    const row = res.rows[0] as
-      { manifest_hash?: string; anchor_symbol?: string; numeraire?: string } | undefined;
-    if (!row) return null;
-    return {
-      manifestHash: String(row.manifest_hash),
-      anchorSymbol: row.anchor_symbol ? String(row.anchor_symbol) : null,
-      numeraire: row.numeraire ? String(row.numeraire) : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/** Mark an issued manifest single-use once its launch is verified. */
-export async function consumeIssuedManifest(tokenAddress: string): Promise<void> {
-  const pg = await getPg();
-  if (!pg) return;
-  try {
-    await pg.query(
-      `UPDATE lab_prepared SET consumed_at = now() WHERE predicted_token = $1 AND consumed_at IS NULL`,
-      [tokenAddress.toLowerCase()],
-    );
-  } catch {
-    // non-fatal
   }
 }
 

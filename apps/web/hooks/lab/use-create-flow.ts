@@ -276,7 +276,6 @@ export function useCreateFlow(): CreateFlow {
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [metadata, setMetadata] = useState<MetadataUploadResult | null>(null);
   const [bundle, setBundle] = useState<PreparedLaunchBundle | null>(null);
-  const [payloadUsed, setPayloadUsed] = useState<PrepareLaunchPayload | null>(null);
   const [prepareRequested, setPrepareRequested] = useState(false);
   const [phase, setPhase] = useState<FlowPhase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -320,7 +319,6 @@ export function useCreateFlow(): CreateFlow {
       // is ALWAYS invalidated when the account or chain changes.
       setMetadata(null);
       setBundle(null);
-      setPayloadUsed(null);
       setPrepareRequested(false);
       setPhase("idle");
       setError(null);
@@ -513,7 +511,6 @@ export function useCreateFlow(): CreateFlow {
       });
       setMetadata(result);
       setBundle(null);
-      setPayloadUsed(null);
       setPrepareRequested(false);
       setPhase("idle");
       return true;
@@ -589,7 +586,6 @@ export function useCreateFlow(): CreateFlow {
         body: JSON.stringify({ payload }),
       });
       setBundle(fresh);
-      setPayloadUsed(payload);
       setNow(Date.now());
       setPhase("idle");
       return true;
@@ -610,32 +606,56 @@ export function useCreateFlow(): CreateFlow {
   ]);
 
   /**
-   * Silent re-simulation via /api/lab/simulate (180 s staleness rule). No
-   * wallet interaction of any kind — the server needs no signature, so a stale
-   * prepared transaction is refreshed transparently before sending.
+   * Silent stale refresh via /api/lab/simulate ({ predictedToken,
+   * creatorAddress }). No wallet interaction of any kind. The server loads the
+   * IMMUTABLE stored preparation and re-simulates the exact stored calldata,
+   * returning fresh gas + staleAfter with the SAME stored manifestHash — the
+   * manifest reviewed by the user is never replaced here. Returns null when
+   * the server no longer holds a re-simulatable preparation (missing,
+   * consumed, or expired): callers must fall back to a full re-prepare, which
+   * mints a fresh manifest and re-renders review.
    */
   const resimulate = useCallback(async (): Promise<PreparedLaunchBundle | null> => {
-    if (!bundle || !payloadUsed) return null;
+    if (!bundle || !address) return null;
     setPhase("simulating");
-    const fresh = await labFetch<{
-      simulation: LaunchSimulation;
-      prepared: PreparedLaunchTransaction;
-      manifestHash: Hex;
-    }>("/api/lab/simulate", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ payload: payloadUsed }),
-    });
-    const merged: PreparedLaunchBundle = {
-      manifest: bundle.manifest,
-      manifestHash: fresh.manifestHash,
-      simulation: fresh.simulation,
-      prepared: fresh.prepared,
-    };
-    setBundle(merged);
-    setNow(Date.now());
-    return merged;
-  }, [bundle, payloadUsed]);
+    try {
+      const fresh = await labFetch<{
+        simulation: LaunchSimulation;
+        prepared: PreparedLaunchTransaction;
+        manifestHash: Hex;
+      }>("/api/lab/simulate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          predictedToken: bundle.simulation.predictedTokenAddress,
+          creatorAddress: address,
+        }),
+      });
+      // Contract guarantee: the stored manifest is immutable. If the server
+      // ever answers with a different hash, treat it as not re-simulatable.
+      if (fresh.manifestHash !== bundle.manifestHash) return null;
+      const merged: PreparedLaunchBundle = {
+        manifest: bundle.manifest,
+        manifestHash: bundle.manifestHash,
+        simulation: {
+          ...bundle.simulation,
+          gasEstimate: fresh.simulation.gasEstimate,
+          simulationBlock: fresh.simulation.simulationBlock,
+          simulationTimestamp: fresh.simulation.simulationTimestamp,
+        },
+        prepared: {
+          ...bundle.prepared,
+          gas: fresh.prepared.gas,
+          staleAfter: fresh.prepared.staleAfter,
+        },
+      };
+      setBundle(merged);
+      setNow(Date.now());
+      return merged;
+    } catch {
+      return null;
+    }
+  }, [bundle, address]);
 
   const launch = useCallback(async (): Promise<void> => {
     if (phase === "launch-mismatch" || phase === "launch-success") return; // hard stop / done
@@ -683,10 +703,18 @@ export function useCreateFlow(): CreateFlow {
       await ensureChain();
       let active = bundle;
       if (Date.now() > active.prepared.staleAfter) {
-        // Stale prepared tx → silent server-side re-simulation; no wallet
-        // interaction, then proceed straight to the one confirmation.
+        // Stale prepared tx → silent server-side re-simulation of the EXACT
+        // stored calldata (same manifest, fresh gas); no wallet interaction,
+        // then proceed straight to the one confirmation.
         const fresh = await resimulate();
-        if (!fresh) throw new Error("Re-simulation before send failed.");
+        if (!fresh) {
+          // The server no longer holds this preparation (missing/consumed/
+          // expired) → full re-prepare. That mints a FRESH manifest and
+          // re-renders review — never auto-send a manifest the user has not
+          // reviewed.
+          await prepare();
+          return;
+        }
         active = fresh;
       }
       setPhase("awaiting-signature");
@@ -746,6 +774,7 @@ export function useCreateFlow(): CreateFlow {
     metadata,
     form.termsAccepted,
     ensureChain,
+    prepare,
     resimulate,
     sendTransactionAsync,
     router,
@@ -755,7 +784,6 @@ export function useCreateFlow(): CreateFlow {
   const reset = useCallback(() => {
     setMetadata(null);
     setBundle(null);
-    setPayloadUsed(null);
     setPrepareRequested(false);
     setPhase("idle");
     setError(null);

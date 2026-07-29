@@ -64,18 +64,34 @@ export async function POST(req: Request): Promise<Response> {
     const commit =
       process.env.BPS_SOURCE_COMMIT || process.env.VERCEL_GIT_COMMIT_SHA || "local-dev";
     const bundle = await prepareLaunch(payload, "8h-v1", commit);
-    // Record the issued manifest prediction: this is the BPS provenance signal.
-    // At registration, the created token must match a prediction by this creator
-    // — external Doppler markets never went through /api/lab/prepare.
+    // Record the issued preparation as an IMMUTABLE provenance_version=2 row:
+    // the exact transaction target, raw calldata (hash computed server-side),
+    // value, the FULL canonical manifest, and a 60-minute validity window.
+    // Registration verifies the broadcast transaction against THIS record and
+    // /api/lab/simulate re-simulates the exact stored calldata. An identical
+    // re-prepare is a no-op; a conflicting prepare for the same predicted
+    // token is refused (PREPARED_CONFLICT → 409).
     await recordPreparedLaunch({
       predictedToken: bundle.simulation.predictedTokenAddress,
       creator: wallet,
       manifestHash: bundle.manifestHash,
       anchorSymbol: bundle.manifest.anchorSymbol,
       numeraire: bundle.manifest.anchorAddress,
+      chainId: bundle.prepared.chainId,
+      transactionTarget: bundle.prepared.to,
+      transactionData: bundle.prepared.data,
+      transactionValue: bundle.prepared.value,
+      launchManifest: bundle.manifest as unknown as Record<string, unknown>,
     });
     return ok(bundle);
   } catch (e) {
+    if (e instanceof Error && e.message === "PREPARED_CONFLICT") {
+      return err(
+        "PREPARED_CONFLICT",
+        "A different launch was already prepared for this predicted market address. Start the preparation again.",
+        409,
+      );
+    }
     return mapError(e);
   }
 }
