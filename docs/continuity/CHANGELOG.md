@@ -7,6 +7,29 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-29 — LAUNCH LAB LANE: P0.2B TWO FINAL PROVENANCE BLOCKERS shipped (web 7c30dc39; still BROWSE-ONLY)
+
+- (1) FAIL-CLOSED VALIDITY REFRESH: refreshPreparedValidity(predictedToken, creator) is typed and
+  authoritative — UPDATE bound to creator + provenance_version=2 + consumed_at IS NULL, RETURNING
+  the new valid_until epoch; DB-unavailable/query failures throw REGISTRY_UNAVAILABLE, zero rows
+  throw PREPARED_NOT_FOUND, never suppressed. /api/lab/simulate returns NO simulation/calldata/
+  transaction unless the durable refresh succeeded (503/404 with empty data, byte-absence
+  asserted), and staleAfter = min(simulationTimestamp + SIMULATION_MAX_AGE_MS, validUntilEpoch
+  ×1000) — the client's freshness window can never exceed the database's valid_until.
+- (2) NEVER-PROMOTE CONFLICT HANDLING: on a lab_launches conflict the complete existing row is
+  locked FOR UPDATE; idempotent success requires provenance_verified ALREADY true AND exact
+  equality of launch_tx, creator, numeraire, pool_or_hook, block_number, manifest_hash,
+  launch_manifest (canonical JSON, undefined-key-safe), anchor_symbol — with NO update to
+  immutable facts (the COALESCE promotion path is gone). An unverified row for the same tx or any
+  field mismatch → ROLLBACK LAUNCH_ROW_CONFLICT, preparation left unconsumed.
+- Gate: web 499 tests (54 files; store-provenance 24, prepare-route 21, launch-provenance 17) +
+  indexer 13 + pkg 56; tsc/lint/build/secret-scan clean. Browser proof re-run: wallet log =
+  [wallet_requestPermissions, eth_requestAccounts, eth_chainId×3, eth_sendTransaction] — 1
+  transaction, 0 sign requests (QA v2 row retired; env restored). Deployed 7c30dc39744b; live
+  read-only: access public / broadcast false / kill true, buy+sell 503 TRADING_PAUSED, 2 markets
+  browsable. RAILWAY INDEXER DDL-PARITY DEPLOYMENT CONFIRMED COMPLETE + HEALTHY (fresh instance,
+  tracked=2, pools=2, both markets state=current, no errors). Founder acceptance NOT opened.
+
 ## 2026-07-29 — LAUNCH LAB LANE: P0.2A FINAL RELEASE BLOCKERS shipped (web 0f603952; still BROWSE-ONLY)
 
 - (1) FAIL-CLOSED preparation: recordPreparedLaunch is typed-or-throws — DB-unavailable/insert/
