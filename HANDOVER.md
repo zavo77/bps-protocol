@@ -32,7 +32,7 @@
 > in quote + prepare-leg). Markets/charts/history stay visible. The one-confirmation launch
 > (envelopes removed), atomic-only public routes, venue pinning, and prompt-count UI are DEPLOYED
 > at ae601af6a7a8 behind the brakes with a Playwright fresh-wallet proof (1 sendTransaction, 0
-> sign requests). P0.2 ATOMIC EXACT PROVENANCE is additionally deployed at 15a9e9351c96: immutable
+> sign requests). P0.2A FINAL BLOCKERS deployed at 0f60395265f3 (fail-closed prepare 503, stable review identity via stored-manifest reuse, in-lock all-field re-check, safe conflict adoption; 489 tests + browser proof 1-tx/0-sign). P0.2 base at 15a9e9351c96: immutable
 > v2 prepared ledger (target/calldata-hash/value/chain/manifest JSONB/validity), byte-exact
 > transaction verification at registration, atomic register+consume (never consumes on failure),
 > stale re-simulation preserves the manifest hash, client manifests discarded. Legacy prepared

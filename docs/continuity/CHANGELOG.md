@@ -7,6 +7,31 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-29 — LAUNCH LAB LANE: P0.2A FINAL RELEASE BLOCKERS shipped (web 0f603952; still BROWSE-ONLY)
+
+- (1) FAIL-CLOSED preparation: recordPreparedLaunch is typed-or-throws — DB-unavailable/insert/
+  read-back failures throw REGISTRY_UNAVAILABLE (503, retryable); /api/lab/prepare never returns a
+  manifest/calldata/transaction unless the v2 record is durably inserted or verified identical.
+- (2) STABLE preparation identity: predicted_token is the canonical review identity (deterministic
+  calldata builder). Reload / double request / retry / parallel duplicates converge on the STORED
+  manifest + hash (original createdAt; only valid_until refreshes) — one review, one immutable
+  manifest hash. Consumed identities can never be re-prepared. Changed payloads yield a distinct
+  legitimate preparation (different predicted token) or PREPARED_CONFLICT when facts diverge.
+- (3) IN-LOCK exact re-check: registerVerifiedLaunchAtomic SELECTs FOR UPDATE ALL v2 fields
+  (creator, manifest_hash, chain_id, target, calldata_hash, value, launch_manifest, created_at,
+  valid_until, consumed_at, consumed_by_tx) and compares them with the decoded transaction +
+  Create event INSIDE the transaction — mismatch → ROLLBACK (PROVENANCE_MISMATCH). Launch facts
+  are built from the manifest read under that lock.
+- (4) SAFE lab_launches conflict: INSERT … DO NOTHING; conflicting row locked and adopted ONLY on
+  exact equality of launch_tx/creator/numeraire/pool_or_hook — provenance_verified can never flip
+  true on a conflicting row (LAUNCH_ROW_CONFLICT rollback).
+- Gate: web 489 tests (54 files; store-provenance 17, prepare-route 18, launch-provenance 17) +
+  indexer 13; tsc/lint/build/secret-scan clean. Browser proof re-run on this build: wallet log =
+  [wallet_requestPermissions, eth_requestAccounts, eth_chainId×3, eth_sendTransaction] — 1
+  transaction, 0 sign requests (QA v2 row retired; env restored). Deployed 0f60395265f3; live
+  read-only verification: access public / broadcast false / kill true; buy+sell quotes 503
+  TRADING_PAUSED; both markets browsable. Founder acceptance window NOT opened.
+
 ## 2026-07-29 — LAUNCH LAB LANE: P0.2 ATOMIC EXACT LAUNCH PROVENANCE shipped (web 15a9e935; still BROWSE-ONLY)
 
 - Founder pre-open blocker implemented in full. lab_prepared is now an immutable provenance_version=2
