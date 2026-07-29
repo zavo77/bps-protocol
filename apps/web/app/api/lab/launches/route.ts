@@ -52,31 +52,6 @@ export async function GET(req: Request): Promise<Response> {
   }
 }
 
-/**
- * Immutable launch facts built EXCLUSIVELY from the manifest THIS server
- * stored at prepare time (lab_prepared.launch_manifest). Same shape the
- * hash-gated extractor produced, but the client can no longer influence it.
- */
-function factsFromStoredManifest(
-  m: Record<string, unknown>,
-  manifestHash: string,
-): Record<string, unknown> {
-  return {
-    source: "registration",
-    manifestHash,
-    startingFdvUsd: m.startingFdvUsdFixed,
-    feePreset: m.feePreset,
-    exactPoolFeeUnits: m.exactPoolFeeUnits,
-    creatorFeeAddress:
-      typeof m.creatorFeeAddress === "string" ? m.creatorFeeAddress.toLowerCase() : null,
-    beneficiaries: m.beneficiaries,
-    tokenUri: m.tokenUri,
-    anchorSymbol: m.anchorSymbol,
-    initialSupplyWei: m.initialSupply,
-    saleInventoryWei: m.saleInventory,
-  };
-}
-
 export async function POST(req: Request): Promise<Response> {
   try {
     if (rateLimited(`launchreg:${clientKey(req)}`, 10))
@@ -197,6 +172,9 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     const anchor = getAnchorByAddress(args.numeraire);
+    // The atomic operation re-checks EVERY fact under SELECT FOR UPDATE and
+    // builds the launch facts from the manifest read under that lock — the
+    // route-level checks above are defense in depth, not the authority.
     const result = await registerVerifiedLaunchAtomic(
       {
         tokenAddress: asset,
@@ -208,7 +186,15 @@ export async function POST(req: Request): Promise<Response> {
         blockNumber: receipt.blockNumber.toString(),
         timestamp: blockTimestamp,
         manifestHash: prepared.manifestHash,
-        launchManifest: factsFromStoredManifest(storedManifest, prepared.manifestHash),
+      },
+      {
+        creator,
+        transactionTarget: tx.to ?? "",
+        calldataHash: keccak256(tx.input),
+        transactionValue: tx.value.toString(),
+        chainId: CHAIN_ID,
+        eventNumeraire: args.numeraire,
+        blockTimestamp,
       },
       hash,
     );
@@ -242,6 +228,18 @@ export async function POST(req: Request): Promise<Response> {
         return err(
           "PREPARED_EXPIRED",
           "The preparation validity window does not cover this transaction.",
+          409,
+        );
+      case "PROVENANCE_MISMATCH":
+        return err(
+          "PROVENANCE_MISMATCH",
+          "The transaction does not match the recorded preparation; nothing was registered.",
+          409,
+        );
+      case "LAUNCH_ROW_CONFLICT":
+        return err(
+          "LAUNCH_ROW_CONFLICT",
+          "A different record already exists for this market; nothing was registered.",
           409,
         );
       default:

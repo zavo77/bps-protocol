@@ -158,7 +158,7 @@ describe("POST /api/lab/launches — exact provenance verification", () => {
     expect(out.status).toBe(200);
     expect(out.data).toMatchObject({ registered: true, provenanceVerified: true });
     expect(m.registerVerifiedLaunchAtomic).toHaveBeenCalledTimes(1);
-    const [rec, launchTx] = m.registerVerifiedLaunchAtomic.mock.calls[0]!;
+    const [rec, expected, launchTx] = m.registerVerifiedLaunchAtomic.mock.calls[0]!;
     expect(launchTx).toBe(TX);
     expect(rec).toMatchObject({
       tokenAddress: TOKEN,
@@ -166,6 +166,15 @@ describe("POST /api/lab/launches — exact provenance verification", () => {
       launchTx: TX,
       timestamp: 2_000,
     });
+    // The decoded on-chain facts are handed to the atomic operation for the
+    // authoritative in-transaction comparison under SELECT FOR UPDATE.
+    expect(expected).toMatchObject({
+      creator: WALLET,
+      chainId: 4663,
+      blockTimestamp: 2_000,
+    });
+    expect(String(expected.transactionTarget).toLowerCase()).toBe(a.airlock.toLowerCase());
+    expect(String(expected.calldataHash).toLowerCase()).toBe(keccak256(CALLDATA).toLowerCase());
   });
 
   it("(1) rejects a wrong transaction target", async () => {
@@ -313,17 +322,14 @@ describe("POST /api/lab/launches — exact provenance verification", () => {
       }),
     );
     expect(res.status).toBe(200);
-    const [rec] = m.registerVerifiedLaunchAtomic.mock.calls[0]!;
-    // Facts come EXCLUSIVELY from the server-stored manifest JSONB.
-    expect(rec.launchManifest).toMatchObject({
-      source: "registration",
-      manifestHash: MANIFEST_HASH,
-      startingFdvUsd: "20500",
-      creatorFeeAddress: WALLET.toLowerCase(),
-      tokenUri: "ipfs://bafyStoredManifest",
-      anchorSymbol: "GOOGL",
-      initialSupplyWei: STORED_MANIFEST.initialSupply,
-      saleInventoryWei: STORED_MANIFEST.saleInventory,
-    });
+    // The route passes NO manifest-derived facts at all — the atomic operation
+    // builds them from the manifest read UNDER ITS OWN ROW LOCK, so nothing
+    // the client submitted can reach the stored facts.
+    const call = m.registerVerifiedLaunchAtomic.mock.calls[0]!;
+    const serialized = JSON.stringify(call);
+    expect(Object.keys(call[0] as Record<string, unknown>)).not.toContain("launchManifest");
+    expect(serialized).not.toContain("999999999");
+    expect(serialized).not.toContain("ipfs://attacker");
+    expect(serialized).not.toContain("0x9999999999999999999999999999999999999999");
   });
 });

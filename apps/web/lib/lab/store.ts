@@ -147,6 +147,17 @@ export async function listLaunches(): Promise<LaunchRecord[]> {
  * (only the validity window refreshes); any difference throws
  * "PREPARED_CONFLICT" (mapped to 409 by the prepare route).
  */
+export type RecordPreparedResult =
+  | { status: "inserted" }
+  | {
+      /** An identical preparation already exists (parallel duplicate, retry,
+       *  reload). The caller MUST return this STORED manifest + hash so the
+       *  same review keeps one immutable manifest identity. */
+      status: "existing";
+      storedManifest: Record<string, unknown>;
+      storedManifestHash: string;
+    };
+
 export async function recordPreparedLaunch(args: {
   predictedToken: string;
   creator: string;
@@ -161,9 +172,11 @@ export async function recordPreparedLaunch(args: {
   transactionValue: string;
   /** FULL canonical manifest — the only source of launch facts at registration. */
   launchManifest: Record<string, unknown>;
-}): Promise<void> {
+}): Promise<RecordPreparedResult> {
   const pg = await getPg();
-  if (!pg) return;
+  // FAIL CLOSED: without a durable provenance record the preparation must not
+  // be handed to a wallet — the launch could never be verified.
+  if (!pg) throw new Error("REGISTRY_UNAVAILABLE");
   const token = args.predictedToken.toLowerCase();
   const calldataHash = keccak256(args.transactionData as Hex);
   try {
@@ -189,11 +202,15 @@ export async function recordPreparedLaunch(args: {
         JSON.stringify(args.launchManifest),
       ],
     );
-    if (inserted.rows.length > 0) return; // fresh immutable row written
-    // Conflict: idempotent ONLY when every provenance fact matches exactly.
+    if (inserted.rows.length > 0) return { status: "inserted" }; // fresh immutable row written
+    // Conflict (parallel duplicate / retry / reload of the SAME review — the
+    // calldata builder is deterministic, so predicted_token IS the canonical
+    // preparation identity). Idempotent ONLY when every EXECUTION fact matches
+    // exactly; the caller must then return the STORED manifest so the same
+    // review keeps ONE immutable manifest hash (original createdAt preserved).
     const existing = await pg.query(
       `SELECT creator, manifest_hash, transaction_target, calldata_hash,
-              transaction_value, chain_id, consumed_at
+              transaction_value, chain_id, consumed_at, launch_manifest
        FROM lab_prepared WHERE predicted_token = $1`,
       [token],
     );
@@ -206,30 +223,45 @@ export async function recordPreparedLaunch(args: {
           transaction_value?: string;
           chain_id?: number | string;
           consumed_at?: unknown;
+          launch_manifest?: unknown;
         }
       | undefined;
+    if (!row) throw new Error("REGISTRY_UNAVAILABLE"); // conflict yet no row readable
     const identical =
-      row !== undefined &&
       String(row.creator ?? "").toLowerCase() === args.creator.toLowerCase() &&
-      String(row.manifest_hash ?? "") === args.manifestHash &&
       String(row.transaction_target ?? "").toLowerCase() ===
         args.transactionTarget.toLowerCase() &&
       String(row.calldata_hash ?? "").toLowerCase() === calldataHash.toLowerCase() &&
       String(row.transaction_value ?? "") === args.transactionValue &&
       Number(row.chain_id ?? Number.NaN) === args.chainId;
     if (!identical) throw new Error("PREPARED_CONFLICT");
-    // Identical re-prepare: no-op success; only the validity window refreshes.
-    if (row.consumed_at === null || row.consumed_at === undefined) {
-      await pg.query(
-        `UPDATE lab_prepared SET valid_until = now() + interval '60 minutes'
-         WHERE predicted_token = $1 AND consumed_at IS NULL`,
-        [token],
-      );
+    // A consumed identity already registered a launch — it can never be reused.
+    if (row.consumed_at !== null && row.consumed_at !== undefined) {
+      throw new Error("PREPARED_CONFLICT");
     }
+    const storedManifest =
+      row.launch_manifest && typeof row.launch_manifest === "object"
+        ? (row.launch_manifest as Record<string, unknown>)
+        : null;
+    const storedManifestHash = String(row.manifest_hash ?? "");
+    if (!storedManifest || !storedManifestHash) throw new Error("REGISTRY_UNAVAILABLE");
+    // Identical re-prepare: only the validity window refreshes.
+    await pg.query(
+      `UPDATE lab_prepared SET valid_until = now() + interval '60 minutes'
+       WHERE predicted_token = $1 AND consumed_at IS NULL`,
+      [token],
+    );
+    return { status: "existing", storedManifest, storedManifestHash };
   } catch (e) {
-    if (e instanceof Error && e.message === "PREPARED_CONFLICT") throw e;
-    // Other DB failures stay non-fatal: a missing issued row just means the
-    // launch can never be provenance-verified.
+    if (
+      e instanceof Error &&
+      (e.message === "PREPARED_CONFLICT" || e.message === "REGISTRY_UNAVAILABLE")
+    ) {
+      throw e;
+    }
+    // ANY other persistence error fails closed — never hand out a
+    // transaction whose provenance record is not durable.
+    throw new Error("REGISTRY_UNAVAILABLE");
   }
 }
 
@@ -245,8 +277,6 @@ export interface VerifiedLaunchInsert {
   manifestHash: string;
   tokenName?: string;
   tokenSymbol?: string;
-  /** Immutable per-launch facts built from the SERVER-STORED prepared manifest. */
-  launchManifest?: Record<string, unknown> | null;
 }
 
 export interface PreparedLaunchRow {
@@ -341,8 +371,46 @@ export type AtomicRegistrationResult =
         | "PREPARED_CONSUMED"
         | "UNVERIFIED_PROVENANCE"
         | "PREPARED_EXPIRED"
+        | "PROVENANCE_MISMATCH"
+        | "LAUNCH_ROW_CONFLICT"
         | "REGISTRATION_FAILED";
     };
+
+/** Decoded on-chain facts re-checked INSIDE the registration transaction
+ *  against the locked prepared row — the authoritative comparison. */
+export interface ExpectedLaunchFacts {
+  creator: string;
+  transactionTarget: string;
+  calldataHash: string;
+  transactionValue: string;
+  chainId: number;
+  /** The Airlock Create event's numeraire — must equal the STORED manifest's anchorAddress. */
+  eventNumeraire: string;
+  /** Launch block timestamp (unix seconds). */
+  blockTimestamp: number;
+}
+
+/** Immutable launch facts built EXCLUSIVELY from the manifest read under the
+ *  registration row lock — the client can never influence them. */
+function factsFromLockedManifest(
+  m: Record<string, unknown>,
+  manifestHash: string,
+): Record<string, unknown> {
+  return {
+    source: "registration",
+    manifestHash,
+    startingFdvUsd: m.startingFdvUsdFixed,
+    feePreset: m.feePreset,
+    exactPoolFeeUnits: m.exactPoolFeeUnits,
+    creatorFeeAddress:
+      typeof m.creatorFeeAddress === "string" ? m.creatorFeeAddress.toLowerCase() : null,
+    beneficiaries: m.beneficiaries,
+    tokenUri: m.tokenUri,
+    anchorSymbol: m.anchorSymbol,
+    initialSupplyWei: m.initialSupply,
+    saleInventoryWei: m.saleInventory,
+  };
+}
 
 /**
  * ONE atomic DB operation for registration: lock the prepared row FOR UPDATE,
@@ -356,6 +424,7 @@ export type AtomicRegistrationResult =
  */
 export async function registerVerifiedLaunchAtomic(
   rec: VerifiedLaunchInsert,
+  expected: ExpectedLaunchFacts,
   launchTx: string,
 ): Promise<AtomicRegistrationResult> {
   const pg = await getPg();
@@ -378,20 +447,32 @@ export async function registerVerifiedLaunchAtomic(
   };
   try {
     await client.query("BEGIN");
+    // Lock and read EVERY v2 fact — the in-transaction comparison below is the
+    // authoritative check; anything the route verified earlier is re-verified
+    // here against the locked row.
     const res = await client.query(
-      `SELECT provenance_version,
+      `SELECT creator, manifest_hash, provenance_version, chain_id,
+              transaction_target, calldata_hash, transaction_value, launch_manifest,
               EXTRACT(EPOCH FROM created_at)::bigint AS created_epoch,
               EXTRACT(EPOCH FROM valid_until)::bigint AS valid_until_epoch,
-              consumed_at
+              consumed_at, consumed_by_tx
        FROM lab_prepared WHERE predicted_token = $1 FOR UPDATE`,
       [token],
     );
     const row = res.rows[0] as
       | {
+          creator?: string | null;
+          manifest_hash?: string | null;
           provenance_version?: number | string | null;
+          chain_id?: number | string | null;
+          transaction_target?: string | null;
+          calldata_hash?: string | null;
+          transaction_value?: string | null;
+          launch_manifest?: unknown;
           created_epoch?: number | string | null;
           valid_until_epoch?: number | string | null;
           consumed_at?: unknown;
+          consumed_by_tx?: string | null;
         }
       | undefined;
     if (!row) {
@@ -414,7 +495,33 @@ export async function registerVerifiedLaunchAtomic(
       await rollback();
       return { status: "failed", code: "UNVERIFIED_PROVENANCE" };
     }
-    const ts = rec.timestamp;
+    // EXACT fact comparison under the lock: sender, target, calldata hash,
+    // value, chain, manifest hash, and the Create event's numeraire vs the
+    // STORED manifest anchor. Any mismatch rolls back.
+    const storedManifest =
+      row.launch_manifest && typeof row.launch_manifest === "object"
+        ? (row.launch_manifest as Record<string, unknown>)
+        : null;
+    const storedAnchor =
+      storedManifest && typeof storedManifest.anchorAddress === "string"
+        ? storedManifest.anchorAddress.toLowerCase()
+        : null;
+    const factsMatch =
+      String(row.creator ?? "").toLowerCase() === expected.creator.toLowerCase() &&
+      String(row.manifest_hash ?? "") === rec.manifestHash &&
+      Number(row.chain_id ?? Number.NaN) === expected.chainId &&
+      String(row.transaction_target ?? "").toLowerCase() ===
+        expected.transactionTarget.toLowerCase() &&
+      String(row.calldata_hash ?? "").toLowerCase() === expected.calldataHash.toLowerCase() &&
+      String(row.transaction_value ?? "") === expected.transactionValue &&
+      storedManifest !== null &&
+      storedAnchor !== null &&
+      storedAnchor === expected.eventNumeraire.toLowerCase();
+    if (!factsMatch) {
+      await rollback();
+      return { status: "failed", code: "PROVENANCE_MISMATCH" };
+    }
+    const ts = expected.blockTimestamp;
     const validUntil =
       row.valid_until_epoch === null || row.valid_until_epoch === undefined
         ? null
@@ -423,20 +530,20 @@ export async function registerVerifiedLaunchAtomic(
       row.created_epoch === null || row.created_epoch === undefined
         ? null
         : Number(row.created_epoch);
-    if (ts === null || validUntil === null || ts > validUntil || (createdAt !== null && ts < createdAt)) {
+    if (validUntil === null || ts > validUntil || (createdAt !== null && ts < createdAt)) {
       await rollback();
       return { status: "failed", code: "PREPARED_EXPIRED" };
     }
-    await client.query(
+    // Launch facts come from the manifest READ UNDER THIS LOCK.
+    const facts = factsFromLockedManifest(storedManifest, String(row.manifest_hash));
+    // SAFE conflict handling: never blind-promote an existing lab_launches row.
+    const insertRes = await client.query(
       `INSERT INTO lab_launches
          (token_address, token_name, token_symbol, creator, numeraire, anchor_symbol, pool_or_hook,
           launch_tx, block_number, launched_at, launch_source, provenance_verified, provenance_verified_at, manifest_hash, launch_manifest)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,to_timestamp($10),'bps-web',true,now(),$11,$12::jsonb)
-       ON CONFLICT (token_address) DO UPDATE SET
-         provenance_verified = true, launch_source = 'bps-web', provenance_verified_at = now(),
-         manifest_hash = COALESCE(lab_launches.manifest_hash, EXCLUDED.manifest_hash),
-         anchor_symbol = COALESCE(lab_launches.anchor_symbol, EXCLUDED.anchor_symbol),
-         launch_manifest = COALESCE(lab_launches.launch_manifest, EXCLUDED.launch_manifest)`,
+       ON CONFLICT (token_address) DO NOTHING
+       RETURNING token_address`,
       [
         token,
         rec.tokenName ?? "",
@@ -449,9 +556,47 @@ export async function registerVerifiedLaunchAtomic(
         rec.blockNumber,
         rec.timestamp,
         rec.manifestHash,
-        rec.launchManifest ? JSON.stringify(rec.launchManifest) : null,
+        JSON.stringify(facts),
       ],
     );
+    if (insertRes.rows.length === 0) {
+      // A row already exists for this token. It may only be adopted when every
+      // immutable fact matches EXACTLY — provenance_verified can never flip to
+      // true on a conflicting row.
+      const existing = await client.query(
+        `SELECT creator, numeraire, pool_or_hook, launch_tx, provenance_verified
+         FROM lab_launches WHERE token_address = $1 FOR UPDATE`,
+        [token],
+      );
+      const ex = existing.rows[0] as
+        | {
+            creator?: string | null;
+            numeraire?: string | null;
+            pool_or_hook?: string | null;
+            launch_tx?: string | null;
+            provenance_verified?: boolean | null;
+          }
+        | undefined;
+      const sameLaunch =
+        ex !== undefined &&
+        String(ex.launch_tx ?? "").toLowerCase() === rec.launchTx.toLowerCase() &&
+        String(ex.creator ?? "").toLowerCase() === rec.creator.toLowerCase() &&
+        String(ex.numeraire ?? "").toLowerCase() === rec.numeraire.toLowerCase() &&
+        String(ex.pool_or_hook ?? "").toLowerCase() === rec.poolOrHook.toLowerCase();
+      if (!sameLaunch) {
+        await rollback();
+        return { status: "failed", code: "LAUNCH_ROW_CONFLICT" };
+      }
+      await client.query(
+        `UPDATE lab_launches SET
+           provenance_verified = true, launch_source = 'bps-web', provenance_verified_at = now(),
+           manifest_hash = COALESCE(manifest_hash, $2),
+           anchor_symbol = COALESCE(anchor_symbol, $3),
+           launch_manifest = COALESCE(launch_manifest, $4::jsonb)
+         WHERE token_address = $1`,
+        [token, rec.manifestHash, rec.anchorSymbol, JSON.stringify(facts)],
+      );
+    }
     await client.query(
       `UPDATE lab_prepared SET consumed_at = now(), consumed_by_tx = $2 WHERE predicted_token = $1`,
       [token, launchTx],

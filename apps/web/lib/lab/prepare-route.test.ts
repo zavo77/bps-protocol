@@ -23,7 +23,12 @@ const m = vi.hoisted(() => ({
   },
   prepareLaunch: vi.fn(),
   enforceLaunchGuardrails: vi.fn(async () => {}),
-  recordPreparedLaunch: vi.fn(async () => {}),
+  recordPreparedLaunch: vi.fn<
+    () => Promise<
+      | { status: "inserted" }
+      | { status: "existing"; storedManifest: Record<string, unknown>; storedManifestHash: string }
+    >
+  >(async () => ({ status: "inserted" })),
   getPreparedLaunch: vi.fn(),
   refreshPreparedValidity: vi.fn(async () => {}),
   labClient: {
@@ -118,7 +123,7 @@ beforeEach(() => {
   m.flags.creatorAllowlist = [];
   m.prepareLaunch.mockResolvedValue(BUNDLE);
   m.enforceLaunchGuardrails.mockResolvedValue(undefined);
-  m.recordPreparedLaunch.mockResolvedValue(undefined);
+  m.recordPreparedLaunch.mockResolvedValue({ status: "inserted" });
   m.getPreparedLaunch.mockResolvedValue(null);
   m.refreshPreparedValidity.mockResolvedValue(undefined);
   m.labClient.call.mockResolvedValue({ data: "0x" });
@@ -155,6 +160,71 @@ describe("POST /api/lab/prepare (no signed envelope)", () => {
         launchManifest: BUNDLE.manifest,
       }),
     );
+  });
+
+  it("FAIL-CLOSED: a DB-unavailable registry returns 503 with NO manifest or transaction", async () => {
+    m.recordPreparedLaunch.mockRejectedValue(new Error("REGISTRY_UNAVAILABLE"));
+    const res = await preparePost(
+      jsonRequest(
+        "/api/lab/prepare",
+        { payload: payloadFor("0x1100000000000000000000000000000000000011") },
+        "10.1.9.1",
+      ),
+    );
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(res.status).toBe(503);
+    expect(body.code).toBe("REGISTRY_UNAVAILABLE");
+    expect(body.data).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain(BUNDLE.manifestHash);
+    expect(JSON.stringify(body)).not.toContain(BUNDLE.prepared.data);
+  });
+
+  it("FAIL-CLOSED: an insert failure returns 503 with NO manifest or transaction", async () => {
+    m.recordPreparedLaunch.mockRejectedValue(new Error("REGISTRY_UNAVAILABLE"));
+    const res = await preparePost(
+      jsonRequest(
+        "/api/lab/prepare",
+        { payload: payloadFor("0x1100000000000000000000000000000000000012") },
+        "10.1.9.2",
+      ),
+    );
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.data).toBeUndefined();
+  });
+
+  it("(2) an identical re-prepare returns the STORED manifest + hash — one immutable identity per review", async () => {
+    const storedHash = `0x${"cd".repeat(32)}`;
+    const storedManifest = { anchorSymbol: "GOOGL", createdAt: 1_000_000, original: true };
+    m.recordPreparedLaunch.mockResolvedValue({
+      status: "existing",
+      storedManifest,
+      storedManifestHash: storedHash,
+    });
+    const res = await preparePost(
+      jsonRequest(
+        "/api/lab/prepare",
+        { payload: payloadFor("0x1100000000000000000000000000000000000013") },
+        "10.1.9.3",
+      ),
+    );
+    const body = (await res.json()) as {
+      ok: boolean;
+      data: {
+        manifest: Record<string, unknown>;
+        manifestHash: string;
+        simulation: { manifestHash: string };
+        prepared: { manifestHash: string; data: string };
+      };
+    };
+    expect(res.status).toBe(200);
+    // NOT the freshly minted hash — the stored one, everywhere.
+    expect(body.data.manifestHash).toBe(storedHash);
+    expect(body.data.manifest).toEqual(storedManifest);
+    expect(body.data.simulation.manifestHash).toBe(storedHash);
+    expect(body.data.prepared.manifestHash).toBe(storedHash);
+    // The transaction itself is still returned (identical calldata).
+    expect(body.data.prepared.data).toBe(BUNDLE.prepared.data);
   });
 
   it("maps a conflicting prepare (same predicted token, different facts) to 409 PREPARED_CONFLICT", async () => {

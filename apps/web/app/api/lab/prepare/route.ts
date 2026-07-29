@@ -64,14 +64,14 @@ export async function POST(req: Request): Promise<Response> {
     const commit =
       process.env.BPS_SOURCE_COMMIT || process.env.VERCEL_GIT_COMMIT_SHA || "local-dev";
     const bundle = await prepareLaunch(payload, "8h-v1", commit);
-    // Record the issued preparation as an IMMUTABLE provenance_version=2 row:
-    // the exact transaction target, raw calldata (hash computed server-side),
-    // value, the FULL canonical manifest, and a 60-minute validity window.
-    // Registration verifies the broadcast transaction against THIS record and
-    // /api/lab/simulate re-simulates the exact stored calldata. An identical
-    // re-prepare is a no-op; a conflicting prepare for the same predicted
-    // token is refused (PREPARED_CONFLICT → 409).
-    await recordPreparedLaunch({
+    // Record the issued preparation as an IMMUTABLE provenance_version=2 row.
+    // FAIL CLOSED: the manifest/calldata/transaction are returned ONLY after
+    // the record is durably inserted or verified identical to a stored one.
+    // The calldata builder is deterministic, so a reload/double-request/retry
+    // of the SAME review conflicts on predicted_token with identical execution
+    // facts — the STORED manifest (original createdAt) is returned so one
+    // review keeps exactly one immutable manifest hash.
+    const recorded = await recordPreparedLaunch({
       predictedToken: bundle.simulation.predictedTokenAddress,
       creator: wallet,
       manifestHash: bundle.manifestHash,
@@ -83,6 +83,19 @@ export async function POST(req: Request): Promise<Response> {
       transactionValue: bundle.prepared.value,
       launchManifest: bundle.manifest as unknown as Record<string, unknown>,
     });
+    if (recorded.status === "existing") {
+      const storedHash = recorded.storedManifestHash as `0x${string}`;
+      return ok({
+        manifest: recorded.storedManifest,
+        manifestHash: storedHash,
+        simulation: { ...bundle.simulation, manifestHash: storedHash },
+        prepared: {
+          ...bundle.prepared,
+          manifestHash: storedHash,
+          simulation: { ...bundle.prepared.simulation, manifestHash: storedHash },
+        },
+      });
+    }
     return ok(bundle);
   } catch (e) {
     if (e instanceof Error && e.message === "PREPARED_CONFLICT") {
@@ -90,6 +103,14 @@ export async function POST(req: Request): Promise<Response> {
         "PREPARED_CONFLICT",
         "A different launch was already prepared for this predicted market address. Start the preparation again.",
         409,
+      );
+    }
+    if (e instanceof Error && e.message === "REGISTRY_UNAVAILABLE") {
+      // Nothing durable was recorded — no manifest or transaction is returned.
+      return err(
+        "REGISTRY_UNAVAILABLE",
+        "The launch registry is temporarily unavailable; nothing was prepared. Retry shortly.",
+        503,
       );
     }
     return mapError(e);
