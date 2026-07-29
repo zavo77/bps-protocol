@@ -7,6 +7,36 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-29 — LAUNCH LAB LANE: P0.2 ATOMIC EXACT LAUNCH PROVENANCE shipped (web 15a9e935; still BROWSE-ONLY)
+
+- Founder pre-open blocker implemented in full. lab_prepared is now an immutable provenance_version=2
+  ledger (additive DDL in web + indexer): chain_id, transaction_target, transaction_data,
+  server-computed calldata_hash, transaction_value, FULL canonical launch_manifest JSONB, valid_until
+  (60 min, refreshed by re-simulation), consumed_at + consumed_by_tx. Legacy v1 rows can NEVER verify
+  a launch (the founder's stale AAPL manifest 0xec64fd65… remains the only active row and is now
+  inert by design). recordPreparedLaunch: INSERT-only; identical re-prepare idempotent; divergence →
+  409 PREPARED_CONFLICT; provenance fields never updated. /api/lab/simulate reworked: stale
+  re-simulation verifies the EXACT STORED calldata and returns the SAME manifestHash (one immutable
+  manifest per review; prepareLaunch never re-runs). /api/lab/launches now fetches the RAW
+  transaction + receipt + block and requires sender/target/keccak256(calldata)/value/chain matches
+  against the prepared row, block timestamp inside the validity window, Create asset == predicted
+  token, event numeraire == STORED manifest anchor; client-supplied manifests are discarded — launch
+  facts come only from the server-stored JSONB. registerVerifiedLaunchAtomic: single-connection
+  BEGIN → SELECT FOR UPDATE → in-txn consumed/version/validity checks → INSERT lab_launches →
+  consume prepared row → COMMIT, ROLLBACK on any error — consumption is impossible without the
+  committed insert; concurrent registration consumes exactly once; retry-after-success idempotent.
+- Gate: 479 web (54 files) + 13 indexer + 56 pkg tests; tsc/lint/build/secret-scan clean; the 15-test
+  founder matrix covered (wrong target/calldata/value/sender/chain, expired, legacy, conflict,
+  idempotent prepare, preserved manifest hash, rollback-not-consumed, concurrent-once, retry
+  idempotent, client-manifest-ignored, browser proof). Real-browser fresh-wallet proof re-run on this
+  build: wallet log = [wallet_requestPermissions, eth_requestAccounts, eth_chainId×3,
+  eth_sendTransaction] — 1 transaction, 0 sign requests; the live QA prepare wrote a
+  provenance_version=2 row against the production DB (retired consumed_at after the run).
+- Read-only verification after deploy (health 15a9e9351c96): access public, broadcast false, kill
+  true, TRADING_PAUSED live (buy quote 503), 2 markets listed, MAG8 history visible, indexer ok now
+  tracking BOTH pools (MAG8 + the AAPL market). Indexer redeployed for DDL parity. Creation and
+  trading remain CLOSED — awaiting the founder's 4-step acceptance.
+
 ## 2026-07-29 — LAUNCH LAB LANE: P0 WALLET-PROMPT INCIDENT — browse-only brake + one-confirmation flows shipped (web ae601af6; MUTATIONS PAUSED)
 
 - **Normal-public-operation declaration SUSPENDED by the founder** after a human test: launch took

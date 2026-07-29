@@ -32,7 +32,11 @@
 > in quote + prepare-leg). Markets/charts/history stay visible. The one-confirmation launch
 > (envelopes removed), atomic-only public routes, venue pinning, and prompt-count UI are DEPLOYED
 > at ae601af6a7a8 behind the brakes with a Playwright fresh-wallet proof (1 sendTransaction, 0
-> sign requests). Reopen only after the founder performs the 4 acceptance actions (1-prompt
+> sign requests). P0.2 ATOMIC EXACT PROVENANCE is additionally deployed at 15a9e9351c96: immutable
+> v2 prepared ledger (target/calldata-hash/value/chain/manifest JSONB/validity), byte-exact
+> transaction verification at registration, atomic register+consume (never consumes on failure),
+> stale re-simulation preserves the manifest hash, client manifests discarded. Legacy prepared
+> rows are inert. Reopen only after the founder performs the 4 acceptance actions (1-prompt
 > launch, 1-prompt ETH buy, first sell ≤ approval+sell, subsequent 1-prompt sell), then flip the
 > four env flags open and redeploy. See CURRENT_STATE.json → walletPromptIncident.
 >
