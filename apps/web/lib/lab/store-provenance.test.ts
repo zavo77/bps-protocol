@@ -369,23 +369,36 @@ describe("registerVerifiedLaunchAtomic — one transaction, both effects or neit
     expect(sqls.some((s) => /SET consumed_at/i.test(s))).toBe(false);
   });
 
-  it("(4) an existing row with EXACTLY matching facts is adopted (promoted) and consumption proceeds", async () => {
+  /** The exact facts JSON the atomic op builds from fullRow()'s locked manifest. */
+  const factsForFullRow = () => ({
+    source: "registration",
+    manifestHash: MANIFEST_HASH,
+    startingFdvUsd: "20500",
+    creatorFeeAddress: null,
+    anchorSymbol: undefined,
+  });
+  const existingVerifiedRow = (overrides: Record<string, unknown> = {}) => ({
+    creator: WALLET.toLowerCase(),
+    numeraire: GOOGL,
+    pool_or_hook: POOL_OR_HOOK,
+    launch_tx: LAUNCH_TX,
+    block_number: "123",
+    manifest_hash: MANIFEST_HASH,
+    // What a JSONB round-trip of the inserted facts looks like (undefined
+    // keys dropped by JSON.stringify).
+    launch_manifest: JSON.parse(JSON.stringify(factsForFullRow())),
+    anchor_symbol: "GOOGL",
+    provenance_verified: true,
+    ...overrides,
+  });
+
+  it("(4) an ALREADY-VERIFIED byte-identical row is idempotent — no update, consumption proceeds", async () => {
     const { store, clientCalls } = await loadStore({
       clientHandler: (sql) => {
         if (/FROM lab_prepared/i.test(sql)) return { rows: [fullRow()] };
         if (/INSERT INTO lab_launches/i.test(sql)) return { rows: [] }; // conflict
         if (/FROM lab_launches WHERE token_address = \$1 FOR UPDATE/i.test(sql)) {
-          return {
-            rows: [
-              {
-                creator: WALLET.toLowerCase(),
-                numeraire: GOOGL,
-                pool_or_hook: POOL_OR_HOOK,
-                launch_tx: LAUNCH_TX,
-                provenance_verified: false,
-              },
-            ],
-          };
+          return { rows: [existingVerifiedRow()] };
         }
         return { rows: [] };
       },
@@ -397,9 +410,97 @@ describe("registerVerifiedLaunchAtomic — one transaction, both effects or neit
     );
     expect(result).toEqual({ status: "registered" });
     const sqls = clientCalls.map((c) => c.sql);
-    expect(sqls.some((s) => /SET provenance_verified = true/i.test(s))).toBe(true);
+    // Immutable facts are NEVER updated on the idempotent path.
+    expect(sqls.some((s) => /UPDATE lab_launches/i.test(s))).toBe(false);
     expect(sqls.some((s) => /SET consumed_at/i.test(s))).toBe(true);
     expect(sqls[sqls.length - 1]).toBe("COMMIT");
+  });
+
+  it("(4) an UNVERIFIED row for the SAME transaction is rejected and never promoted", async () => {
+    const { store, clientCalls } = await loadStore({
+      clientHandler: (sql) => {
+        if (/FROM lab_prepared/i.test(sql)) return { rows: [fullRow()] };
+        if (/INSERT INTO lab_launches/i.test(sql)) return { rows: [] };
+        if (/FROM lab_launches WHERE token_address = \$1 FOR UPDATE/i.test(sql)) {
+          return { rows: [existingVerifiedRow({ provenance_verified: false })] };
+        }
+        return { rows: [] };
+      },
+    });
+    const result = await store.registerVerifiedLaunchAtomic(
+      verifiedRec(),
+      expectedFacts(),
+      LAUNCH_TX,
+    );
+    expect(result).toEqual({ status: "failed", code: "LAUNCH_ROW_CONFLICT" });
+    const sqls = clientCalls.map((c) => c.sql);
+    expect(sqls).toContain("ROLLBACK");
+    expect(sqls.some((s) => /provenance_verified = true/i.test(s) && /UPDATE/i.test(s))).toBe(false);
+    // The failed conflict leaves the preparation UNCONSUMED.
+    expect(sqls.some((s) => /SET consumed_at/i.test(s))).toBe(false);
+  });
+
+  it("(4) a wrong manifest_hash on the existing verified row is rejected", async () => {
+    const { store } = await loadStore({
+      clientHandler: (sql) => {
+        if (/FROM lab_prepared/i.test(sql)) return { rows: [fullRow()] };
+        if (/INSERT INTO lab_launches/i.test(sql)) return { rows: [] };
+        if (/FROM lab_launches WHERE token_address = \$1 FOR UPDATE/i.test(sql)) {
+          return { rows: [existingVerifiedRow({ manifest_hash: `0x${"ee".repeat(32)}` })] };
+        }
+        return { rows: [] };
+      },
+    });
+    const result = await store.registerVerifiedLaunchAtomic(
+      verifiedRec(),
+      expectedFacts(),
+      LAUNCH_TX,
+    );
+    expect(result).toEqual({ status: "failed", code: "LAUNCH_ROW_CONFLICT" });
+  });
+
+  it("(4) wrong manifest JSON on the existing verified row is rejected — no COALESCE preservation", async () => {
+    const { store } = await loadStore({
+      clientHandler: (sql) => {
+        if (/FROM lab_prepared/i.test(sql)) return { rows: [fullRow()] };
+        if (/INSERT INTO lab_launches/i.test(sql)) return { rows: [] };
+        if (/FROM lab_launches WHERE token_address = \$1 FOR UPDATE/i.test(sql)) {
+          return {
+            rows: [
+              existingVerifiedRow({
+                launch_manifest: { source: "registration", startingFdvUsd: "999999" },
+              }),
+            ],
+          };
+        }
+        return { rows: [] };
+      },
+    });
+    const result = await store.registerVerifiedLaunchAtomic(
+      verifiedRec(),
+      expectedFacts(),
+      LAUNCH_TX,
+    );
+    expect(result).toEqual({ status: "failed", code: "LAUNCH_ROW_CONFLICT" });
+  });
+
+  it("(4) a wrong block_number on the existing verified row is rejected", async () => {
+    const { store } = await loadStore({
+      clientHandler: (sql) => {
+        if (/FROM lab_prepared/i.test(sql)) return { rows: [fullRow()] };
+        if (/INSERT INTO lab_launches/i.test(sql)) return { rows: [] };
+        if (/FROM lab_launches WHERE token_address = \$1 FOR UPDATE/i.test(sql)) {
+          return { rows: [existingVerifiedRow({ block_number: "999" })] };
+        }
+        return { rows: [] };
+      },
+    });
+    const result = await store.registerVerifiedLaunchAtomic(
+      verifiedRec(),
+      expectedFacts(),
+      LAUNCH_TX,
+    );
+    expect(result).toEqual({ status: "failed", code: "LAUNCH_ROW_CONFLICT" });
   });
 
   it("(11) a failed lab_launches insert ROLLS BACK and never consumes the preparation", async () => {
@@ -509,5 +610,43 @@ describe("registerVerifiedLaunchAtomic — one transaction, both effects or neit
       LAUNCH_TX,
     );
     expect(result).toEqual({ status: "failed", code: "PREPARED_NOT_FOUND" });
+  });
+});
+
+describe("refreshPreparedValidity — authoritative, fail-closed", () => {
+  it("returns the authoritative new validUntilEpoch and binds creator + v2 + unconsumed in SQL", async () => {
+    const { store, poolCalls } = await loadStore({
+      poolHandler: (sql) =>
+        /UPDATE lab_prepared SET valid_until/i.test(sql)
+          ? { rows: [{ valid_until_epoch: "1785300000" }] }
+          : { rows: [] },
+    });
+    const epoch = await store.refreshPreparedValidity(TOKEN, WALLET);
+    expect(epoch).toBe(1_785_300_000);
+    const update = poolCalls.find((c) => /UPDATE lab_prepared SET valid_until/i.test(c.sql))!;
+    expect(update.sql).toContain("creator = $2");
+    expect(update.sql).toContain("provenance_version = 2");
+    expect(update.sql).toContain("consumed_at IS NULL"); // a consumed row can never refresh
+    expect(update.sql).toMatch(/RETURNING EXTRACT\(EPOCH FROM valid_until\)::bigint/);
+    expect(update.values).toEqual([TOKEN.toLowerCase(), WALLET.toLowerCase()]);
+  });
+
+  it("throws PREPARED_NOT_FOUND when zero rows were updated (missing/foreign/legacy/consumed)", async () => {
+    const { store } = await loadStore({ poolHandler: () => ({ rows: [] }) });
+    await expect(store.refreshPreparedValidity(TOKEN, WALLET)).rejects.toThrow(
+      "PREPARED_NOT_FOUND",
+    );
+  });
+
+  it("throws REGISTRY_UNAVAILABLE on a query failure — never suppressed", async () => {
+    const { store } = await loadStore({
+      poolHandler: (sql) => {
+        if (/UPDATE lab_prepared SET valid_until/i.test(sql)) throw new Error("connection reset");
+        return { rows: [] };
+      },
+    });
+    await expect(store.refreshPreparedValidity(TOKEN, WALLET)).rejects.toThrow(
+      "REGISTRY_UNAVAILABLE",
+    );
   });
 });

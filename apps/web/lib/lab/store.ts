@@ -346,18 +346,38 @@ export async function getPreparedLaunch(predictedToken: string): Promise<Prepare
 }
 
 /** Extend an unconsumed preparation's validity window (stale re-simulation). */
-export async function refreshPreparedValidity(predictedToken: string): Promise<void> {
+/**
+ * AUTHORITATIVE validity refresh — typed, fail-closed. Returns the new
+ * valid_until as unix seconds. Throws REGISTRY_UNAVAILABLE on any DB
+ * failure and PREPARED_NOT_FOUND when no matching unconsumed v2 row for
+ * this creator was updated. Callers must NOT hand out refreshed transaction
+ * data unless this durably succeeded.
+ */
+export async function refreshPreparedValidity(
+  predictedToken: string,
+  creator: string,
+): Promise<number> {
   const pg = await getPg();
-  if (!pg) return;
+  if (!pg) throw new Error("REGISTRY_UNAVAILABLE");
+  let rows: Record<string, unknown>[];
   try {
-    await pg.query(
+    const res = await pg.query(
       `UPDATE lab_prepared SET valid_until = now() + interval '60 minutes'
-       WHERE predicted_token = $1 AND consumed_at IS NULL`,
-      [predictedToken.toLowerCase()],
+       WHERE predicted_token = $1 AND creator = $2
+         AND provenance_version = 2 AND consumed_at IS NULL
+       RETURNING EXTRACT(EPOCH FROM valid_until)::bigint AS valid_until_epoch`,
+      [predictedToken.toLowerCase(), creator.toLowerCase()],
     );
+    rows = res.rows;
   } catch {
-    // non-fatal: staleness simply is not extended
+    throw new Error("REGISTRY_UNAVAILABLE");
   }
+  const epochRaw = (rows[0] as { valid_until_epoch?: number | string } | undefined)
+    ?.valid_until_epoch;
+  if (epochRaw === undefined || epochRaw === null) throw new Error("PREPARED_NOT_FOUND");
+  const epoch = Number(epochRaw);
+  if (!Number.isFinite(epoch)) throw new Error("REGISTRY_UNAVAILABLE");
+  return epoch;
 }
 
 export type AtomicRegistrationResult =
@@ -560,11 +580,14 @@ export async function registerVerifiedLaunchAtomic(
       ],
     );
     if (insertRes.rows.length === 0) {
-      // A row already exists for this token. It may only be adopted when every
-      // immutable fact matches EXACTLY — provenance_verified can never flip to
-      // true on a conflicting row.
+      // A row already exists for this token. Registration NEVER promotes or
+      // mutates it: idempotent success requires the row to ALREADY be
+      // provenance-verified AND byte-equal on every immutable fact. Anything
+      // else — including an unverified row for the same transaction — rolls
+      // back with LAUNCH_ROW_CONFLICT for manual investigation.
       const existing = await client.query(
-        `SELECT creator, numeraire, pool_or_hook, launch_tx, provenance_verified
+        `SELECT creator, numeraire, pool_or_hook, launch_tx, block_number,
+                manifest_hash, launch_manifest, anchor_symbol, provenance_verified
          FROM lab_launches WHERE token_address = $1 FOR UPDATE`,
         [token],
       );
@@ -574,28 +597,41 @@ export async function registerVerifiedLaunchAtomic(
             numeraire?: string | null;
             pool_or_hook?: string | null;
             launch_tx?: string | null;
+            block_number?: string | number | null;
+            manifest_hash?: string | null;
+            launch_manifest?: unknown;
+            anchor_symbol?: string | null;
             provenance_verified?: boolean | null;
           }
         | undefined;
-      const sameLaunch =
+      const canonical = (v: unknown): string => {
+        if (v === undefined) return "null"; // matches JSON round-trip semantics
+        if (v === null || typeof v !== "object") return JSON.stringify(v);
+        if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+        const o = v as Record<string, unknown>;
+        return `{${Object.keys(o)
+          .filter((k) => o[k] !== undefined) // JSON.stringify drops these
+          .sort()
+          .map((k) => `${JSON.stringify(k)}:${canonical(o[k])}`)
+          .join(",")}}`;
+      };
+      const identicalVerified =
         ex !== undefined &&
+        ex.provenance_verified === true &&
         String(ex.launch_tx ?? "").toLowerCase() === rec.launchTx.toLowerCase() &&
         String(ex.creator ?? "").toLowerCase() === rec.creator.toLowerCase() &&
         String(ex.numeraire ?? "").toLowerCase() === rec.numeraire.toLowerCase() &&
-        String(ex.pool_or_hook ?? "").toLowerCase() === rec.poolOrHook.toLowerCase();
-      if (!sameLaunch) {
+        String(ex.pool_or_hook ?? "").toLowerCase() === rec.poolOrHook.toLowerCase() &&
+        String(ex.block_number ?? "") === String(rec.blockNumber) &&
+        String(ex.manifest_hash ?? "") === rec.manifestHash &&
+        String(ex.anchor_symbol ?? "") === String(rec.anchorSymbol ?? "") &&
+        canonical(ex.launch_manifest ?? null) === canonical(facts);
+      if (!identicalVerified) {
         await rollback();
         return { status: "failed", code: "LAUNCH_ROW_CONFLICT" };
       }
-      await client.query(
-        `UPDATE lab_launches SET
-           provenance_verified = true, launch_source = 'bps-web', provenance_verified_at = now(),
-           manifest_hash = COALESCE(manifest_hash, $2),
-           anchor_symbol = COALESCE(anchor_symbol, $3),
-           launch_manifest = COALESCE(launch_manifest, $4::jsonb)
-         WHERE token_address = $1`,
-        [token, rec.manifestHash, rec.anchorSymbol, JSON.stringify(facts)],
-      );
+      // Exact already-verified duplicate: nothing to write on lab_launches —
+      // fall through to consume the preparation and commit (idempotent).
     }
     await client.query(
       `UPDATE lab_prepared SET consumed_at = now(), consumed_by_tx = $2 WHERE predicted_token = $1`,

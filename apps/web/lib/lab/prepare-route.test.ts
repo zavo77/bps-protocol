@@ -30,7 +30,7 @@ const m = vi.hoisted(() => ({
     >
   >(async () => ({ status: "inserted" })),
   getPreparedLaunch: vi.fn(),
-  refreshPreparedValidity: vi.fn(async () => {}),
+  refreshPreparedValidity: vi.fn<() => Promise<number>>(async () => 9_999_999_999),
   labClient: {
     call: vi.fn(async () => ({ data: "0x" })),
     estimateGas: vi.fn(async () => 1_000_000n),
@@ -125,7 +125,7 @@ beforeEach(() => {
   m.enforceLaunchGuardrails.mockResolvedValue(undefined);
   m.recordPreparedLaunch.mockResolvedValue({ status: "inserted" });
   m.getPreparedLaunch.mockResolvedValue(null);
-  m.refreshPreparedValidity.mockResolvedValue(undefined);
+  m.refreshPreparedValidity.mockResolvedValue(9_999_999_999); // far-future epoch
   m.labClient.call.mockResolvedValue({ data: "0x" });
   m.labClient.estimateGas.mockResolvedValue(1_000_000n);
   m.labClient.getBlockNumber.mockResolvedValue(123n);
@@ -371,10 +371,68 @@ describe("POST /api/lab/simulate ({ predictedToken, creatorAddress } contract)",
       expect.objectContaining({ account: creator, data: "0xdead", value: 0n }),
     );
     expect(m.labClient.estimateGas).toHaveBeenCalledTimes(1);
-    // The validity window was refreshed.
-    expect(m.refreshPreparedValidity).toHaveBeenCalledWith(PREDICTED_TOKEN);
+    // The validity window was durably refreshed, bound to the creator.
+    expect(m.refreshPreparedValidity).toHaveBeenCalledWith(PREDICTED_TOKEN, creator);
     // Re-simulation consumes no launch quota.
     expect(m.enforceLaunchGuardrails).not.toHaveBeenCalled();
+  });
+
+  it("FAIL-CLOSED: a DB-unavailable/failed validity refresh returns 503 with NO transaction data", async () => {
+    const creator = "0x2100000000000000000000000000000000000022";
+    m.getPreparedLaunch.mockResolvedValue(preparedRow(creator));
+    m.refreshPreparedValidity.mockRejectedValue(new Error("REGISTRY_UNAVAILABLE"));
+    const res = await simulatePost(
+      jsonRequest(
+        "/api/lab/simulate",
+        { predictedToken: PREDICTED_TOKEN, creatorAddress: creator },
+        "10.2.9.1",
+      ),
+    );
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(res.status).toBe(503);
+    expect(body.code).toBe("REGISTRY_UNAVAILABLE");
+    expect(body.data).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain("0xdead"); // no calldata leaves
+  });
+
+  it("FAIL-CLOSED: a zero-row refresh (consumed/foreign/legacy) returns 404 with NO transaction data", async () => {
+    const creator = "0x2100000000000000000000000000000000000023";
+    m.getPreparedLaunch.mockResolvedValue(preparedRow(creator));
+    m.refreshPreparedValidity.mockRejectedValue(new Error("PREPARED_NOT_FOUND"));
+    const res = await simulatePost(
+      jsonRequest(
+        "/api/lab/simulate",
+        { predictedToken: PREDICTED_TOKEN, creatorAddress: creator },
+        "10.2.9.2",
+      ),
+    );
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(res.status).toBe(404);
+    expect(body.code).toBe("PREPARED_NOT_FOUND");
+    expect(body.data).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain("0xdead");
+  });
+
+  it("staleAfter never exceeds the database valid_until (near-expiry cap)", async () => {
+    const creator = "0x2100000000000000000000000000000000000024";
+    m.getPreparedLaunch.mockResolvedValue(preparedRow(creator));
+    // The authoritative refresh reports an expiry only ~5s away — far sooner
+    // than SIMULATION_MAX_AGE_MS.
+    const nearExpiryEpoch = Math.floor(Date.now() / 1000) + 5;
+    m.refreshPreparedValidity.mockResolvedValue(nearExpiryEpoch);
+    const res = await simulatePost(
+      jsonRequest(
+        "/api/lab/simulate",
+        { predictedToken: PREDICTED_TOKEN, creatorAddress: creator },
+        "10.2.9.3",
+      ),
+    );
+    const body = (await res.json()) as {
+      data: { prepared: { staleAfter: number } };
+    };
+    expect(res.status).toBe(200);
+    expect(body.data.prepared.staleAfter).toBe(nearExpiryEpoch * 1000);
+    expect(body.data.prepared.staleAfter).toBeLessThan(Date.now() + 60_000);
   });
 
   it("rejects a malformed request (BAD_PAYLOAD)", async () => {

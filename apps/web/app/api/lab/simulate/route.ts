@@ -95,11 +95,36 @@ export async function POST(req: Request): Promise<Response> {
       return err("SIMULATION_FAILED", "Re-simulation of the prepared transaction failed.", 409);
     }
     const block = await client.getBlockNumber();
-    await refreshPreparedValidity(predictedToken);
+    // AUTHORITATIVE, fail-closed validity refresh: no simulation, calldata, or
+    // transaction leaves this route unless the refresh durably succeeded. The
+    // returned epoch caps staleAfter so the client can never hold a
+    // transaction it believes is fresher than the database's valid_until.
+    let validUntilEpoch: number;
+    try {
+      validUntilEpoch = await refreshPreparedValidity(predictedToken, wallet);
+    } catch (refreshErr) {
+      const msg = refreshErr instanceof Error ? refreshErr.message : "";
+      if (msg === "PREPARED_NOT_FOUND") {
+        return err(
+          "PREPARED_NOT_FOUND",
+          "No re-simulatable preparation exists for this launch. Prepare it again.",
+          404,
+        );
+      }
+      return err(
+        "REGISTRY_UNAVAILABLE",
+        "The launch registry is temporarily unavailable; nothing was refreshed. Retry shortly.",
+        503,
+      );
+    }
 
     const manifestHash = row.manifestHash as Hex;
     const calldataHash = row.calldataHash as Hex;
     const simulationTimestamp = Date.now();
+    const staleAfter = Math.min(
+      simulationTimestamp + SIMULATION_MAX_AGE_MS,
+      validUntilEpoch * 1000,
+    );
     // The STORED, immutable facts + only the freshness fields renewed. The
     // client keeps its manifest/simulation state and merges gas + staleAfter.
     const simulation = {
@@ -121,7 +146,7 @@ export async function POST(req: Request): Promise<Response> {
       gas: ((gasEstimate * 125n) / 100n).toString(),
       manifestHash,
       calldataHash,
-      staleAfter: simulationTimestamp + SIMULATION_MAX_AGE_MS,
+      staleAfter,
     };
     return ok({ simulation, prepared, manifestHash });
   } catch (e) {
