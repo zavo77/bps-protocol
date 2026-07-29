@@ -27,7 +27,18 @@
 > routing (`01c8cfd`), live-verified Rialto activation (`48a7c8d`), public shell + simplified wizard,
 > wallet-chain gate fix (`47032dd`), live market recovery (`7a7ea73`).
 >
-> **POSTURE (2026-07-28, current):** Production **FAIL-CLOSED** — public / broadcast FALSE / kill
+> **POSTURE (2026-07-29, CURRENT): ★ NORMAL PUBLIC OPERATION.** The Launch Lab is the real public
+> product: ACCESS_MODE=public, BROADCAST_ENABLED=true, KILL_SWITCH=false, SELL_PAUSED=false
+> (health 13d685eb5720). No allowlists, no acceptance windows, no ticker/anchor forcing — identical
+> behavior for every wallet. Emergency env controls stay available but INACTIVE; re-engage only for
+> a genuine fund-safety or transaction-integrity defect. NEVER remove BPS_LAUNCH_LAB_ACCESS_MODE
+> from the Vercel env store (it was once missing while old deployments carried a baked-in value —
+> a redeploy would have gone allowlist/disabled). PRINT acceptance dissolved. Verified 2026-07-29:
+> wizard live for disconnected visitors; random-wallet manifest + exact create simulation ok;
+> only provenance-verified markets listed; public buys + one-transaction allowance sells live.
+> A live founder AAPL manifest is active (genuine launch in progress).
+>
+> **POSTURE (2026-07-28, superseded):** Production **FAIL-CLOSED** — public / broadcast FALSE / kill
 > switch TRUE, health-verified at commit `d5051611cf18`. Market CREATION is closed. **SELLS ARE PAUSED again — the one authorised MAG8 sell canary EXECUTED and PASSED (2026-07-28T18:11Z, tx 0x9017bd7a…e0f114: one wallet prompt, Rialto one-step, exact delivery, ≤3.75s public visibility, no dupes incl. indexer restart) and the brake was immediately restored**; previously (`BPS_LAUNCH_LAB_SELL_PAUSED=true` incident brake — new market-token sells 503
 > SELL_PAUSED; buys + partial-sale recovery legs unaffected). The sell failure is fully
 > root-caused AND fixed: (a) the 4-prompt sign→approve→sign→send UX (now SIGNATURE-FREE

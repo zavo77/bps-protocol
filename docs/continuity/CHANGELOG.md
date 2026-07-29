@@ -7,6 +7,38 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-29 — LAUNCH LAB LANE: ★★ NORMAL PUBLIC OPERATION — Launch Lab opened as the real public product
+
+- **Founder directive: no more wallet/ticker acceptance windows.** Production env now:
+  BPS_LAUNCH_LAB_ACCESS_MODE=public / BROADCAST_ENABLED=true / KILL_SWITCH=false /
+  SELL_PAUSED=false. Deployed at health commit 13d685eb5720 (env-only; no code change). Emergency
+  controls (kill switch, sell brake, access mode, broadcast) remain AVAILABLE but INACTIVE.
+  **CRITICAL CATCH:** BPS_LAUNCH_LAB_ACCESS_MODE had been REMOVED from the Vercel env store (older
+  deployments carried a baked-in value); redeploying without it would have silently dropped the
+  site to allowlist/disabled — re-added explicitly as `public` before deploying.
+- **Code-level check:** `public` mode consults NO allowlist; anchors GOOGL/NVDA/AAPL/TSLA/SPCX all
+  offered; no PRINT/ GOOGL forcing, no wallet-specific behavior anywhere. Normal validation stands:
+  chain 4663 only, approved anchors only, metadata/manifest/hash verification, provenance gate,
+  exact pre-signature simulation, indexer records verified BPS markets only.
+- **Live verification (no transactions executed by Claude):** (1) /lab/launch renders the active
+  wizard for a disconnected visitor — no "temporarily unavailable". (2-6) a RANDOM in-memory
+  throwaway wallet passed the full server gate: manifest issued (hash 0x6aba275a…, ticker QAOPEN,
+  anchor NVDA — proving free ticker/anchor choice; 85/10/5, $20,500 FDV, 1% fee) and the EXACT
+  Airlock create simulated ok (predicted token 0xe4E5…3C35, gas 4,473,206); QA manifest retired
+  audit-safely (consumed_at; throwaway key discarded). (7/12) /api/lab/launches lists ONLY the
+  provenance-verified MAG8 — no external Doppler markets. (8) MAG8 page/chart/metadata/trade card
+  live. (9) public-wallet ETH→MAG8 buy quote: rialto, 1 action. (10) fresh-wallet sell preflight:
+  quote rialto + approvalsRequired = the exact Rialto spender → exact approval + automatic
+  signature-free re-preparation + sell (route/client covered by the 409-test suite). (11)
+  existing-allowance sell prepare: simulation ok, zero approvals — ONE transaction. Indexer ok,
+  tracked=1, pools=1, current, no errors.
+- **A LIVE founder-wallet manifest (AAPL, predicted 0xec64fd65…, created 2026-07-29T10:05Z) is
+  active and untouched — a genuine launch in progress under normal operation.**
+- Standing posture change: the fail-closed-by-default rule for broadcast/kill is SUPERSEDED by this
+  directive — the site stays open unless a genuine fund-safety or transaction-integrity defect is
+  found. PRINT acceptance was dissolved (no required PRINT ticker). MAG8 remains the first verified
+  market.
+
 ## 2026-07-28 — LAUNCH LAB LANE: ★ MAG8 SELL CANARY PASSED — verified end-to-end; brake RESTORED
 
 - **The human sell executed and verified.** Tx 0x9017bd7a…e0f114: SUCCESS, block 21797213
