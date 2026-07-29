@@ -3,12 +3,20 @@
 //
 // Sequence: form validation → metadata upload (Pinata via /api/lab/metadata) →
 // prepare (/api/lab/prepare: anchor re-verify + exact simulation + manifest) →
-// gating (broadcast flag, kill switch, wallet, chain, freshness) → send via the
-// wallet → wait for the receipt → decodeAndVerifyReceipt against the manifest.
+// gating (broadcast flag, kill switch, wallet, chain) → send via the wallet →
+// wait for the receipt → decodeAndVerifyReceipt against the manifest.
 // Any manifest mismatch is a HARD STOP ('launch-mismatch'); the only exit is reset().
+//
+// SINGLE WALLET CONFIRMATION: no step before the final sendTransaction ever
+// asks the wallet for anything (no personal_sign envelopes — the deployment
+// transaction authenticates the creator; the server verifies receipt.from +
+// calldata + manifest hash + predicted token at registration). If the prepared
+// transaction goes stale, it is silently re-simulated server-side with zero
+// wallet interaction. The only other possible wallet prompt is a chain switch
+// when the wallet sits on the wrong network.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { isAddress, getAddress, keccak256, type Address, type Hex, type PublicClient } from "viem";
+import { isAddress, getAddress, type Address, type Hex, type PublicClient } from "viem";
 import { useAccount, usePublicClient, useSendTransaction, useSwitchChain } from "wagmi";
 import {
   CHAIN_ID,
@@ -30,7 +38,6 @@ import {
 import { errorMessage, isNotAllowlisted, labFetch } from "./api";
 import { useAnchor } from "./use-anchor";
 import { useLabConfig } from "./use-lab-config";
-import { useSignedRequest } from "./use-signed-request";
 import { useWalletUiState } from "./use-wallet-ui-state";
 
 export interface CreateFlowFormState {
@@ -258,7 +265,6 @@ export function useCreateFlow(): CreateFlow {
   const publicClient = usePublicClient();
   const { sendTransactionAsync } = useSendTransaction();
   const { switchChainAsync } = useSwitchChain();
-  const signRequest = useSignedRequest();
 
   const configQuery = useLabConfig();
   const anchorQuery = useAnchor();
@@ -417,9 +423,10 @@ export function useCreateFlow(): CreateFlow {
     if (config?.killSwitchActive) return "kill-switch-active";
     if (config && !config.broadcastEnabled) return "broadcast-disabled";
     if (!anchorVerified) return "anchor-mismatch";
+    // Staleness does NOT demote readiness: launch() silently re-simulates a
+    // stale prepared transaction server-side with zero wallet interaction.
     if (
       walletState !== "connected" ||
-      !simulationFresh ||
       !gates.metadataConfirmed ||
       !form.termsAccepted ||
       config === undefined
@@ -440,7 +447,6 @@ export function useCreateFlow(): CreateFlow {
     config,
     anchorVerified,
     walletState,
-    simulationFresh,
     gates.metadataConfirmed,
     form.termsAccepted,
   ]);
@@ -487,18 +493,11 @@ export function useCreateFlow(): CreateFlow {
         setUploadErrors(fullErrors);
         return false;
       }
-      await ensureChain();
-      const payload = {
-        tokenName: form.tokenName,
-        tokenSymbol: form.tokenSymbol,
-        tokenDescription: form.tokenDescription,
-        imageHash: keccak256(bytes),
-        imageMime: file.type,
-      };
-      const envelope = await signRequest("metadata-upload", payload);
+      // No wallet interaction here: the server requires no signed envelope —
+      // the wallet address is sent as a plain field (rate-limit key only).
       setPhase("image-uploading");
       const fd = new FormData();
-      fd.append("envelope", JSON.stringify(envelope));
+      fd.append("wallet", address);
       fd.append(
         "fields",
         JSON.stringify({
@@ -523,7 +522,7 @@ export function useCreateFlow(): CreateFlow {
       failFromError(e);
       return false;
     }
-  }, [address, chainBlocked, form, ensureChain, signRequest, failFromError]);
+  }, [address, chainBlocked, form, failFromError]);
 
   const buildPayload = useCallback((): PrepareLaunchPayload | null => {
     if (!address || !metadata) return null;
@@ -575,20 +574,19 @@ export function useCreateFlow(): CreateFlow {
       setError("Complete the form, upload metadata, and connect the creator wallet first.");
       return false;
     }
-    // Fail-closed anchor check before asking the wallet to sign anything.
+    // Fail-closed anchor check before preparing anything.
     const anchorNow = anchor ?? (await anchorQuery.refetch()).data;
     if (!anchorNow || anchorNow.status !== "verified") {
       setError(anchorNow?.mismatchReason ?? "GOOGL anchor verification failed.");
       return false;
     }
     try {
-      await ensureChain();
-      const envelope = await signRequest("prepare-launch", payload);
+      // No wallet interaction: preparation requires no signed envelope.
       setPhase("simulating");
       const fresh = await labFetch<PreparedLaunchBundle>("/api/lab/prepare", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ envelope, payload }),
+        body: JSON.stringify({ payload }),
       });
       setBundle(fresh);
       setPayloadUsed(payload);
@@ -608,15 +606,16 @@ export function useCreateFlow(): CreateFlow {
     buildPayload,
     anchor,
     anchorQuery,
-    ensureChain,
-    signRequest,
     failFromError,
   ]);
 
-  /** Re-simulate via /api/lab/simulate (requires a fresh signature; 180 s rule). */
+  /**
+   * Silent re-simulation via /api/lab/simulate (180 s staleness rule). No
+   * wallet interaction of any kind — the server needs no signature, so a stale
+   * prepared transaction is refreshed transparently before sending.
+   */
   const resimulate = useCallback(async (): Promise<PreparedLaunchBundle | null> => {
     if (!bundle || !payloadUsed) return null;
-    const envelope = await signRequest("prepare-launch", payloadUsed);
     setPhase("simulating");
     const fresh = await labFetch<{
       simulation: LaunchSimulation;
@@ -625,7 +624,7 @@ export function useCreateFlow(): CreateFlow {
     }>("/api/lab/simulate", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ envelope, payload: payloadUsed }),
+      body: JSON.stringify({ payload: payloadUsed }),
     });
     const merged: PreparedLaunchBundle = {
       manifest: bundle.manifest,
@@ -636,7 +635,7 @@ export function useCreateFlow(): CreateFlow {
     setBundle(merged);
     setNow(Date.now());
     return merged;
-  }, [bundle, payloadUsed, signRequest]);
+  }, [bundle, payloadUsed]);
 
   const launch = useCallback(async (): Promise<void> => {
     if (phase === "launch-mismatch" || phase === "launch-success") return; // hard stop / done
@@ -679,9 +678,13 @@ export function useCreateFlow(): CreateFlow {
     }
     broadcastRef.current = false;
     try {
+      // The only wallet prompts in the whole launch: an optional chain switch
+      // (wrong network) and the single deployment-transaction confirmation.
       await ensureChain();
       let active = bundle;
       if (Date.now() > active.prepared.staleAfter) {
+        // Stale prepared tx → silent server-side re-simulation; no wallet
+        // interaction, then proceed straight to the one confirmation.
         const fresh = await resimulate();
         if (!fresh) throw new Error("Re-simulation before send failed.");
         active = fresh;

@@ -1143,7 +1143,15 @@ describe("TradeCard — P0 sell prompt-count + reliability regressions", () => {
     expect(approveArgs.args[1]).toBe(100n * 10n ** 18n);
     // Exactly ONE swap confirmation; the re-preparation was automatic (2 posts).
     expect(h.fns.sendTransactionAsync).toHaveBeenCalledTimes(1);
-    expect(calls.filter((c) => c.url.includes("/api/lab/trade/prepare-leg")).length).toBe(2);
+    const legPosts = calls
+      .filter((c) => c.url.includes("/api/lab/trade/prepare-leg"))
+      .map((c) => c.body!.payload as Record<string, unknown>);
+    expect(legPosts).toHaveLength(2);
+    // The post-approval re-preparation is PINNED to the approved venue+spender
+    // (the first preparation runs the normal chain and is unpinned).
+    expect(legPosts[0]!.pinnedVenue).toBeUndefined();
+    expect(legPosts[1]!.pinnedVenue).toBe("rialto");
+    expect(legPosts[1]!.pinnedSpender).toBe(SPENDER);
   });
 
   it("existing allowance: exactly ONE wallet confirmation (the swap)", async () => {
@@ -1466,5 +1474,151 @@ describe("TradeCard — P0 sell prompt-count + reliability regressions", () => {
     expect(h.fns.signMessageAsync).not.toHaveBeenCalled();
     expect(h.fns.writeContractAsync).not.toHaveBeenCalled();
     expect(h.fns.sendTransactionAsync).not.toHaveBeenCalled();
+  });
+
+  it("pre-action summary: confirmations, transaction count, approval, venue, and max slippage sit BEFORE the trade button", async () => {
+    mockSellReads(0n); // no allowance yet → 1 approval transaction is planned
+    stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+    const user = userEvent.setup();
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" anchorAddress={GOOGL} />,
+    );
+    await user.click(screen.getByTestId("tab-sell"));
+    await user.type(screen.getByTestId("trade-amount"), "100");
+    await user.click(screen.getByTestId("quote-button"));
+
+    await waitFor(() => expect(screen.getByTestId("trade-summary")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("summary-confirmations")).toHaveTextContent(/^2$/),
+    );
+    expect(screen.getByTestId("summary-transactions")).toHaveTextContent(/^1 swap transaction$/);
+    expect(screen.getByTestId("summary-approval")).toHaveTextContent(
+      /^1 approval transaction required$/,
+    );
+    expect(screen.getByTestId("summary-venue")).toHaveTextContent(/^via Rialto$/);
+    expect(screen.getByTestId("summary-slippage")).toHaveTextContent(/^1%$/);
+    // The summary renders BEFORE the primary trade button in the document.
+    const summary = screen.getByTestId("trade-summary");
+    const button = screen.getByTestId("trade-button");
+    expect(summary.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Summarizing is read-only — no wallet interaction of any kind.
+    expect(h.fns.signMessageAsync).not.toHaveBeenCalled();
+    expect(h.fns.writeContractAsync).not.toHaveBeenCalled();
+    expect(h.fns.sendTransactionAsync).not.toHaveBeenCalled();
+  });
+
+  it("pre-action summary with an existing allowance: 1 wallet confirmation, approval not required", async () => {
+    mockSellReads(1000n * 10n ** 18n); // allowance already covers the trade
+    stubFetch((url) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+    const user = userEvent.setup();
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" anchorAddress={GOOGL} />,
+    );
+    await user.click(screen.getByTestId("tab-sell"));
+    await user.type(screen.getByTestId("trade-amount"), "100");
+    await user.click(screen.getByTestId("quote-button"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("summary-confirmations")).toHaveTextContent(/^1$/),
+    );
+    expect(screen.getByTestId("summary-transactions")).toHaveTextContent(/^1 swap transaction$/);
+    expect(screen.getByTestId("summary-approval")).toHaveTextContent(/^Not required$/);
+  });
+
+  it("VENUE CANNOT CHANGE after approval: pinned re-prepare 409 VENUE_CHANGED → concise failure, ONE approval, NO transaction", async () => {
+    mockSellReads(0n);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    h.fns.writeContractAsync.mockResolvedValue(`0x${"46".repeat(32)}`);
+    const calls = stubFetch((url, init) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+      if (url.includes("/api/lab/trade/prepare-leg")) {
+        const body = init?.body ? (JSON.parse(init.body as string) as { payload?: { pinnedVenue?: string } }) : {};
+        // The pinned post-approval re-preparation finds the spender moved.
+        if (body.payload?.pinnedVenue)
+          return jsonResponse(409, {
+            ok: false,
+            error:
+              "The route's spender changed after your approval — no transaction was prepared. Get a fresh quote to continue.",
+            code: "VENUE_CHANGED",
+          });
+        return jsonResponse(200, { ok: true, data: prepResponse({ approvalNeeded: true }) });
+      }
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    const user = userEvent.setup();
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" anchorAddress={GOOGL} />,
+    );
+    await user.click(screen.getByTestId("tab-sell"));
+    await user.type(screen.getByTestId("trade-amount"), "100");
+    await user.click(screen.getByTestId("quote-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-button")).toBeInTheDocument());
+    await user.click(screen.getByTestId("trade-button"));
+
+    await waitFor(() => expect(screen.getByTestId("trade-error")).toBeInTheDocument());
+    // Exactly ONE approval (to the originally approved spender), never a second
+    // approval, and NO swap transaction was ever requested.
+    expect(h.fns.writeContractAsync).toHaveBeenCalledTimes(1);
+    expect(h.fns.sendTransactionAsync).not.toHaveBeenCalled();
+    const text = screen.getByTestId("trade-error").textContent ?? "";
+    expect(text).toMatch(/changed after your approval/i);
+    expect(text.length).toBeLessThan(160); // concise — no provider dumps
+    // The re-preparation carried the exact approved venue + spender.
+    const pinned = calls
+      .map((c) => c.body?.payload as Record<string, unknown> | undefined)
+      .find((p) => p?.pinnedVenue);
+    expect(pinned?.pinnedVenue).toBe("rialto");
+    expect(pinned?.pinnedSpender).toBe(SPENDER);
+  });
+
+  it("pinned re-preparation reporting an approval to a DIFFERENT spender fails concisely — never auto-approves a second spender", async () => {
+    mockSellReads(0n);
+    h.fns.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+    h.fns.writeContractAsync.mockResolvedValue(`0x${"47".repeat(32)}`);
+    const OTHER = "0x9999999999999999999999999999999999999999";
+    stubFetch((url, init) => {
+      if (url.includes("/api/lab/quote"))
+        return jsonResponse(200, { ok: true, data: ONE_STEP_SELL });
+      if (url.includes("/api/lab/trade/prepare-leg")) {
+        const body = init?.body ? (JSON.parse(init.body as string) as { payload?: { pinnedVenue?: string } }) : {};
+        if (body.payload?.pinnedVenue) {
+          // Misbehaving response: approval still needed, but to a NEW spender.
+          const data = prepResponse({ approvalNeeded: true });
+          data.approvals.erc20ApprovalTarget = OTHER;
+          return jsonResponse(200, { ok: true, data });
+        }
+        return jsonResponse(200, { ok: true, data: prepResponse({ approvalNeeded: true }) });
+      }
+      return jsonResponse(404, { ok: false, error: "x", code: "NOT_FOUND" });
+    });
+
+    const user = userEvent.setup();
+    wrap(
+      <TradeCard address={TOKEN} tokenSymbol="PRINT" anchorSymbol="GOOGL" anchorAddress={GOOGL} />,
+    );
+    await user.click(screen.getByTestId("tab-sell"));
+    await user.type(screen.getByTestId("trade-amount"), "100");
+    await user.click(screen.getByTestId("quote-button"));
+    await waitFor(() => expect(screen.getByTestId("trade-button")).toBeInTheDocument());
+    await user.click(screen.getByTestId("trade-button"));
+
+    await waitFor(() => expect(screen.getByTestId("trade-error")).toBeInTheDocument());
+    // ONE approval only — the second spender is NEVER approved, and no swap
+    // transaction is requested.
+    expect(h.fns.writeContractAsync).toHaveBeenCalledTimes(1);
+    expect(h.fns.sendTransactionAsync).not.toHaveBeenCalled();
+    const text = screen.getByTestId("trade-error").textContent ?? "";
+    expect(text).toMatch(/no transaction was sent/i);
+    expect(text.length).toBeLessThan(160);
   });
 });

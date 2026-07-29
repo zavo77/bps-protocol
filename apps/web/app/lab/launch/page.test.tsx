@@ -73,20 +73,22 @@ const ANCHOR = {
 
 function stubLabFetch(opts?: { withMetadata?: boolean }) {
   const calls: string[] = [];
+  const signAttempts: string[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       calls.push(url);
-      // The wagmi mock connector routes signing through the HTTP transport as a
-      // JSON-RPC call — answer it with a deterministic test signature.
-      if (typeof init?.body === "string" && init.body.includes('"eth_sign"')) {
-        const rpc = JSON.parse(init.body) as { id: number };
-        return new Response(
-          JSON.stringify({ jsonrpc: "2.0", id: rpc.id, result: `0x${"ab".repeat(65)}` }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+      // The single-confirmation launch NEVER asks the wallet to sign a message.
+      // Any signing RPC the mock connector routes through the transport is
+      // recorded (and deliberately NOT answered) so tests fail loudly if one
+      // ever reappears.
+      if (
+        typeof init?.body === "string" &&
+        /"(eth_sign|personal_sign|eth_signTypedData[^"]*)"/.test(init.body)
+      ) {
+        signAttempts.push(init.body);
       }
       if (url.includes("/api/lab/config")) {
         return {
@@ -120,7 +122,7 @@ function stubLabFetch(opts?: { withMetadata?: boolean }) {
       } as unknown as Response;
     }),
   );
-  return calls;
+  return { calls, signAttempts };
 }
 
 afterEach(() => {
@@ -129,7 +131,7 @@ afterEach(() => {
 
 describe("Launch Lab create page (disconnected wallet)", () => {
   it("lets a disconnected visitor fill the form; Continue opens the wallet flow instead of uploading", async () => {
-    const calls = stubLabFetch();
+    const { calls } = stubLabFetch();
     const user = userEvent.setup();
     render(
       <Providers config={makeConfig()}>
@@ -183,7 +185,7 @@ describe("Launch Lab create page (disconnected wallet)", () => {
 
 describe("Launch Lab create page (terms acknowledgement)", () => {
   it("requires the acknowledgement checkbox on the market step before Continue", async () => {
-    stubLabFetch({ withMetadata: true });
+    const { signAttempts } = stubLabFetch({ withMetadata: true });
     const user = userEvent.setup();
     render(
       <Providers config={makeConnectableConfig()}>
@@ -215,6 +217,9 @@ describe("Launch Lab create page (terms acknowledgement)", () => {
     await user.click(screen.getByTestId("upload-continue"));
     await waitFor(() => expect(screen.getByTestId("pair-step")).toBeInTheDocument());
 
+    // The metadata upload succeeded WITHOUT any wallet message signature.
+    expect(signAttempts).toEqual([]);
+
     // The exact acknowledgement label renders with the checkbox on the market step.
     expect(screen.getByText(TERMS_LABEL)).toBeInTheDocument();
 
@@ -228,7 +233,7 @@ describe("Launch Lab create page (terms acknowledgement)", () => {
   });
 
   it("prepare() is not callable without the acknowledgement — no prepare/simulate request is sent", async () => {
-    const calls = stubLabFetch();
+    const { calls } = stubLabFetch();
     const user = userEvent.setup();
 
     function PrepareProbe() {

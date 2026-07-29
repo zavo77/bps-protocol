@@ -1,19 +1,16 @@
-// POST { envelope, payload } — full launch preparation: anchor re-verify,
-// module verification, exact simulation, manifest + unsigned transaction.
+// POST { payload } — full launch preparation: anchor re-verify, module
+// verification, exact simulation, manifest + unsigned transaction.
+//
+// NO signed envelope: the creator is authenticated by the deployment
+// transaction itself (registration verifies receipt.from + calldata + manifest
+// hash + predicted token + provenance). payload.creatorAddress is a CLAIMED
+// wallet used only for access control, launch guardrails, and rate limiting —
+// spoofing it gains nothing because the prepared transaction and the issued
+// manifest are bound to that address, and only that address can broadcast them.
 
-import { keccak256, stringToHex } from "viem";
-import { isBroadcastableTokenUri, prepareLaunchSchema, signedRequestSchema } from "@bps/launch-lab";
-import {
-  getFlags,
-  payloadHashOf,
-  prepareLaunch,
-  verifySignedRequest,
-} from "../../../../lib/lab/server";
-import {
-  assertSignatureUnused,
-  enforceLaunchGuardrails,
-  recordPreparedLaunch,
-} from "../../../../lib/lab/store";
+import { isBroadcastableTokenUri, prepareLaunchSchema } from "@bps/launch-lab";
+import { getFlags, prepareLaunch } from "../../../../lib/lab/server";
+import { enforceLaunchGuardrails, recordPreparedLaunch } from "../../../../lib/lab/store";
 import {
   assertSameOrigin,
   clientKey,
@@ -21,7 +18,6 @@ import {
   mapError,
   ok,
   rateLimited,
-  requestHost,
 } from "../../../../lib/lab/http";
 
 export const dynamic = "force-dynamic";
@@ -33,27 +29,27 @@ export async function POST(req: Request): Promise<Response> {
     if (rateLimited(`prepare:${clientKey(req)}`, 6))
       return err("RATE_LIMITED", "Too many requests.", 429);
 
-    const body = (await req.json()) as { envelope?: unknown; payload?: unknown };
-    const envelope = signedRequestSchema.parse(body.envelope);
-    const payload = prepareLaunchSchema.parse(body.payload);
+    const body = (await req.json()) as { payload?: unknown };
+    const parsed = prepareLaunchSchema.safeParse(body.payload);
+    if (!parsed.success) return err("BAD_PAYLOAD", "Invalid launch payload.", 400);
+    const payload = parsed.data;
+    const wallet = payload.creatorAddress;
 
-    const wallet = await verifySignedRequest(envelope, {
-      action: "prepare-launch",
-      payloadHash: payloadHashOf(payload),
-      host: requestHost(req),
-    });
-    if (wallet.toLowerCase() !== payload.creatorAddress.toLowerCase()) {
-      return err("CREATOR_MISMATCH", "Signer must be the creator wallet.", 403);
-    }
     const flags = getFlags();
-    await assertSignatureUnused(
-      keccak256(stringToHex(envelope.signature)),
-      flags.requestTtlSeconds * 1000,
-    );
-    await enforceLaunchGuardrails(wallet, flags);
+    // Access modes still bind to the claimed creator wallet: 'disabled'
+    // rejects everyone; 'allowlist' requires the claimed creator to be listed.
+    if (flags.accessMode === "disabled")
+      return err("AUTH_CREATION_DISABLED", "Market creation is currently disabled.", 403);
+    if (
+      flags.accessMode === "allowlist" &&
+      !flags.creatorAllowlist.some((a) => a.toLowerCase() === wallet.toLowerCase())
+    ) {
+      return err("AUTH_NOT_ALLOWLISTED", "Request authentication failed.", 401);
+    }
     if (rateLimited(`prepare-wallet:${wallet.toLowerCase()}`, 6)) {
       return err("RATE_LIMITED", "Too many requests for this wallet.", 429);
     }
+    await enforceLaunchGuardrails(wallet, flags);
     if (
       !isBroadcastableTokenUri({
         imageCid: payload.imageCid,

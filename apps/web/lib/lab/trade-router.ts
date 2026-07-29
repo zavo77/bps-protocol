@@ -5,14 +5,17 @@
 //     1. Rialto direct payment → token          (token not whitelisted → skips)
 //     2. 1inch  direct payment → token
 //     3. 0x     direct payment → token
-//     4. Rialto payment → anchor, then BPS Direct anchor → token   (workhorse)
-//     5. Anchor-direct BPS trade                (advanced fallback)
-//   SELL mirrors: BPS Direct token → anchor, then Rialto anchor → payment.
+//   SELL mirrors: token → payment through the same one-step chain.
+//   Advanced: anchor ↔ token directly through the BPS pool (one transaction).
 //
-// Composed routes are explicit SEQUENTIAL wallet actions — never claimed atomic.
-// Rialto is the primary RWA venue (it has payment↔anchor liquidity the other
-// aggregators lack on 4663). All aggregator adapters are server-only, use the
-// returned allowance spender exactly, add no integrator fee, and return the
+// EVERY public quote is exactly ONE wallet transaction (walletActionCount === 1;
+// approvals are counted separately in the UI). The old composed 2-transaction
+// fallback (payment↔anchor leg + BPS Direct leg executed sequentially) is
+// FORBIDDEN as a public quote: when no one-step venue fills payment↔token,
+// quoteUserTrade throws NO_ROUTE_FOR_PAYMENT_TOKEN instead. Single recovery
+// legs of previously persisted composed trades still prepare via prepare-leg.
+// Rialto is the primary RWA venue. All aggregator adapters are server-only, use
+// the returned allowance spender exactly, add no integrator fee, and return the
 // unsigned tx for the browser wallet to sign after simulation. No server signer.
 
 import "server-only";
@@ -30,7 +33,6 @@ import { quoteOneInch } from "./oneinch";
 import { quoteZeroExRoute } from "./zeroex";
 
 const QUOTE_TTL_MS = 60_000;
-const ANCHOR_DECIMALS = 18; // all approved anchors are 18dp
 const TOKEN_DECIMALS = 18; // DopplerERC20V1
 
 function leg(partial: Omit<RouteLeg, "transactionValue"> & { transactionValue?: string }): RouteLeg {
@@ -50,7 +52,9 @@ interface AggQuote {
 }
 
 /** Try aggregators in priority order (Rialto → 1inch → 0x); first executable wins.
- *  Exported for the routing-order test. */
+ *  With `pinnedVenue` set, ONLY that venue's adapter is quoted — no priority
+ *  chain, no fallback. Used by prepare-leg to freeze the venue after the user
+ *  approved its spender. Exported for the routing-order test. */
 export async function quoteAggregatorDirect(args: {
   sellToken: Address;
   sellDecimals: number;
@@ -58,8 +62,10 @@ export async function quoteAggregatorDirect(args: {
   sellAmountWei: bigint;
   taker: Address;
   slippageBps: number;
+  pinnedVenue?: Extract<LegVenue, "rialto" | "oneInch" | "zeroEx"> | undefined;
 }): Promise<AggQuote | null> {
-  const r = await quoteRialto(args);
+  const pin = args.pinnedVenue;
+  const r = pin === undefined || pin === "rialto" ? await quoteRialto(args) : null;
   if (r) {
     return {
       venue: "rialto",
@@ -73,7 +79,7 @@ export async function quoteAggregatorDirect(args: {
       quoteExpiry: r.quoteExpiry,
     };
   }
-  const o = await quoteOneInch(args);
+  const o = pin === undefined || pin === "oneInch" ? await quoteOneInch(args) : null;
   if (o) {
     return {
       venue: "oneInch",
@@ -87,13 +93,16 @@ export async function quoteAggregatorDirect(args: {
       quoteExpiry: o.quoteExpiry,
     };
   }
-  const z = await quoteZeroExRoute({
-    sellToken: args.sellToken,
-    buyToken: args.buyToken,
-    sellAmountWei: args.sellAmountWei,
-    taker: args.taker,
-    slippageBps: args.slippageBps,
-  });
+  const z =
+    pin === undefined || pin === "zeroEx"
+      ? await quoteZeroExRoute({
+          sellToken: args.sellToken,
+          buyToken: args.buyToken,
+          sellAmountWei: args.sellAmountWei,
+          taker: args.taker,
+          slippageBps: args.slippageBps,
+        })
+      : null;
   if (z) {
     return {
       venue: "zeroEx",
@@ -238,137 +247,9 @@ export async function quoteUserTrade(
     };
   }
 
-  // (4) composed: aggregator payment↔anchor (Rialto primary) + BPS Direct anchor↔token.
-  if (isBuy) {
-    const legA = await quoteAggregatorDirect({
-      sellToken: payment.address,
-      sellDecimals: payment.decimals,
-      buyToken: anchor,
-      sellAmountWei: args.exactInputAmountWei,
-      taker: args.taker,
-      slippageBps: args.slippageBps,
-    });
-    if (!legA) throw new Error("NO_ROUTE_FOR_PAYMENT_TOKEN");
-    const anchorIn = BigInt(legA.minBuyAmountWei);
-    const { quote: legB } = await quoteDirectRoute(client, args.marketToken, "buy", anchorIn, args.slippageBps);
-    warnings.push(
-      `Two steps: ${payment.symbol} → ${ctx.anchorSymbol} (${VENUE_LABEL[legA.venue]}), then ${ctx.anchorSymbol} → token (BPS pool). Two wallet actions — not one-click; step 2 re-quotes from the actual amount received.`,
-    );
-    return {
-      marketToken: args.marketToken,
-      side: args.side,
-      anchorSymbol: ctx.anchorSymbol,
-      anchorAddress: anchor,
-      userInputToken: userInput,
-      userOutputToken: userOutput,
-      routeKind: "composed",
-      legs: [
-        leg({
-          kind: legA.venue,
-          label: `Step 1 · ${payment.symbol} → ${ctx.anchorSymbol} (${VENUE_LABEL[legA.venue]})`,
-          inputToken: payment.address,
-          outputToken: anchor,
-          inputAmountWei: args.exactInputAmountWei.toString(),
-          expectedOutputWei: legA.buyAmountWei,
-          minimumOutputWei: legA.minBuyAmountWei,
-          transactionTarget: legA.transactionTarget,
-          transactionData: legA.transactionData,
-          transactionValue: legA.transactionValue,
-          allowanceTarget: legA.allowanceTarget,
-          estimated: false,
-        }),
-        leg({
-          kind: "bpsDirect",
-          label: `Step 2 · ${ctx.anchorSymbol} → token (BPS pool)`,
-          inputToken: anchor,
-          outputToken: args.marketToken,
-          inputAmountWei: anchorIn.toString(),
-          expectedOutputWei: legB.buyAmount,
-          minimumOutputWei: legB.minimumBuyAmount,
-          transactionTarget: null,
-          transactionData: null,
-          allowanceTarget: legB.allowanceTarget,
-          estimated: true,
-        }),
-      ],
-      expectedFinalOutputWei: legB.buyAmount,
-      minimumFinalOutputWei: legB.minimumBuyAmount,
-      totalPriceImpactBps: legB.priceImpactBps,
-      poolFeeUnits: legB.poolFee,
-      zeroExFeeNote: legA.platformFeeBps !== null ? `${VENUE_LABEL[legA.venue]} leg fee ${legA.platformFeeBps} bps.` : null,
-      walletActionCount: 2,
-      approvalsRequired: [
-        ...(legA.allowanceTarget && !payment.native ? [{ token: payment.address, spender: legA.allowanceTarget }] : []),
-        ...(legB.allowanceTarget ? [{ token: anchor, spender: legB.allowanceTarget }] : []),
-      ],
-      quoteExpiry: Math.min(Date.now() + QUOTE_TTL_MS, legA.quoteExpiry),
-      warnings,
-    };
-  }
-
-  // SELL composed: BPS Direct token → anchor, then aggregator anchor → payment.
-  const { quote: legA } = await quoteDirectRoute(client, args.marketToken, "sell", args.exactInputAmountWei, args.slippageBps);
-  const anchorOut = BigInt(legA.minimumBuyAmount);
-  const legB = await quoteAggregatorDirect({
-    sellToken: anchor,
-    sellDecimals: ANCHOR_DECIMALS,
-    buyToken: payment.address,
-    sellAmountWei: anchorOut,
-    taker: args.taker,
-    slippageBps: args.slippageBps,
-  });
-  if (!legB) throw new Error("NO_ROUTE_FOR_PAYMENT_TOKEN");
-  warnings.push(
-    `Two steps: token → ${ctx.anchorSymbol} (BPS pool), then ${ctx.anchorSymbol} → ${payment.symbol} (${VENUE_LABEL[legB.venue]}). Two wallet actions — not one-click; step 2 re-quotes from the actual amount received.`,
-  );
-  return {
-    marketToken: args.marketToken,
-    side: args.side,
-    anchorSymbol: ctx.anchorSymbol,
-    anchorAddress: anchor,
-    userInputToken: userInput,
-    userOutputToken: userOutput,
-    routeKind: "composed",
-    legs: [
-      leg({
-        kind: "bpsDirect",
-        label: `Step 1 · token → ${ctx.anchorSymbol} (BPS pool)`,
-        inputToken: args.marketToken,
-        outputToken: anchor,
-        inputAmountWei: legA.sellAmount,
-        expectedOutputWei: legA.buyAmount,
-        minimumOutputWei: legA.minimumBuyAmount,
-        transactionTarget: legA.transactionTarget,
-        transactionData: legA.transactionData,
-        allowanceTarget: legA.allowanceTarget,
-        estimated: false,
-      }),
-      leg({
-        kind: legB.venue,
-        label: `Step 2 · ${ctx.anchorSymbol} → ${payment.symbol} (${VENUE_LABEL[legB.venue]})`,
-        inputToken: anchor,
-        outputToken: payment.address,
-        inputAmountWei: anchorOut.toString(),
-        expectedOutputWei: legB.buyAmountWei,
-        minimumOutputWei: legB.minBuyAmountWei,
-        transactionTarget: null,
-        transactionData: null,
-        allowanceTarget: legB.allowanceTarget,
-        estimated: true,
-      }),
-    ],
-    expectedFinalOutputWei: legB.buyAmountWei,
-    // The venue already enforced slippage on this leg — never re-apply it.
-    minimumFinalOutputWei: legB.minBuyAmountWei,
-    totalPriceImpactBps: legA.priceImpactBps,
-    poolFeeUnits: legA.poolFee,
-    zeroExFeeNote: legB.platformFeeBps !== null ? `${VENUE_LABEL[legB.venue]} leg fee ${legB.platformFeeBps} bps.` : null,
-    walletActionCount: 2,
-    approvalsRequired: [
-      ...(legA.allowanceTarget ? [{ token: args.marketToken, spender: legA.allowanceTarget }] : []),
-      ...(legB.allowanceTarget ? [{ token: anchor, spender: legB.allowanceTarget }] : []),
-    ],
-    quoteExpiry: Math.min(Date.now() + QUOTE_TTL_MS, legB.quoteExpiry),
-    warnings,
-  };
+  // No one-step venue can fill payment↔token. The composed 2-transaction
+  // fallback (payment↔anchor + BPS Direct anchor↔token as sequential wallet
+  // actions) is FORBIDDEN as a public quote — fail honestly instead. The
+  // /api/lab/quote handler maps this to a 409 with user-facing copy.
+  throw new Error("NO_ROUTE_FOR_PAYMENT_TOKEN");
 }

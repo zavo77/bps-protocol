@@ -188,8 +188,15 @@ describe("Create wizard — anchor picker", () => {
     await user.click(screen.getByTestId("prepare-launch"));
 
     await waitFor(() => expect(bucket.prepareBodies.length).toBeGreaterThan(0));
-    const body = JSON.parse(bucket.prepareBodies[0]!) as { payload: { anchorSymbol: string } };
+    const body = JSON.parse(bucket.prepareBodies[0]!) as {
+      envelope?: unknown;
+      payload: { anchorSymbol: string };
+    };
     expect(body.payload.anchorSymbol).toBe("NVDA");
+    // Single-confirmation contract: no signed envelope, no message signature —
+    // the deployment transaction is the only wallet interaction of a launch.
+    expect(body.envelope).toBeUndefined();
+    expect(h.fns.signMessageAsync).not.toHaveBeenCalled();
   });
 });
 

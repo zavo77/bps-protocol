@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getAddress } from "viem";
 
-// Routing tests for the frozen V1 architecture:
-//   BUY : payment → [Rialto] → anchor → [BPS Direct] → market token
-//   SELL: market token → [BPS Direct] → anchor → [Rialto] → payment
-// with one-step aggregator routes attempted first (Rialto → 1inch → 0x) and
-// never depended on for brand-new BPS pools.
+// Routing tests. Every PUBLIC quote is exactly ONE wallet transaction via the
+// one-step aggregator chain (Rialto → 1inch → 0x) or the advanced
+// direct-anchor BPS route. When no one-step venue fills payment↔token,
+// quoteUserTrade throws NO_ROUTE_FOR_PAYMENT_TOKEN — the composed
+// 2-transaction fallback is FORBIDDEN and must never be offered.
 //
 // The three aggregator adapters hit distinct hosts, so the fetch mock branches
 // on hostname (and on buy/sell token for Rialto, to separate the direct
@@ -72,7 +72,7 @@ vi.mock("@bps/launch-lab", async (importOriginal) => {
   };
 });
 
-import { APPROVED_ANCHORS, PAYMENT_TOKENS } from "@bps/launch-lab";
+import { APPROVED_ANCHORS, NATIVE_ETH, PAYMENT_TOKENS, quoteDirectRoute } from "@bps/launch-lab";
 import { quoteAggregatorDirect, quoteUserTrade } from "./trade-router";
 
 const saved = { ...process.env };
@@ -199,6 +199,24 @@ describe("quoteAggregatorDirect — routing priority", () => {
     const q = await quoteAggregatorDirect(args);
     expect(q?.venue).toBe("zeroEx"); // 1inch skipped (no key), so 0x
   });
+
+  it("pinnedVenue quotes ONLY that adapter — the priority chain never runs", async () => {
+    allKeys();
+    const urls = stub({ rialto: true, oneInch: true, zeroEx: true }); // Rialto would win unpinned
+    const q = await quoteAggregatorDirect({ ...args, pinnedVenue: "zeroEx" });
+    expect(q?.venue).toBe("zeroEx");
+    expect(urls.some((u) => u.includes("rialto"))).toBe(false);
+    expect(urls.some((u) => u.includes("1inch.dev"))).toBe(false);
+  });
+
+  it("pinnedVenue NEVER falls back: pinned venue down → null even when others could fill", async () => {
+    allKeys();
+    const urls = stub({ rialto: false, oneInch: true, zeroEx: true });
+    const q = await quoteAggregatorDirect({ ...args, pinnedVenue: "rialto" });
+    expect(q).toBeNull();
+    expect(urls.some((u) => u.includes("1inch.dev"))).toBe(false);
+    expect(urls.some((u) => u.includes("0x.org"))).toBe(false);
+  });
 });
 
 describe("quoteAggregatorDirect — all five anchors × ETH/WETH/USDG, both directions", () => {
@@ -256,83 +274,132 @@ describe("quoteAggregatorDirect — all five anchors × ETH/WETH/USDG, both dire
   }
 });
 
-describe("quoteUserTrade — frozen V1 composed architecture", () => {
+describe("quoteUserTrade — public quotes are ONE transaction only (no composed fallback)", () => {
   const client = {} as never; // pool context + direct quote are mocked
 
-  it("NORMAL BUY: payment → Rialto → anchor, then BPS Direct anchor → token (2 wallet actions)", async () => {
+  /** Invariant every PUBLIC quote must satisfy: exactly one executable wallet
+   *  transaction. Approvals are counted separately in the UI. */
+  function expectOneTransaction(q: {
+    walletActionCount: number;
+    legs: { transactionData: string | null; estimated: boolean }[];
+  }) {
+    expect(q.walletActionCount).toBe(1);
+    expect(q.legs).toHaveLength(1);
+    expect(q.legs[0]!.transactionData).not.toBeNull();
+    expect(q.legs[0]!.estimated).toBe(false);
+  }
+
+  it("anchor-only Rialto liquidity (the live new-market condition): BUY throws NO_ROUTE_FOR_PAYMENT_TOKEN — the composed 2-transaction fallback is NEVER offered", async () => {
     process.env.RIALTO_API_KEY = "r";
     delete process.env.ONEINCH_API_KEY;
     delete process.env.ZEROX_API_KEY;
     stubAnchorOnlyRialto();
+    vi.mocked(quoteDirectRoute).mockClear();
 
+    await expect(
+      quoteUserTrade(client, {
+        marketToken: TOKEN,
+        side: "buy",
+        inputToken: WETH,
+        outputToken: TOKEN,
+        exactInputAmountWei: 10n ** 18n,
+        taker: TAKER,
+        slippageBps: 100,
+      }),
+    ).rejects.toThrow("NO_ROUTE_FOR_PAYMENT_TOKEN");
+    // No composed leg was ever built: the BPS Direct quoter never ran.
+    expect(vi.mocked(quoteDirectRoute)).not.toHaveBeenCalled();
+  });
+
+  it("anchor-only Rialto liquidity: SELL throws NO_ROUTE_FOR_PAYMENT_TOKEN — no BPS Direct leg is quoted", async () => {
+    process.env.RIALTO_API_KEY = "r";
+    delete process.env.ONEINCH_API_KEY;
+    delete process.env.ZEROX_API_KEY;
+    stubAnchorOnlyRialto();
+    vi.mocked(quoteDirectRoute).mockClear();
+
+    await expect(
+      quoteUserTrade(client, {
+        marketToken: TOKEN,
+        side: "sell",
+        inputToken: TOKEN,
+        outputToken: WETH,
+        exactInputAmountWei: 10n ** 18n,
+        taker: TAKER,
+        slippageBps: 100,
+      }),
+    ).rejects.toThrow("NO_ROUTE_FOR_PAYMENT_TOKEN");
+    expect(vi.mocked(quoteDirectRoute)).not.toHaveBeenCalled();
+  });
+
+  for (const side of ["buy", "sell"] as const) {
+    it(`ALL one-step venues down: ${side} throws NO_ROUTE_FOR_PAYMENT_TOKEN (mapped to the honest 409 by /api/lab/quote)`, async () => {
+      allKeys();
+      stub({ rialto: false, oneInch: false, zeroEx: false });
+      vi.mocked(quoteDirectRoute).mockClear();
+      await expect(
+        quoteUserTrade(client, {
+          marketToken: TOKEN,
+          side,
+          inputToken: side === "buy" ? WETH : TOKEN,
+          outputToken: side === "buy" ? TOKEN : WETH,
+          exactInputAmountWei: 10n ** 18n,
+          taker: TAKER,
+          slippageBps: 100,
+        }),
+      ).rejects.toThrow("NO_ROUTE_FOR_PAYMENT_TOKEN");
+      expect(vi.mocked(quoteDirectRoute)).not.toHaveBeenCalled();
+    });
+  }
+
+  it("native ETH one-step BUY is exactly ONE transaction with NO approval", async () => {
+    allKeys();
+    stub({ rialto: true });
     const q = await quoteUserTrade(client, {
       marketToken: TOKEN,
       side: "buy",
-      inputToken: WETH,
+      inputToken: NATIVE_ETH,
       outputToken: TOKEN,
       exactInputAmountWei: 10n ** 18n,
       taker: TAKER,
       slippageBps: 100,
     });
-
-    expect(q.routeKind).toBe("composed");
-    expect(q.walletActionCount).toBe(2);
-    expect(q.legs).toHaveLength(2);
-    // Leg 1: Rialto payment → anchor, executable now.
-    expect(q.legs[0]!.kind).toBe("rialto");
-    expect(q.legs[0]!.inputToken).toBe(WETH);
-    expect(q.legs[0]!.outputToken).toBe(GOOGL);
-    expect(q.legs[0]!.estimated).toBe(false);
-    expect(q.legs[0]!.transactionTarget).toBe(R_ROUTER);
-    // Leg 2: BPS Direct anchor → token, ESTIMATED (re-prepared from the actual
-    // received amount after leg 1 confirms — never a reused stale estimate).
-    expect(q.legs[1]!.kind).toBe("bpsDirect");
-    expect(q.legs[1]!.inputToken).toBe(GOOGL);
-    expect(q.legs[1]!.outputToken).toBe(TOKEN);
-    expect(q.legs[1]!.estimated).toBe(true);
-    expect(q.legs[1]!.transactionData).toBeNull();
-    // Approvals: payment→Rialto spender, anchor→Permit2.
-    expect(q.approvalsRequired).toEqual([
-      { token: WETH, spender: R_ROUTER },
-      { token: GOOGL, spender: PERMIT2 },
-    ]);
-    expect(q.zeroExFeeNote).toContain("Rialto");
-    expect(q.zeroExFeeNote).toContain("5 bps");
-    expect(q.warnings.join(" ")).toMatch(/Two steps/);
+    expect(q.routeKind).toBe("one-step");
+    expectOneTransaction(q);
+    // Native ETH needs no ERC-20 approval — the swap is the only wallet action.
+    expect(q.approvalsRequired).toEqual([]);
   });
 
-  it("NORMAL SELL: BPS Direct token → anchor, then Rialto anchor → payment (reverse route)", async () => {
-    process.env.RIALTO_API_KEY = "r";
-    delete process.env.ONEINCH_API_KEY;
-    delete process.env.ZEROX_API_KEY;
-    stubAnchorOnlyRialto();
-
+  it("advanced direct-anchor BUY (anchor → token) stays exactly ONE transaction", async () => {
+    allKeys();
+    stub({}); // aggregators are never consulted for the anchor-direct path
     const q = await quoteUserTrade(client, {
       marketToken: TOKEN,
-      side: "sell",
-      inputToken: TOKEN,
-      outputToken: WETH,
+      side: "buy",
+      inputToken: GOOGL,
+      outputToken: TOKEN,
       exactInputAmountWei: 10n ** 18n,
       taker: TAKER,
       slippageBps: 100,
     });
+    expect(q.routeKind).toBe("direct-anchor");
+    expectOneTransaction(q);
+  });
 
-    expect(q.routeKind).toBe("composed");
-    expect(q.walletActionCount).toBe(2);
-    // Leg 1: BPS Direct token → anchor, executable now.
-    expect(q.legs[0]!.kind).toBe("bpsDirect");
-    expect(q.legs[0]!.inputToken).toBe(TOKEN);
-    expect(q.legs[0]!.outputToken).toBe(GOOGL);
-    expect(q.legs[0]!.estimated).toBe(false);
-    // Leg 2: Rialto anchor → payment, estimated until leg 1 confirms.
-    expect(q.legs[1]!.kind).toBe("rialto");
-    expect(q.legs[1]!.inputToken).toBe(GOOGL);
-    expect(q.legs[1]!.outputToken).toBe(WETH);
-    expect(q.legs[1]!.estimated).toBe(true);
-    expect(q.legs[1]!.transactionData).toBeNull();
-    // The venue already enforced slippage on leg 2 — the route minimum is the
-    // venue-reported minimum, never slippage applied a second time.
-    expect(q.minimumFinalOutputWei).toBe("995000000000000000");
+  it("advanced direct-anchor SELL (token → anchor) stays exactly ONE transaction", async () => {
+    allKeys();
+    stub({});
+    const q = await quoteUserTrade(client, {
+      marketToken: TOKEN,
+      side: "sell",
+      inputToken: TOKEN,
+      outputToken: GOOGL,
+      exactInputAmountWei: 10n ** 18n,
+      taker: TAKER,
+      slippageBps: 100,
+    });
+    expect(q.routeKind).toBe("direct-anchor");
+    expectOneTransaction(q);
   });
 
   it("one-step SELL requires approval of the MARKET token (never the payment token)", async () => {
@@ -348,6 +415,7 @@ describe("quoteUserTrade — frozen V1 composed architecture", () => {
       slippageBps: 100,
     });
     expect(q.routeKind).toBe("one-step");
+    expectOneTransaction(q);
     // SELL spends the market token — an ERC-20 that always needs approval.
     expect(q.approvalsRequired).toEqual([{ token: TOKEN, spender: R_ROUTER }]);
   });
@@ -365,7 +433,7 @@ describe("quoteUserTrade — frozen V1 composed architecture", () => {
       slippageBps: 100,
     });
     expect(q.routeKind).toBe("one-step");
-    expect(q.walletActionCount).toBe(1);
+    expectOneTransaction(q);
     expect(q.legs[0]!.kind).toBe("rialto");
   });
 

@@ -21,9 +21,12 @@
 //   (d) send transaction     → the ONLY wallet prompts are approvals + the swap
 //   (e) waitForTransactionReceipt → success/failure
 //
-// For a COMPOSED route (2 wallet actions via the anchor) the quote's leg 2 is an
-// ESTIMATE: after leg 1 confirms we read the actual anchor received (balanceOf
-// delta) and re-prepare leg 2 with that exact amount. A non-secret attemptId
+// Every NEW public quote is exactly ONE swap transaction (the server never
+// returns a composed 2-transaction route anymore). The multi-leg machinery
+// below remains ONLY so previously persisted partial composed trades can be
+// resumed (single anchor→payment / anchor→token recovery leg). After an
+// approval the re-preparation is PINNED to the approved venue + spender —
+// the venue can never change once the user approved. A non-secret attemptId
 // keys the structured server logs for the whole attempt.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -114,6 +117,11 @@ interface LegPayload {
   exactInputAmount: string;
   slippageBps: number;
   taker: Address;
+  /** Post-approval venue pin: the server quotes ONLY this venue's adapter. */
+  pinnedVenue?: "rialto" | "oneInch" | "zeroEx" | undefined;
+  /** Post-approval spender pin: the server 409s (VENUE_CHANGED) unless the
+   *  fresh quote's allowance target is null (satisfied) or exactly this. */
+  pinnedSpender?: Address | undefined;
 }
 
 interface PrepareLegResponse {
@@ -610,11 +618,22 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
       const amountInWei = BigInt(payload.exactInputAmount);
       const nativeLegInput = payload.inputToken.toLowerCase() === NATIVE_ETH.toLowerCase();
       let approved = false;
+      // VENUE + SPENDER PINNING: the moment the user approves an aggregator
+      // spender, this leg's venue and spender are FROZEN. The post-approval
+      // re-preparation quotes only the pinned venue and the server rejects
+      // (VENUE_CHANGED) any quote whose spender moved — the venue can never
+      // change after an approval.
+      let pinnedVenue: "rialto" | "oneInch" | "zeroEx" | null = null;
+      let pinnedSpender: Address | null = null;
       if (
         !nativeLegInput &&
         prep.approvals.erc20ApprovalNeeded &&
         prep.approvals.erc20ApprovalTarget
       ) {
+        if (prep.leg.kind !== "bpsDirect") {
+          pinnedVenue = prep.leg.kind;
+          pinnedSpender = prep.approvals.erc20ApprovalTarget;
+        }
         setStatus("approving");
         const approveHash = await writeContractAsync({
           address: payload.inputToken,
@@ -646,7 +665,29 @@ export function useTrade(marketToken: string, options?: UseTradeOptions): UseTra
         await publicClient.waitForTransactionReceipt({ hash: permitHash });
         approved = true;
       }
-      if (approved) prep = await prepareLeg(payload, legNo);
+      if (approved) {
+        // Re-prepare signature-free. An aggregator leg re-prepares WITH the
+        // pinned venue + spender so the just-approved allowance always binds.
+        prep = await prepareLeg(
+          pinnedVenue && pinnedSpender ? { ...payload, pinnedVenue, pinnedSpender } : payload,
+          legNo,
+        );
+        // NEVER request approval for a second spender. If the pinned
+        // re-preparation still reports an approval needed to a DIFFERENT
+        // spender, stop with a concise error — no auto-approve, no signature.
+        if (
+          pinnedSpender &&
+          prep.approvals.erc20ApprovalNeeded &&
+          prep.approvals.erc20ApprovalTarget &&
+          prep.approvals.erc20ApprovalTarget.toLowerCase() !== pinnedSpender.toLowerCase()
+        ) {
+          setStatus("failure");
+          setError(
+            "The route changed after your approval — no transaction was sent. Get a fresh quote and try again.",
+          );
+          return null;
+        }
+      }
 
       // Stale leg quote → stop; the user re-quotes and reviews fresh numbers.
       // (Post-approval re-preparation above always yields a fresh window, so

@@ -756,6 +756,19 @@ export default function LabCreatePage() {
             </div>
           </details>
 
+          {/* Exactly ONE wallet confirmation — the deployment transaction.
+              Nothing else is ever asked of the wallet behind the button. */}
+          <div style={{ marginTop: 14 }} data-testid="wallet-confirmations">
+            <Row k="Wallet confirmations" v="1" mono={false} />
+            <p
+              className="lab-muted"
+              style={{ fontSize: 13, margin: "4px 0 0" }}
+              data-testid="wallet-confirmation-steps"
+            >
+              1. Launch {flow.manifest.tokenSymbol}
+            </p>
+          </div>
+
           <div
             style={{
               display: "flex",

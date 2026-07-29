@@ -35,6 +35,13 @@ const prepareLegSchema = z.object({
   exactInputAmount: z.string().regex(/^[0-9]{1,36}$/),
   slippageBps: z.number().int().min(1).max(5_000),
   taker: z.string().refine(isAddress),
+  // VENUE + SPENDER PINNING (post-approval re-preparation): with pinnedVenue
+  // set, ONLY that venue's adapter is quoted (no priority chain), and the leg
+  // is rejected (409 VENUE_CHANGED) unless the fresh quote's allowance target
+  // is null (allowance satisfied) or exactly pinnedSpender. The user's
+  // approval can never silently migrate to a different venue or spender.
+  pinnedVenue: z.enum(["rialto", "oneInch", "zeroEx"]).optional(),
+  pinnedSpender: z.string().refine(isAddress).optional(),
 });
 
 /** Non-secret client-generated trade attempt id for structured server logs. */
@@ -133,8 +140,9 @@ export async function POST(req: Request): Promise<Response> {
       expectedOutputWei = quote.buyAmount;
       minimumOutputWei = quote.minimumBuyAmount;
     } else {
-      // Aggregator leg. The server ALWAYS runs the frozen priority chain
-      // (Rialto → 1inch → 0x) regardless of the client's kind hint, and the
+      // Aggregator leg. Without a pin the server ALWAYS runs the frozen
+      // priority chain (Rialto → 1inch → 0x) regardless of the client's kind
+      // hint; with pinnedVenue (post-approval) ONLY that adapter runs. The
       // response reports the venue actually used. Token binding: one side must
       // be a supported payment token and the counter-side must be EXACTLY this
       // market's token (one-step) or its anchor (composed). payment→payment and
@@ -165,9 +173,35 @@ export async function POST(req: Request): Promise<Response> {
         sellAmountWei: amountIn,
         taker,
         slippageBps: payload.slippageBps,
+        // With a pin, ONLY the approved venue's adapter runs — no fallback.
+        pinnedVenue: payload.pinnedVenue,
       });
       if (!agg)
         return err("ROUTE_UNAVAILABLE", "No executable aggregator route for this leg.", 409);
+      // Spender pinning: after the user approved pinnedSpender, a fresh quote
+      // whose allowance target is neither null (allowance satisfied) nor that
+      // exact spender must never reach a signature.
+      if (payload.pinnedVenue) {
+        const pinnedSpender = payload.pinnedSpender
+          ? getAddress(payload.pinnedSpender).toLowerCase()
+          : null;
+        if (
+          agg.allowanceTarget !== null &&
+          agg.allowanceTarget.toLowerCase() !== pinnedSpender
+        ) {
+          logTrade({
+            event: "prepare-leg",
+            venue: agg.venue,
+            rejected: "VENUE_CHANGED",
+            quotedAt: Date.now(),
+          });
+          return err(
+            "VENUE_CHANGED",
+            "The route's spender changed after your approval — no transaction was prepared. Get a fresh quote to continue.",
+            409,
+          );
+        }
+      }
       actualKind = agg.venue;
       to = agg.transactionTarget;
       data = agg.transactionData as Hex;

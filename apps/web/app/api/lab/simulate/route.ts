@@ -1,15 +1,11 @@
-// POST — identical inputs to /prepare; re-runs the exact simulation for
-// freshness checks (180 s rule). Same authentication requirements.
+// POST { payload } — identical inputs to /prepare; re-runs the exact simulation
+// for freshness checks (180 s rule). NO signed envelope (same contract as
+// /prepare): the deployment transaction authenticates the creator, so stale
+// re-simulation never requires a wallet interaction. Validation, access-mode
+// enforcement, and per-IP + per-claimed-wallet rate limits still apply.
 
-import { keccak256, stringToHex } from "viem";
-import { prepareLaunchSchema, signedRequestSchema } from "@bps/launch-lab";
-import {
-  getFlags,
-  payloadHashOf,
-  prepareLaunch,
-  verifySignedRequest,
-} from "../../../../lib/lab/server";
-import { assertSignatureUnused } from "../../../../lib/lab/store";
+import { prepareLaunchSchema } from "@bps/launch-lab";
+import { getFlags, prepareLaunch } from "../../../../lib/lab/server";
 import {
   assertSameOrigin,
   clientKey,
@@ -17,7 +13,6 @@ import {
   mapError,
   ok,
   rateLimited,
-  requestHost,
 } from "../../../../lib/lab/http";
 
 export const dynamic = "force-dynamic";
@@ -29,21 +24,25 @@ export async function POST(req: Request): Promise<Response> {
     if (rateLimited(`simulate:${clientKey(req)}`, 10))
       return err("RATE_LIMITED", "Too many requests.", 429);
 
-    const body = (await req.json()) as { envelope?: unknown; payload?: unknown };
-    const envelope = signedRequestSchema.parse(body.envelope);
-    const payload = prepareLaunchSchema.parse(body.payload);
-    const wallet = await verifySignedRequest(envelope, {
-      action: "prepare-launch",
-      payloadHash: payloadHashOf(payload),
-      host: requestHost(req),
-    });
-    if (wallet.toLowerCase() !== payload.creatorAddress.toLowerCase()) {
-      return err("CREATOR_MISMATCH", "Signer must be the creator wallet.", 403);
+    const body = (await req.json()) as { payload?: unknown };
+    const parsed = prepareLaunchSchema.safeParse(body.payload);
+    if (!parsed.success) return err("BAD_PAYLOAD", "Invalid launch payload.", 400);
+    const payload = parsed.data;
+    const wallet = payload.creatorAddress;
+
+    const flags = getFlags();
+    if (flags.accessMode === "disabled")
+      return err("AUTH_CREATION_DISABLED", "Market creation is currently disabled.", 403);
+    if (
+      flags.accessMode === "allowlist" &&
+      !flags.creatorAllowlist.some((a) => a.toLowerCase() === wallet.toLowerCase())
+    ) {
+      return err("AUTH_NOT_ALLOWLISTED", "Request authentication failed.", 401);
     }
-    await assertSignatureUnused(
-      keccak256(stringToHex(envelope.signature)),
-      getFlags().requestTtlSeconds * 1000,
-    );
+    if (rateLimited(`simulate-wallet:${wallet.toLowerCase()}`, 10)) {
+      return err("RATE_LIMITED", "Too many requests for this wallet.", 429);
+    }
+
     const commit =
       process.env.BPS_SOURCE_COMMIT || process.env.VERCEL_GIT_COMMIT_SHA || "local-dev";
     const bundle = await prepareLaunch(payload, "8h-v1", commit);

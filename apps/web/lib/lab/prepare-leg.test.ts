@@ -17,6 +17,7 @@ const RIALTO_ROUTER = getAddress("0x3000000000000000000000000000000000000003");
 
 const m = vi.hoisted(() => ({
   sellPaused: false,
+  tradingPaused: false,
   quoteRialto: vi.fn(),
   quoteOneInch: vi.fn(async () => null),
   quoteZeroExRoute: vi.fn(async () => null),
@@ -36,6 +37,7 @@ const m = vi.hoisted(() => ({
 vi.mock("./server", () => ({
   getLabClient: () => m.client,
   isSellPaused: () => m.sellPaused,
+  isTradingPaused: () => m.tradingPaused,
 }));
 vi.mock("./rialto", () => ({ quoteRialto: m.quoteRialto }));
 vi.mock("./oneinch", () => ({ quoteOneInch: m.quoteOneInch }));
@@ -127,6 +129,7 @@ const validRialtoPayload = {
 beforeEach(() => {
   vi.clearAllMocks(); // call counts must not leak between tests
   m.sellPaused = false;
+  m.tradingPaused = false;
   m.quoteRialto.mockResolvedValue(rialtoQuoteOk);
   m.quoteOneInch.mockResolvedValue(null);
   m.quoteZeroExRoute.mockResolvedValue(null);
@@ -272,5 +275,121 @@ describe("POST /api/lab/trade/prepare-leg — rejection matrix + Rialto leg", ()
     const body = (await res.json()) as { ok: boolean; code: string };
     expect(res.status).toBe(409);
     expect(body.code).toBe("SIMULATION_FAILED");
+  });
+
+  it("TRADING_PAUSED brake: blocks ALL leg preparation (503) before any venue is quoted", async () => {
+    m.tradingPaused = true;
+    const res = await POST(makeRequest(validRialtoPayload));
+    const body = (await res.json()) as { code: string };
+    expect(res.status).toBe(503);
+    expect(body.code).toBe("TRADING_PAUSED");
+    expect(m.quoteRialto).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// VENUE + SPENDER PINNING — the post-approval re-preparation contract. With
+// pinnedVenue set the server quotes ONLY that adapter (never the priority
+// chain), and rejects (409 VENUE_CHANGED) any fresh quote whose allowance
+// target is neither null (allowance satisfied) nor exactly pinnedSpender.
+// ---------------------------------------------------------------------------
+describe("POST /api/lab/trade/prepare-leg — venue + spender pinning", () => {
+  const ZX_SPENDER = getAddress("0x5000000000000000000000000000000000000005");
+  const OTHER_SPENDER = getAddress("0x6000000000000000000000000000000000000006");
+
+  const zeroExQuoteOk = {
+    buyAmount: "5000000000000000000",
+    minimumBuyAmount: "4950000000000000000",
+    allowanceTarget: ZX_SPENDER,
+    transactionTarget: ZX_SPENDER,
+    transactionData: "0x1234" as const,
+    transactionValue: "0",
+    quoteExpiry: Date.now() + 30_000,
+  };
+
+  it("pinnedVenue quotes ONLY that adapter — Rialto and 1inch are never consulted", async () => {
+    m.quoteZeroExRoute.mockResolvedValue(zeroExQuoteOk as never);
+    const res = await POST(
+      makeRequest({
+        ...validRialtoPayload,
+        kind: "zeroEx",
+        pinnedVenue: "zeroEx",
+        pinnedSpender: ZX_SPENDER,
+      }),
+    );
+    const body = (await res.json()) as {
+      ok: boolean;
+      data: { leg: { kind: string }; approvals: { erc20ApprovalTarget: string | null } };
+    };
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.data.leg.kind).toBe("zeroEx");
+    expect(body.data.approvals.erc20ApprovalTarget).toBe(ZX_SPENDER);
+    expect(m.quoteZeroExRoute).toHaveBeenCalled();
+    expect(m.quoteRialto).not.toHaveBeenCalled();
+    expect(m.quoteOneInch).not.toHaveBeenCalled();
+  });
+
+  it("VENUE_CHANGED (409): a fresh spender that differs from pinnedSpender is rejected before balance, allowance, or simulation", async () => {
+    m.quoteRialto.mockResolvedValue({ ...rialtoQuoteOk, allowanceTarget: OTHER_SPENDER });
+    const res = await POST(
+      makeRequest({
+        ...validRialtoPayload,
+        pinnedVenue: "rialto",
+        pinnedSpender: RIALTO_ROUTER,
+      }),
+    );
+    const body = (await res.json()) as { ok: boolean; code: string };
+    expect(res.status).toBe(409);
+    expect(body.code).toBe("VENUE_CHANGED");
+    // Rejected before any chain read or simulation — no transaction escapes.
+    expect(m.client.call).not.toHaveBeenCalled();
+    expect(m.client.readContract).not.toHaveBeenCalled();
+  });
+
+  it("allowance satisfied (allowanceTarget null) is ACCEPTED under a pin — no false VENUE_CHANGED", async () => {
+    m.quoteRialto.mockResolvedValue({ ...rialtoQuoteOk, allowanceTarget: null });
+    const res = await POST(
+      makeRequest({
+        ...validRialtoPayload,
+        pinnedVenue: "rialto",
+        pinnedSpender: RIALTO_ROUTER,
+      }),
+    );
+    const body = (await res.json()) as {
+      ok: boolean;
+      data: { leg: { kind: string }; approvals: { erc20ApprovalNeeded: boolean } };
+    };
+    expect(res.status).toBe(200);
+    expect(body.data.leg.kind).toBe("rialto");
+    expect(body.data.approvals.erc20ApprovalNeeded).toBe(false);
+  });
+
+  it("pinned venue with no route → ROUTE_UNAVAILABLE; the chain NEVER falls back to another venue", async () => {
+    m.quoteRialto.mockResolvedValue(null);
+    m.quoteOneInch.mockResolvedValue(rialtoQuoteOk as never); // would fill unpinned
+    const res = await POST(
+      makeRequest({
+        ...validRialtoPayload,
+        pinnedVenue: "rialto",
+        pinnedSpender: RIALTO_ROUTER,
+      }),
+    );
+    const body = (await res.json()) as { code: string };
+    expect(res.status).toBe(409);
+    expect(body.code).toBe("ROUTE_UNAVAILABLE");
+    expect(m.quoteOneInch).not.toHaveBeenCalled();
+    expect(m.quoteZeroExRoute).not.toHaveBeenCalled();
+  });
+
+  it("recovery resume still prepares an UNPINNED single anchor→payment leg through the priority chain", async () => {
+    m.quoteRialto.mockResolvedValue({ ...rialtoQuoteOk, sellToken: GOOGL, buyToken: WETH });
+    const res = await POST(
+      makeRequest({ ...validRialtoPayload, inputToken: GOOGL, outputToken: WETH }),
+    );
+    const body = (await res.json()) as { ok: boolean; data: { leg: { kind: string } } };
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.data.leg.kind).toBe("rialto");
   });
 });

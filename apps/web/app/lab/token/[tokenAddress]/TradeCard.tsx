@@ -25,6 +25,14 @@ const SLIPPAGE_PRESETS: { label: string; bps: number }[] = [
   { label: "3%", bps: 300 },
 ];
 
+/** Human venue names for the pre-action summary ("via Rialto" / "via 0x"). */
+const VENUE_NAMES: Record<string, string> = {
+  rialto: "Rialto",
+  oneInch: "1inch",
+  zeroEx: "0x",
+  bpsDirect: "BPS Direct",
+};
+
 function fmt(wei: string | bigint, decimals: number): string {
   try {
     return formatUnits(typeof wei === "bigint" ? wei : BigInt(wei), decimals);
@@ -153,6 +161,19 @@ export function TradeCard({
   const impactBps = quote?.totalPriceImpactBps ?? null;
   const highImpact = impactBps !== null && impactBps >= PRICE_IMPACT_WARN_BPS;
   const multiStep = (quote?.walletActionCount ?? 1) > 1;
+
+  // Pre-action summary inputs, derived from the signature-free plannedSteps
+  // preflight: approval transactions are the "Approve …" prompts; every other
+  // prompt is a swap transaction.
+  const approvalSteps = plannedSteps?.filter((s) => s.startsWith("Approve")) ?? null;
+  const approvalSummary =
+    approvalSteps === null
+      ? "…"
+      : approvalSteps.length === 0
+        ? "Not required"
+        : approvalSteps.some((s) => s.includes("(if needed)"))
+          ? `Up to ${approvalSteps.length} approval transaction${approvalSteps.length === 1 ? "" : "s"}`
+          : `${approvalSteps.length} approval transaction${approvalSteps.length === 1 ? "" : "s"} required`;
 
   return (
     <div data-testid="trade-card">
@@ -354,28 +375,66 @@ export function TradeCard({
         </div>
       )}
 
-      {/* Exact wallet prompts BEFORE execution: every approval + transaction,
-          in order, from a signature-free allowance preflight. No surprises. */}
+      {/* Pre-action summary: BEFORE the trade button the primary surface
+          states exactly what execution will ask of the wallet — wallet
+          confirmations (approval transactions + swap transactions, from the
+          signature-free plannedSteps preflight), route venue, and max
+          slippage — plus the ordered wallet prompts. No surprises. */}
       {quote && quote.legs.length > 0 && (
-        <div style={{ marginTop: 8 }} data-testid="planned-steps">
-          <p className="lab-muted" style={{ fontSize: 13, margin: "0 0 4px" }}>
-            {plannedSteps
-              ? `This trade takes ${plannedSteps.length} wallet confirmation${plannedSteps.length === 1 ? "" : "s"}:`
-              : `Checking the wallet confirmations this trade needs…`}
-          </p>
-          {plannedSteps && (
-            <ol style={{ margin: 0, paddingLeft: "1.2rem" }}>
-              {plannedSteps.map((step, i) => (
-                <li
-                  key={`${step}-${i}`}
-                  data-testid={`planned-step-${i + 1}`}
-                  style={{ fontSize: 13, marginBottom: 2 }}
-                >
-                  {step}
-                </li>
-              ))}
-            </ol>
-          )}
+        <div style={{ marginTop: 8 }} data-testid="trade-summary">
+          <div className="lab-kv">
+            <span>Wallet confirmations</span>
+            <span className="lab-data" data-testid="summary-confirmations">
+              {plannedSteps ? plannedSteps.length : "…"}
+            </span>
+          </div>
+          <div className="lab-kv">
+            <span>Transactions</span>
+            <span className="lab-data" data-testid="summary-transactions">
+              {`${quote.walletActionCount} swap transaction${quote.walletActionCount === 1 ? "" : "s"}`}
+            </span>
+          </div>
+          <div className="lab-kv">
+            <span>Approval</span>
+            <span className="lab-data" data-testid="summary-approval">
+              {approvalSummary}
+            </span>
+          </div>
+          <div className="lab-kv">
+            <span>Route</span>
+            <span className="lab-data" data-testid="summary-venue">
+              {quote.legs[0] ? `via ${VENUE_NAMES[quote.legs[0].kind] ?? quote.legs[0].kind}` : "—"}
+            </span>
+          </div>
+          <div className="lab-kv">
+            <span>Max slippage</span>
+            <span className="lab-data" data-testid="summary-slippage">
+              {slippageBps / 100}%
+            </span>
+          </div>
+
+          {/* Exact wallet prompts BEFORE execution: every approval + swap
+              transaction, in order, from the signature-free preflight. */}
+          <div style={{ marginTop: 6 }} data-testid="planned-steps">
+            <p className="lab-muted" style={{ fontSize: 13, margin: "0 0 4px" }}>
+              {plannedSteps
+                ? `This trade takes ${plannedSteps.length} wallet confirmation${plannedSteps.length === 1 ? "" : "s"}:`
+                : `Checking the wallet confirmations this trade needs…`}
+            </p>
+            {plannedSteps && (
+              <ol style={{ margin: 0, paddingLeft: "1.2rem" }}>
+                {plannedSteps.map((step, i) => (
+                  <li
+                    key={`${step}-${i}`}
+                    data-testid={`planned-step-${i + 1}`}
+                    style={{ fontSize: 13, marginBottom: 2 }}
+                  >
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         </div>
       )}
 
