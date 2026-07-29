@@ -14,7 +14,7 @@ import {
   getLabPoolContext,
   NATIVE_ETH,
 } from "@bps/launch-lab";
-import { getLabClient, isSellPaused } from "../../../../../lib/lab/server";
+import { getLabClient, isSellPaused, isTradingPaused } from "../../../../../lib/lab/server";
 import { quoteAggregatorDirect } from "../../../../../lib/lab/trade-router";
 import {
   assertSameOrigin,
@@ -47,6 +47,14 @@ export async function POST(req: Request): Promise<Response> {
     if (rateLimited(`tradeleg:${clientKey(req)}`, 20))
       return err("RATE_LIMITED", "Too many requests.", 429);
 
+    // Incident brake: browse-only mode — no leg preparation for buys OR sells.
+    if (isTradingPaused()) {
+      return err(
+        "TRADING_PAUSED",
+        "Trading is temporarily paused while an issue is fixed. Markets and history remain viewable, and your tokens are safe in your wallet.",
+        503,
+      );
+    }
     const body = (await req.json()) as {
       payload?: unknown;
       attemptId?: unknown;

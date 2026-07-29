@@ -87,6 +87,15 @@ export function isSellPaused(): boolean {
   return process.env.BPS_LAUNCH_LAB_SELL_PAUSED === "true";
 }
 
+/**
+ * Full trading brake: when BPS_LAUNCH_LAB_TRADING_PAUSED=true, ALL trade
+ * quoting and leg preparation (buys AND sells) is rejected — production is
+ * browse-only. Markets, charts, and history stay fully visible.
+ */
+export function isTradingPaused(): boolean {
+  return process.env.BPS_LAUNCH_LAB_TRADING_PAUSED === "true";
+}
+
 export function publicConfig(launchesToday: number | null = null): LabPublicConfig {
   const flags = getFlags();
   return {
