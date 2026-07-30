@@ -7,6 +7,25 @@
 > finding, completed milestone, or changed blockers/next actions). Never record secrets or credential-bearing
 > URLs here. This file complements the fuller narrative in `HANDOVER.md` "Historical change log".
 
+## 2026-07-30 — LAUNCH LAB LANE: ★★★ OPEN FOR NORMAL PUBLIC TESTING (web bf6cc7ad18cf)
+
+- Founder directive executed: Production env ACCESS_MODE=public, BROADCAST_ENABLED=true,
+  KILL_SWITCH=false, TRADING_PAUSED=false, SELL_PAUSED=false. Redeployed the verified code at
+  bf6cc7a (documentation-only descendant of 7c30dc39744b, explicitly authorized). ALL EIGHT
+  post-deploy read-only checks PASS: (1) /lab/launch renders the enabled wizard; (2) LIVE
+  production review-stop browser run (throwaway wallet, Launch never clicked, wallet log =
+  connection handshake only, 0 signs / 0 transactions): "Wallet confirmations: 1 — 1. Launch
+  OPENC"; QA prepared row retired consumed_at; (3) native ETH buy quote AVAILABLE — rialto,
+  walletActionCount=1, 0 approvals; (4) fresh-wallet first sell = ONE exact approval (Rialto
+  spender 0xC941…59bD) + ONE swap transaction; (5) existing-allowance sell = ONE transaction
+  (prepare-leg sim ok, no approvals); (6) both markets visible (0xAA5c4306 AAPL + 0x7382C73b
+  GOOGL); (7) indexer trackedMarkets=2, knownPools=2, both state=current, lastError=null;
+  (8) health: accessMode=public, broadcastEnabled=true, killSwitchActive=false — the health
+  payload carries no tradingPaused/sellPaused fields, so those two were proven BEHAVIORALLY
+  (buy + sell quotes return real routes, not 503 pause codes).
+- STANDING POSTURE: brakes are NOT to be restored after these checks — only for a real
+  transaction-integrity or fund-safety defect. The Launch Lab is open for normal public testing.
+
 ## 2026-07-29 — LAUNCH LAB LANE: P0.2B TWO FINAL PROVENANCE BLOCKERS shipped (web 7c30dc39; still BROWSE-ONLY)
 
 - (1) FAIL-CLOSED VALIDITY REFRESH: refreshPreparedValidity(predictedToken, creator) is typed and

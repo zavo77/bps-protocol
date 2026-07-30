@@ -27,7 +27,14 @@
 > routing (`01c8cfd`), live-verified Rialto activation (`48a7c8d`), public shell + simplified wizard,
 > wallet-chain gate fix (`47032dd`), live market recovery (`7a7ea73`).
 >
-> **POSTURE (2026-07-29, CURRENT): ⚠ P0 WALLET-PROMPT INCIDENT — BROWSE-ONLY.** Public operation is
+> **POSTURE (2026-07-30, CURRENT): ★ OPEN FOR NORMAL PUBLIC TESTING.** Production at bf6cc7ad18cf:
+> access public, broadcast TRUE, kill FALSE, trading + sell pauses FALSE. All 8 founder post-open
+> checks passed (one-confirmation launch review proven live with 0 signs; ETH buy 1 action; fresh
+> sell = exact approval + swap; allowance sell = 1 tx; 2 markets; indexer 2/2 current). STANDING
+> RULE: restore a brake ONLY for a real transaction-integrity or fund-safety defect. See
+> CURRENT_STATE.json → launchLab.openForPublicTesting.
+>
+> **POSTURE (2026-07-29, superseded): ⚠ P0 WALLET-PROMPT INCIDENT — BROWSE-ONLY.** Public operation is
 > SUSPENDED: broadcast false, kill true, SELL_PAUSED true, TRADING_PAUSED true (new flag, enforced
 > in quote + prepare-leg). Markets/charts/history stay visible. The one-confirmation launch
 > (envelopes removed), atomic-only public routes, venue pinning, and prompt-count UI are DEPLOYED
